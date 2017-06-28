@@ -330,7 +330,7 @@ def dense_to_disk(var, value_type=complex, min_partitions=8, dir=None):
 
         f = 0
 
-        for i in range(len(ind[2])):
+        for i in range(len(ind[0])):
             files[f].write("{} {} {}\n".format(ind[0][i], ind[1][i], var[ind[0][i], ind[1][i]]))
             f = (f + 1) % min_partitions
 
@@ -449,6 +449,9 @@ def parallel_kron(operand1, operand2, sc, shape, value_type=complex, min_partiti
 
     if sp.isspmatrix(operand1):
         path = sparse_to_disk(operand1, min_partitions=min_partitions)
+        remove_path = True
+    elif isinstance(operand1, np.ndarray):
+        path = dense_to_disk(operand1, min_partitions=min_partitions)
         remove_path = True
     elif type(operand1) == str:
         path = operand1
@@ -599,7 +602,7 @@ def mat_vec_product(mat, vec, sc=None, value_type=complex, min_partitions=8, sav
             ).map(
                 lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
             ).reduceByKey(
-                lambda a, b: a + b
+                lambda a, b: a + b, numPartitions=min_partitions
             )
 
             if save_mode == SAVE_MODE_DISK:
@@ -639,7 +642,7 @@ def mat_mat_product(mat1, mat2, sc=None, value_type=complex, min_partitions=8, s
             raise Exception("Unsupported type for second matrix!")
 
         result = sc.range(
-            shape
+            shape, numSlices=min_partitions
         ).map(
             lambda m: m1.value[:, m] * m2.value[m, :]
         ).reduce(
@@ -699,7 +702,7 @@ def mat_mat_product(mat1, mat2, sc=None, value_type=complex, min_partitions=8, s
         ).map(
             lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
         ).reduceByKey(
-            lambda a, b: a + b
+            lambda a, b: a + b, numPartitions=min_partitions
         )
 
         if save_mode == SAVE_MODE_DISK:

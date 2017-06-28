@@ -117,7 +117,7 @@ class DiscreteTimeQuantumWalk:
                 self.__shift_operator = so.tocsc()
             else:
                 self.__shift_operator = so
-        elif type(self.__shift_operator) == str:
+        elif type(so) == str:
             if os.path.exists(so):
                 self.__shift_operator = so
             else:
@@ -151,7 +151,7 @@ class DiscreteTimeQuantumWalk:
                 self.__interaction_operator = io.tocsc()
             else:
                 self.__interaction_operator = io
-        elif type(self.__interaction_operator) == str:
+        elif type(io) == str:
             if os.path.exists(io):
                 self.__unitary_operator = io
             else:
@@ -168,7 +168,7 @@ class DiscreteTimeQuantumWalk:
                 self.__multiparticles_unitary_operator = mu.tocsc()
             else:
                 self.__multiparticles_unitary_operator = mu
-        elif type(self.__interaction_operator) == str:
+        elif type(mu) == str:
             if os.path.exists(mu):
                 self.__multiparticles_unitary_operator = mu
             else:
@@ -185,7 +185,7 @@ class DiscreteTimeQuantumWalk:
                 self.__walk_operator = w.tocsc()
             else:
                 self.__walk_operator = w
-        elif type(self.__interaction_operator) == str:
+        elif type(w) == str:
             if os.path.exists(w):
                 self.__walk_operator = w
             else:
@@ -276,32 +276,28 @@ class DiscreteTimeQuantumWalk:
 
         if self.__save_mode == SAVE_MODE_DISK:
             if self.__num_dimensions == 1:
-                shape = self.__space.shape
-
                 result = parallel_kron(
                     self.__coin,
                     self.__space,
                     self.__spark_context,
-                    (self.__coin.shape[0] * shape[0], self.__coin.shape[0] * shape[1]),
+                    self.__space.shape,
                     min_partitions=self.__min_partitions
                 )
             elif self.__num_dimensions == 2:
-                shape = (
-                    self.__space[0].shape[0] * self.__space[1].shape[0],
-                    self.__space[0].shape[1] * self.__space[1].shape[1]
-                )
-
                 result = parallel_kron(
                     self.__coin,
                     parallel_kron(
                         self.__space[0],
                         self.__space[1],
                         self.__spark_context,
-                        shape,
+                        self.__space[1].shape,
                         min_partitions=self.__min_partitions
                     ),
                     self.__spark_context,
-                    (self.__coin.shape[0] * shape[0], self.__coin.shape[0] * shape[1]),
+                    (
+                        self.__space[0].shape[0] * self.__space[1].shape[0],
+                        self.__space[0].shape[1] * self.__space[1].shape[1]
+                    ),
                     min_partitions=self.__min_partitions
                 )
         else:
@@ -692,7 +688,7 @@ class DiscreteTimeQuantumWalk:
                 return "{} {} {}".format(m, m, cp)
 
         self.__spark_context.range(
-            shape[0]
+            shape[0], numSlices=self.__min_partitions
         ).map(
             __map
         ).saveAsTextFile(path)
@@ -958,7 +954,7 @@ class DiscreteTimeQuantumWalk:
                 walk, mesh, size, self.__steps, self.__num_particles, self.__min_partitions
             )
 
-    def clear_operators(self):
+    def clear_operators(self, clear_walk_operator=True):
         if self.__coin_operator is not None:
             if sp.isspmatrix(self.__coin_operator):
                 self.__coin_operator = None
@@ -989,11 +985,12 @@ class DiscreteTimeQuantumWalk:
             elif type(self.__multiparticles_unitary_operator) == str:
                 remove_tmp_path(self.__multiparticles_unitary_operator)
 
-        if self.__walk_operator is not None:
-            if sp.isspmatrix(self.__walk_operator):
-                self.__walk_operator = None
-            elif type(self.__walk_operator) == str:
-                remove_tmp_path(self.__walk_operator)
+        if clear_walk_operator:
+            if self.__walk_operator is not None:
+                if sp.isspmatrix(self.__walk_operator):
+                    self.__walk_operator = None
+                elif type(self.__walk_operator) == str:
+                    remove_tmp_path(self.__walk_operator)
 
     def walk(self, steps, initial_state, collision_phase=None):
         if steps < 0:
@@ -1040,13 +1037,15 @@ class DiscreteTimeQuantumWalk:
         if self.__steps > 0:
             self.__build_operators(collision_phase)
 
+            self.clear_operators(False)
+
             t1 = datetime.now()
 
             wo = self.__walk_operator
             
             unpersist = False
 
-            if not sp.isspmatrix(wo) or not isinstance(wo, np.ndarray):
+            if type(wo) == str:
                 def __map(m):
                     a = m.split()
                     return int(a[0]), int(a[1]), complex(a[2])
@@ -1061,8 +1060,11 @@ class DiscreteTimeQuantumWalk:
                 
                 unpersist = True
 
-            # if not sp.isspmatrix(self.__walk_operator) and sp.isspmatrix(result):
-                # result = sparse_to_disk(result, min_partitions=self.__min_partitions)
+            if type(result) != str and self.__save_mode == SAVE_MODE_DISK:
+                if sp.isspmatrix(result):
+                    result = sparse_to_disk(result, min_partitions=self.__min_partitions)
+                elif isinstance(result, np.ndarray):
+                    result = dense_to_disk(result, min_partitions=self.__min_partitions)
 
             t_tmp = datetime.now()
 
@@ -1077,17 +1079,19 @@ class DiscreteTimeQuantumWalk:
             if DEBUG_MODE:
                 with open(self.__debug_file, 'a+') as f:
                     f.write("Step in {}s\n".format((datetime.now() - t_tmp).total_seconds()))
-                    '''
-                    if self.__save_mode == SAVE_MODE_MEMORY:
+
+                    if sp.isspmatrix(result):
                         f.write("Nonzero elements in state: {}\n".format(result.nnz))
-                    if self.__save_mode == SAVE_MODE_MEMORY:
                         f.write("Result is consuming {} bytes\n".format(get_size_of(result)))
-                    elif self.__save_mode == SAVE_MODE_DISK:
-                        f.write("Result is consuming {} bytes\n".format(size_of_tmp_path(result)))
-                    '''
+
+            t_tmp = datetime.now()
 
             if isunitary(result, self.__spark_context) is False:
                 raise Exception("The state is not unitary!")
+
+            if DEBUG_MODE:
+                with open(self.__debug_file, 'a+') as f:
+                    f.write("Unitarity check in {}s\n".format((datetime.now() - t_tmp).total_seconds()))
 
             for i in range(self.__steps - 1):
                 t_tmp = datetime.now()
@@ -1110,18 +1114,20 @@ class DiscreteTimeQuantumWalk:
                 if DEBUG_MODE:
                     with open(self.__debug_file, 'a+') as f:
                         f.write("Step in {}s\n".format((datetime.now() - t_tmp).total_seconds()))
-                        '''
-                        if self.__save_mode == SAVE_MODE_MEMORY:
+
+                        if sp.isspmatrix(result):
                             f.write("Nonzero elements in state: {}\n".format(result.nnz))
-                        if self.__save_mode == SAVE_MODE_MEMORY:
                             f.write("Result is consuming {} bytes\n".format(get_size_of(result)))
-                        elif self.__save_mode == SAVE_MODE_DISK:
-                            f.write("Result is consuming {} bytes\n".format(size_of_tmp_path(result)))
-                        '''
+
+                t_tmp = datetime.now()
 
                 if isunitary(result, self.__spark_context) is False:
                     raise Exception("The state is not unitary!")
-            
+
+                if DEBUG_MODE:
+                    with open(self.__debug_file, 'a+') as f:
+                        f.write("Unitarity check in {}s\n".format((datetime.now() - t_tmp).total_seconds()))
+
             if unpersist:
                 wo.unpersist()
             
@@ -1213,7 +1219,7 @@ class DiscreteTimeQuantumWalk:
                     return " ".join([str(i) for i in a])
 
             self.__spark_context.range(
-                shape[0]
+                shape[0], numSlices=self.__min_partitions
             ).filter(
                 lambda m: s.value[m, 0] != (0+0j)
             ).map(
@@ -1286,13 +1292,10 @@ class DiscreteTimeQuantumWalk:
 
         if self.__num_dimensions == 1:
             size = self.__size
-            cs_size = cs.shape[0] * self.__size
             shape = (size, 1)
         elif self.__num_dimensions == 2:
             size_x = self.__size[0]
             size_y = self.__size[1]
-            cs_size_x = cs.shape[0] * self.__size[0]
-            cs_size_y = cs.shape[0] * self.__size[1]
             shape = (size_x, size_y)
 
         if sp.isspmatrix(full_measurement) or isinstance(full_measurement, np.ndarray):
@@ -1340,7 +1343,7 @@ class DiscreteTimeQuantumWalk:
             path = get_tmp_path()
 
             self.__spark_context.textFile(
-                full_measurement
+                full_measurement, minPartitions=self.__min_partitions
             ).filter(
                 __filter
             ).saveAsTextFile(path)
@@ -1394,7 +1397,7 @@ class DiscreteTimeQuantumWalk:
                     path = get_tmp_path()
 
                     self.__spark_context.range(
-                        cs_size ** num_p
+                        cs_size ** num_p, numSlices=self.__min_partitions
                     ).filter(
                         lambda m: s.value[m, 0] != (0+0j)
                     ).map(
@@ -1417,7 +1420,7 @@ class DiscreteTimeQuantumWalk:
                     path = get_tmp_path()
 
                     self.__spark_context.range(
-                        (cs_size_x * cs_size_y) ** num_p
+                        (cs_size_x * cs_size_y) ** num_p, numSlices=self.__min_partitions
                     ).filter(
                         lambda m: s.value[m, 0] != (0+0j)
                     ).map(
@@ -1439,7 +1442,7 @@ class DiscreteTimeQuantumWalk:
                     def __map(m):
                         a = []
                         for p2 in range(num_p):
-                            a.append(int(m / (cs_size ** (num_p - 1 - p2))) % size)
+                            a.append(int(m[0] / (cs_size ** (num_p - 1 - p2))) % size)
                         return "{} {} {}".format(a[p], 0, (abs(m[1]) ** 2).real)
 
                     path = get_tmp_path()
