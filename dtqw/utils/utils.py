@@ -215,12 +215,12 @@ def isunitary(value, sc=None):
         raise Exception("Unsupported type!")
 
 
-def check_probabilities(value, sc=None):
+def check_probabilities(value, sc=None, ind=2):
     if sp.isspmatrix(value) or isinstance(value, np.ndarray):
         return round(value.sum(), ROUND_PRECISION) == 1.0
     elif isinstance(value, RDD):
         n = value.map(
-            lambda m: float(m[2])
+            lambda m: float(m[ind])
         ).reduce(
             lambda a, b: a + b
         )
@@ -229,7 +229,7 @@ def check_probabilities(value, sc=None):
     elif type(value) == str:
         if os.path.exists(value):
             n = sc.textFile(value).map(
-                lambda m: float(m.split()[2])
+                lambda m: float(m.split()[ind])
             ).reduce(
                 lambda a, b: a + b
             )
@@ -519,9 +519,9 @@ def mat_vec_product(mat, vec, sc=None, value_type=complex, min_partitions=8, sav
             result = mat * vec
 
             if save_mode == SAVE_MODE_DISK:
-                if sp.isspmatrix(vec):
+                if sp.isspmatrix(result):
                     return sparse_to_disk(result, value_type, min_partitions)
-                if isinstance(vec, np.ndarray):
+                if isinstance(result, np.ndarray):
                     return dense_to_disk(result, value_type, min_partitions)
 
             return result
@@ -542,6 +542,10 @@ def mat_vec_product(mat, vec, sc=None, value_type=complex, min_partitions=8, sav
             m_rdd = mat.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
+
+        m_rdd = m_rdd.filter(
+            lambda m: m[1][1] != value_type()
+        )
 
         if sp.isspmatrix(vec) or isinstance(vec, np.ndarray) or isinstance(vec, Broadcast):
             if sp.isspmatrix(vec) or isinstance(vec, np.ndarray):
@@ -675,6 +679,10 @@ def mat_mat_product(mat1, mat2, sc=None, value_type=complex, min_partitions=8, s
                 lambda m: (m[1], (m[0], m[2]))
             )
 
+        mat1_rdd = mat1_rdd.filter(
+            lambda m: m[1][1] != value_type()
+        )
+
         if sp.isspmatrix(mat2) or type(mat2) == str:
             if sp.isspmatrix(mat2):
                 path = sparse_to_disk(mat2, complex, min_partitions)
@@ -691,11 +699,13 @@ def mat_mat_product(mat1, mat2, sc=None, value_type=complex, min_partitions=8, s
                 __map
             )
         elif isinstance(mat2, RDD):
-            mat2_rdd = mat2.map(
-                lambda m: (m[1], (m[0], m[2]))
-            )
+            mat2_rdd = mat2
         else:
             raise Exception("Unsupported type for second matrix!")
+
+        mat2_rdd = mat2_rdd.filter(
+            lambda m: m[1][1] != value_type()
+        )
 
         rdd = mat1_rdd.join(
             mat2_rdd

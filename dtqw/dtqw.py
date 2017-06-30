@@ -199,21 +199,14 @@ class DiscreteTimeQuantumWalk:
             'coin_operator': 0.0,
             'shift_operator_tmp': 0.0,
             'shift_operator': 0.0,
-            'unitary_operator_tmp': 0.0,
             'unitary_operator': 0.0,
-            'interaction_operator_tmp': 0.0,
             'interaction_operator': 0.0,
-            'multiparticle_unitary_operator_tmp': 0.0,
             'multiparticles_unitary_operator': 0.0,
             'walk_operator': 0.0,
             'walk': 0.0,
-            'export_state': 0.0,
-            'measurement_tmp': 0.0,
             'full_measurement': 0.0,
             'filtered_measurement': 0.0,
             'partial_measurement': 0.0,
-            'export_pdf': 0.0,
-            'filter_pdf': 0.0,
             'export_plot': 0.0
         }
 
@@ -223,11 +216,8 @@ class DiscreteTimeQuantumWalk:
             'coin_operator': 0,
             'shift_operator_tmp': 0,
             'shift_operator': 0,
-            'unitary_operator_tmp': 0,
             'unitary_operator': 0,
-            'interaction_operator_tmp': 0,
             'interaction_operator': 0,
-            'multiparticle_unitary_operator_tmp': 0,
             'multiparticles_unitary_operator': 0,
             'walk_operator': 0,
             'state': 0,
@@ -954,7 +944,7 @@ class DiscreteTimeQuantumWalk:
                 walk, mesh, size, self.__steps, self.__num_particles, self.__min_partitions
             )
 
-    def clear_operators(self, clear_walk_operator=True):
+    def clear_operators(self, multiparticles_operator=True, walk_operator=True):
         if self.__coin_operator is not None:
             if sp.isspmatrix(self.__coin_operator):
                 self.__coin_operator = None
@@ -979,13 +969,14 @@ class DiscreteTimeQuantumWalk:
             elif type(self.__interaction_operator) == str:
                 remove_tmp_path(self.__interaction_operator)
 
-        if self.__multiparticles_unitary_operator is not None:
-            if sp.isspmatrix(self.__multiparticles_unitary_operator):
-                self.__multiparticles_unitary_operator = None
-            elif type(self.__multiparticles_unitary_operator) == str:
-                remove_tmp_path(self.__multiparticles_unitary_operator)
+        if multiparticles_operator:
+            if self.__multiparticles_unitary_operator is not None:
+                if sp.isspmatrix(self.__multiparticles_unitary_operator):
+                    self.__multiparticles_unitary_operator = None
+                elif type(self.__multiparticles_unitary_operator) == str:
+                    remove_tmp_path(self.__multiparticles_unitary_operator)
 
-        if clear_walk_operator:
+        if walk_operator:
             if self.__walk_operator is not None:
                 if sp.isspmatrix(self.__walk_operator):
                     self.__walk_operator = None
@@ -1037,8 +1028,6 @@ class DiscreteTimeQuantumWalk:
         if self.__steps > 0:
             self.__build_operators(collision_phase)
 
-            self.clear_operators(False)
-
             t1 = datetime.now()
 
             wo = self.__walk_operator
@@ -1056,11 +1045,14 @@ class DiscreteTimeQuantumWalk:
                     __map
                 ).filter(
                     lambda m: m[2] != (0+0j)
-                ).persist(self.__storage_level)
-                
-                unpersist = True
+                )
 
-            if type(result) != str and self.__save_mode == SAVE_MODE_DISK:
+                if self.__save_mode != SAVE_MODE_DISK:
+                    wo = wo.persist(self.__storage_level)
+
+                    unpersist = True
+
+            if self.__save_mode == SAVE_MODE_DISK:
                 if sp.isspmatrix(result):
                     result = sparse_to_disk(result, min_partitions=self.__min_partitions)
                 elif isinstance(result, np.ndarray):
@@ -1164,6 +1156,8 @@ class DiscreteTimeQuantumWalk:
                 with open(self.__debug_file, 'a+') as f:
                     f.write("Walk in {}s\n".format(self.__execution_times['walk']))
                     f.write("State is consuming {} bytes\n".format(self.__memory_usage['state']))
+                    if self.__save_mode == SAVE_MODE_DISK:
+                        f.write("Final state path: {}\n".format(result))
 
         return result
 
@@ -1179,6 +1173,9 @@ class DiscreteTimeQuantumWalk:
 
         if self.__num_dimensions == 1:
             dims = [self.__size for p in range(ind)]
+
+            if self.__num_particles == 1:
+                dims.append(1)
 
             size = self.__size
             cs_size = cs.shape[0] * self.__size
@@ -1207,8 +1204,13 @@ class DiscreteTimeQuantumWalk:
                     a = []
                     for p in range(num_p):
                         a.append(int(m / (cs_size ** (num_p - 1 - p))) % size)
+                    if num_p == 1:
+                        a.append("0")
                     a.append((abs(s.value[m, 0]) ** 2).real)
                     return " ".join([str(i) for i in a])
+
+                if self.__num_particles == 1:
+                    ind += 1
             elif self.__num_dimensions == 2:
                 def __map(m):
                     a = []
@@ -1238,8 +1240,13 @@ class DiscreteTimeQuantumWalk:
                         a = []
                         for p in range(num_p):
                             a.append(int(m[0] / (cs_size ** (num_p - 1 - p))) % size)
+                        if num_p == 1:
+                            a.append("0")
                         a.append((abs(m[1]) ** 2).real)
                         return " ".join([str(i) for i in a])
+
+                    if self.__num_particles == 1:
+                        ind += 1
                 elif self.__num_dimensions == 2:
                     def __map(m):
                         a = []
@@ -1258,6 +1265,7 @@ class DiscreteTimeQuantumWalk:
                 ).map(
                     __map
                 ).saveAsTextFile(path)
+
             else:
                 raise FileNotFoundError
         else:
@@ -1270,7 +1278,7 @@ class DiscreteTimeQuantumWalk:
         else:
             full_measurement = path
 
-        if check_probabilities(full_measurement) is False:
+        if check_probabilities(full_measurement, self.__spark_context, ind) is False:
             raise Exception("The probabilities do not sum 1.0!")
 
         t2 = datetime.now()
@@ -1279,6 +1287,8 @@ class DiscreteTimeQuantumWalk:
         if DEBUG_MODE:
             with open(self.__debug_file, 'a+') as f:
                 f.write("Full measurement in {}s\n".format(self.__execution_times['full_measurement']))
+                if save_mode == SAVE_MODE_DISK:
+                    f.write("Full measurement path: {}\n".format(full_measurement))
 
         return full_measurement
 
@@ -1288,7 +1298,6 @@ class DiscreteTimeQuantumWalk:
         ndim = self.__num_dimensions
         num_p = self.__num_particles
         ind = self.__num_dimensions * self.__num_particles
-        cs = coin_space(2)
 
         if self.__num_dimensions == 1:
             size = self.__size
@@ -1333,12 +1342,22 @@ class DiscreteTimeQuantumWalk:
                     for p in range(num_p):
                         if a[0] != a[p]:
                             return False
+                    return True
+
+                def __map(m):
+                    a = m.split()
+                    return "{} {} {}".format(int(a[0]), 0, float(a[num_p]))
             elif self.__num_dimensions == 2:
                 def __filter(m):
                     a = m.split()
                     for p in range(0, ind, ndim):
                         if a[0] != a[p] or a[1] != a[p + 1]:
                             return False
+                    return True
+
+                def __map(m):
+                    a = m.split()
+                    return "{} {} {}".format(int(a[0]), int(a[1]), float(a[ind]))
 
             path = get_tmp_path()
 
@@ -1346,6 +1365,8 @@ class DiscreteTimeQuantumWalk:
                 full_measurement, minPartitions=self.__min_partitions
             ).filter(
                 __filter
+            ).map(
+                __map
             ).saveAsTextFile(path)
 
             if save_mode == SAVE_MODE_MEMORY:
@@ -1360,8 +1381,10 @@ class DiscreteTimeQuantumWalk:
         if DEBUG_MODE:
             with open(self.__debug_file, 'a+') as f:
                 f.write("Filtered measurement in {}s\n".format(self.__execution_times['filtered_measurement']))
+                if save_mode == SAVE_MODE_DISK:
+                    f.write("Filtered measurement path: {}\n".format(filtered_measurement))
 
-        return filtered_measurement.toarray()
+        return filtered_measurement
 
     def __partial_measurement(self, state, save_mode):
         t1 = datetime.now()
@@ -1502,8 +1525,31 @@ class DiscreteTimeQuantumWalk:
         if DEBUG_MODE:
             with open(self.__debug_file, 'a+') as f:
                 f.write("Partial measurement in {}s\n".format(self.__execution_times['partial_measurement']))
+                if save_mode == SAVE_MODE_DISK:
+                    for i in range(len(partial_measurement)):
+                        f.write("Partial measurement (particle {}) path: {}\n".format(i + 1, partial_measurement[i]))
 
         return partial_measurement
+
+    @staticmethod
+    def clear_pdfs(pdfs):
+        for k, v in pdfs.items():
+            if k == 'full_measurement':
+                if sp.isspmatrix(v):
+                    pdfs[k] = None
+                elif type(v) == str:
+                    remove_tmp_path(v)
+            elif k == 'filtered_measurement':
+                if sp.isspmatrix(v):
+                    pdfs[k] = None
+                elif type(v) == str:
+                    remove_tmp_path(v)
+            elif k == 'partial_measurement':
+                for i in range(len(v)):
+                    if sp.isspmatrix(v[i]):
+                        pdfs[k][i] = None
+                    elif type(v[i]) == str:
+                        remove_tmp_path(v[i])
 
     def measure(self, state, particles=False, save_mode=SAVE_MODE_MEMORY):
         result = {}
@@ -1544,25 +1590,16 @@ class DiscreteTimeQuantumWalk:
                 "Coin operator in {}s\n".format(self.__execution_times['coin_operator']),
                 "Shift operator tmp in {}s\n".format(self.__execution_times['shift_operator_tmp']),
                 "Shift operator in {}s\n".format(self.__execution_times['shift_operator']),
-                "Unitary operator tmp in {}s\n".format(self.__execution_times['unitary_operator_tmp']),
                 "Unitary operator in {}s\n".format(self.__execution_times['unitary_operator']),
-                "Interaction operator tmp in {}s\n".format(self.__execution_times['interaction_operator_tmp']),
                 "Interaction operator in {}s\n".format(self.__execution_times['interaction_operator']),
-                "Multiparticles unitary operator tmp in {}s\n".format(
-                    self.__execution_times['multiparticle_unitary_operator_tmp']
-                ),
                 "Multiparticles unitary operator in {}s\n".format(
                     self.__execution_times['multiparticles_unitary_operator']
                 ),
                 "Walk operator in {}s\n".format(self.__execution_times['walk_operator']),
                 "Walk in {}s\n".format(self.__execution_times['walk']),
-                "Measurement tmp in {}s\n".format(self.__execution_times['measurement_tmp']),
                 "Full measurement in {}s\n".format(self.__execution_times['full_measurement']),
                 "Filtered measurement in {}s\n".format(self.__execution_times['filtered_measurement']),
                 "Partial measurement in {}s\n".format(self.__execution_times['partial_measurement']),
-                "State exportation in {}s\n".format(self.__execution_times['export_state']),
-                "PDF exportation in {}s\n".format(self.__execution_times['export_pdf']),
-                "PDF filtering in {}s\n".format(self.__execution_times['filter_pdf']),
                 "Plots in {}s\n".format(self.__execution_times['export_plot'])
             ]
 
@@ -1600,11 +1637,7 @@ class DiscreteTimeQuantumWalk:
                 "Coin operator is consuming {} bytes\n".format(self.__memory_usage['coin_operator']),
                 "Shift operator tmp is consuming {} bytes\n".format(self.__memory_usage['shift_operator_tmp']),
                 "Shift operator is consuming {} bytes\n".format(self.__memory_usage['shift_operator']),
-                "Unitary operator is consuming {} bytes\n".format(self.__memory_usage['unitary_operator_tmp']),
                 "Unitary operator is consuming {} bytes\n".format(self.__memory_usage['unitary_operator']),
-                "Interaction operator tmp is consuming {} bytes\n".format(
-                    self.__memory_usage['interaction_operator_tmp']
-                ),
                 "Interaction operator is consuming {} bytes\n".format(self.__memory_usage['interaction_operator']),
                 "Multiparticles unitary operator tmp is consuming {} bytes\n".format(
                     self.__memory_usage['unitary_operator']
@@ -1679,6 +1712,8 @@ class DiscreteTimeQuantumWalk:
 
         for k, v in pdfs.items():
             title = self.plot_title()
+            onedim = False
+            twodim = False
 
             if self.__num_dimensions == 1:
                 if self.__walk_type == DiscreteTimeQuantumWalk.DTQW1D_WALK_LINE:
@@ -1687,6 +1722,7 @@ class DiscreteTimeQuantumWalk:
                     axis = range(self.__size)
 
                 labels = "Position", "Probability"
+                shape = (self.__size, 1)
             elif self.__num_dimensions == 2:
                 if self.__walk_type == DiscreteTimeQuantumWalk.DTQW2D_WALK_LATTICE:
                     axis = np.meshgrid(
@@ -1697,11 +1733,15 @@ class DiscreteTimeQuantumWalk:
                     axis = np.meshgrid(range(self.__size[0]), range(self.__size[1]))
 
                 labels = "Position X", "Position Y", "Probability"
+                shape = (self.__size[0], self.__size[1])
 
             if k == 'full_measurement':
                 if self.__num_dimensions == 1:
                     if self.__num_particles > 2:
                         continue
+
+                    pdf = v
+                    plot_title = title
 
                     if self.__num_particles == 2:
                         if self.__walk_type == DiscreteTimeQuantumWalk.DTQW1D_WALK_LINE:
@@ -1713,49 +1753,82 @@ class DiscreteTimeQuantumWalk:
                             axis = np.meshgrid(range(self.__size), range(self.__size))
 
                         labels = "Position X1", "Position X2", "Probability"
+                        shape = (self.__size, self.__size)
 
-                        self.__build_twodim_plot(v, axis, labels, title)
+                        twodim = True
                     else:
-                        self.__build_onedim_plot(v, axis, labels, title)
+                        onedim = True
                 elif self.__num_dimensions == 2:
                     if self.__num_particles > 1:
                         continue
 
-                    self.__build_twodim_plot(v, axis, labels, title)
+                    pdf = v
+                    plot_title = title
+                    twodim = True
 
-                if path is None:
-                    plt.show()
-                else:
+                if path is not None:
                     filename = path + self.output_filename() + "_" + k.upper() + ".png"
-
-                    plt.savefig(filename, kwargs=kwargs)
             elif k == 'filtered_measurement':
+                pdf = v
+                plot_title = title
+
                 if self.__num_dimensions == 1:
-                    self.__build_onedim_plot(v, axis, labels, title)
+                    onedim = True
                 elif self.__num_dimensions == 2:
-                    self.__build_twodim_plot(v, axis, labels, title)
+                    twodim = True
 
-                if path is None:
-                    plt.show()
-                else:
+                if path is not None:
                     filename = path + self.output_filename() + "_" + k.upper() + ".png"
-
-                    plt.savefig(filename, kwargs=kwargs)
             elif k == 'partial_measurement':
                 for i in range(len(v)):
-                    particle_number = " (Particle " + str(i + 1) + ")"
+                    pdf = v[i]
+                    plot_title = title + " (Particle " + str(i + 1) + ")"
 
                     if self.__num_dimensions == 1:
-                        self.__build_onedim_plot(v[i], axis, labels, title + particle_number)
+                        onedim = True
                     elif self.__num_dimensions == 2:
-                        self.__build_twodim_plot(v[i], axis, labels, title + particle_number)
+                        twodim = True
+
+                    if path is not None:
+                        filename = path + self.output_filename() + "_" + k.upper() + "_" + str(i + 1) + ".png"
+
+                    if sp.isspmatrix(pdf):
+                        pdf = pdf.toarray()
+                    elif type(pdf) == str:
+                        if os.path.exists(pdf):
+                            pdf = disk_to_dense(pdf, shape, float)
+                        else:
+                            raise FileNotFoundError
+
+                    if onedim:
+                        self.__build_onedim_plot(pdf, axis, labels, plot_title)
+                    elif twodim:
+                        self.__build_twodim_plot(pdf, axis, labels, plot_title)
 
                     if path is None:
                         plt.show()
                     else:
-                        filename = path + self.output_filename() + "_" + k.upper() + "_" + str(i + 1) + ".png"
-
                         plt.savefig(filename, kwargs=kwargs)
+
+                continue
+
+            if sp.isspmatrix(pdf):
+                pdf = pdf.toarray()
+            elif type(pdf) == str:
+                if os.path.exists(pdf):
+                    pdf = disk_to_dense(pdf, shape, float)
+                else:
+                    raise FileNotFoundError
+
+            if onedim:
+                self.__build_onedim_plot(pdf, axis, labels, plot_title)
+            elif twodim:
+                self.__build_twodim_plot(pdf, axis, labels, plot_title)
+
+            if path is None:
+                plt.show()
+            else:
+                plt.savefig(filename, kwargs=kwargs)
 
         t2 = datetime.now()
         self.__execution_times['export_plot'] = (t2 - t1).total_seconds()
