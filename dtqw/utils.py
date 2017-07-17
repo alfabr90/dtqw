@@ -1,6 +1,7 @@
 import io
 import os
 import time
+import logging
 from sys import getsizeof
 from functools import partial
 import tempfile as tf
@@ -12,13 +13,15 @@ import cmath
 from datetime import datetime
 import csv
 import numpy as np
+import statistics as st
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import scipy.sparse as sp
 from scipy.sparse.linalg import norm
-from pyspark import *
+from pyspark import RDD, Broadcast, StorageLevel
+
 
 STR_FORMAT_INT = 7
 STR_FORMAT_FLOAT = 23
@@ -76,8 +79,8 @@ def get_pos(x, size):
     return int(math.ceil((size - 1) / 2.0)) + x
 
 
-def coin_space(size):
-    return sp.identity(size, format='csc')
+def coin_space(size, format='csc'):
+    return sp.identity(size, format=format)
 
 
 def bra(a):
@@ -95,6 +98,10 @@ def braket(a, b):
 
 def outer(a, b):
     return a * bra(b)
+
+
+def is_shape(shape):
+    return isinstance(shape, (list, tuple))
 
 
 def get_buffer_size(data_size):
@@ -158,13 +165,14 @@ def get_tmp_path(dir=None):
 
 
 def remove_tmp_path(path):
-    if os.path.exists(path):
-        if os.path.isdir(path):
-            for i in os.listdir(path):
-                os.remove(path + "/" + i)
-            os.rmdir(path)
-        else:
-            os.remove(path)
+    if path is not None:
+        if os.path.exists(path):
+            if os.path.isdir(path):
+                for i in os.listdir(path):
+                    os.remove(path + "/" + i)
+                os.rmdir(path)
+            else:
+                os.remove(path)
 
 
 def size_of_tmp_path(path):
@@ -175,6 +183,44 @@ def size_of_tmp_path(path):
         return size
     else:
         return os.stat(path).st_size
+
+
+def export_times(execution_times, filename, extension='csv', path=None):
+    if extension == 'csv':
+        if path is None:
+            path = './'
+        else:
+            create_dir(path)
+
+        f = path + filename + "_TIMES." + extension
+
+        fieldnames = execution_times.keys()
+
+        with open(f, 'w') as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            f.write(','.join(fieldnames) + "\n")
+            w.writerow(execution_times)
+    else:
+        raise Exception("Unsupported file extension!")
+
+
+def export_memory(memory_usage, filename, extension='csv', path=None):
+    if extension == 'csv':
+        if path is None:
+            path = './'
+        else:
+            create_dir(path)
+
+        f = path + filename + "_MEMORY." + extension
+
+        fieldnames = memory_usage.keys()
+
+        with open(f, 'w') as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            f.write(','.join(fieldnames) + "\n")
+            w.writerow(memory_usage)
+    else:
+        raise Exception("Unsupported file extension!")
 
 
 def broadcast(sc, data):
@@ -241,23 +287,23 @@ def check_probabilities(value, sc=None, ind=2):
         raise Exception("Unsupported type!")
 
 
-def convert_sparse(result, format):
+def convert_sparse(sparse, format):
     if format == 'csc':
-        return result.tocsc()
-    if format == 'csr':
-        return result.tocsr()
-    if format == 'lil':
-        return result.tolil()
-    if format == 'dia':
-        return result.todia()
-    if format == 'coo':
-        return result.tocoo()
-    if format == 'bsr':
-        return result.tobsr()
-    if format == 'dense':
-        return result.todense()
-
-    return result
+        return sparse.tocsc()
+    elif format == 'csr':
+        return sparse.tocsr()
+    elif format == 'lil':
+        return sparse.tolil()
+    elif format == 'dia':
+        return sparse.todia()
+    elif format == 'coo':
+        return sparse.tocoo()
+    elif format == 'bsr':
+        return sparse.tobsr()
+    elif format == 'dense':
+        return sparse.todense()
+    else:
+        raise NotImplementedError
 
 
 def rdd_to_sparse(rdd, shape, value_type=complex, format=None):
@@ -279,12 +325,27 @@ def rdd_to_sparse(rdd, shape, value_type=complex, format=None):
 
 def rdd_to_dense(rdd, shape, value_type=complex):
     result = np.zeros(shape, dtype=value_type)
+    '''
+    for p in range(rdd.getNumPartitions()):
+        def __mapPartitionsWithIndex(splitIndex, iterator):
+            if splitIndex == p:
+                return iterator
+            return tuple()
 
-    ind = rdd.collect()
+        rdd_tmp = rdd.mapPartitionsWithIndex(
+            __mapPartitionsWithIndex, preservesPartitioning=True
+        )
 
-    for i in ind:
+        if rdd_tmp is not None:
+            for i in rdd_tmp.collect():
+                result[i[0], i[1]] += i[2]
+    '''
+    '''
+    for i in rdd.toLocalIterator():
         result[i[0], i[1]] += i[2]
-
+    '''
+    for i in rdd.collect():
+        result[i[0], i[1]] += i[2]
     return result
 
 
@@ -370,16 +431,15 @@ def disk_to_dense(path, shape, value_type=complex):
     return result
 
 
-def build_initial_state(num_dimensions, amplitudes, position, size,
-                        entangled=False, coin_space_indices=None, operator=op.add,
-                        num_particles=1):
+def build_initial_state(mesh, amplitudes, position,
+                        entangled=False, coin_space_indices=None, operator=op.add, num_particles=1):
     if num_particles < 1:
         raise Exception("There must be at least one particle!")
 
     cs = coin_space(2)
 
-    if num_dimensions == 1:
-        s = space(position, size)
+    if mesh.is_1d():
+        s = space(position, mesh.size)
 
         if entangled:
             if num_particles == 2:
@@ -413,8 +473,8 @@ def build_initial_state(num_dimensions, amplitudes, position, size,
                     ),
                     format='csc'
                 )
-    elif num_dimensions == 2:
-        sx, sy = space(position[0], size[0]), space(position[1], size[1])
+    elif mesh.is_2d():
+        sx, sy = space(position[0], mesh.size[0]), space(position[1], mesh.size[1])
 
         state = sp.kron(
             amplitudes[0][0] * sp.kron(cs[:, 0], cs[:, 0]) +
@@ -580,6 +640,8 @@ def mat_vec_product(mat, vec, sc=None, value_type=complex, min_partitions=8, sav
             if unpersist:
                 v.unpersist()
 
+            del m_rdd
+
             return result
         elif type(vec) == str or isinstance(vec, RDD):
             if type(vec) == str:
@@ -621,6 +683,8 @@ def mat_vec_product(mat, vec, sc=None, value_type=complex, min_partitions=8, sav
                 result = mv_rdd.map(
                     lambda m: (m[0][0], m[0][1], m[1])
                 )
+
+            del mv_rdd
 
             return result
         else:
@@ -728,6 +792,16 @@ def mat_mat_product(mat1, mat2, sc=None, value_type=complex, min_partitions=8, s
                 lambda m: (m[0][0], m[0][1], m[1])
             )
 
+        del rdd
+
         return result
     else:
         raise Exception("Unsupported type for first matrix!")
+
+
+def get_logger(name, filename):
+    logger = logging.getLogger(name)
+    file_handler = logging.FileHandler(filename)
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.DEBUG)
+    return logger
