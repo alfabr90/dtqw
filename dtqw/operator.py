@@ -408,134 +408,12 @@ class Operator:
             else:
                 # TODO
                 raise NotImplementedError
-        elif self.is_path():
-            oper1 = self.to_rdd(min_partitions, True)
-
-            oper1.data = oper1.data.map(
-                lambda m: (m[1], (m[0], m[2]))
-            )
-
-            if other.is_dense() or other.is_sparse():
-                oper2 = other.to_rdd(min_partitions, True)
-
-                oper2 = oper2.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
-
-                j = oper1.data.join(
-                    oper2
-                )
-
-                oper1.destroy()
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: (m[0][0], m[0][1], m[1])
-                )
-
-                j.unpersist()
-
-                if other.is_dense():
-                    operator = Operator(r, spark_context, shape, log_filename=self.__logger.filename).to_dense()
-                else:
-                    operator = Operator(r, spark_context, shape, log_filename=self.__logger.filename).to_sparse()
-
-                r.unpersist()
-                oper2.unpersist()
-
-                return operator
-            elif other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                oper2.data = oper2.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
-
-                j = oper1.data.join(
-                    oper2.data
-                )
-
-                oper1.destroy()
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: "{} {} {}".format(m[0][0], m[0][1], m[1])
-                )
-
-                j.unpersist()
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-
-                oper2.destroy()
-
-                return Operator(path, spark_context, shape, log_filename=self.__logger.filename)
-            elif other.is_rdd():
-                oper2 = other.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
-
-                j = oper1.data.join(
-                    oper2
-                )
-
-                oper1.destroy()
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: (m[0][0], m[0][1], m[1])
-                )
-
-                j.unpersist()
-
-                return Operator(r, spark_context, shape, log_filename=self.__logger.filename)
-            else:
-                # TODO
-                raise NotImplementedError
         elif self.is_rdd():
             oper1 = self.data.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
 
-            if other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                oper2.data = oper2.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
-
-                j = oper1.join(
-                    oper2.data
-                )
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: "{} {} {}".format(m[0][0], m[0][1], m[1])
-                )
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-                j.unpersist()
-                oper2.destroy()
-
-                return Operator(path, spark_context, shape, log_filename=self.__logger.filename)
-            elif other.is_rdd():
+            if other.is_rdd():
                 oper2 = other.data.map(
                     lambda m: (m[0], (m[1], m[2]))
                 )
@@ -600,96 +478,6 @@ class Operator:
             else:
                 # TODO
                 raise NotImplementedError
-        elif self.is_path():
-            oper1 = self.to_rdd(min_partitions, True)
-
-            oper1.data = oper1.data.map(
-                lambda m: (m[1], (m[0], m[2]))
-            )
-
-            if other.is_sparse() or other.is_dense():
-                oper2 = broadcast(other.spark_context, other.data)
-
-                data = oper1.data.filter(
-                    lambda m: oper2.value[m[0], 0] != value_type()
-                ).map(
-                    lambda m: (m[1][0], 0, m[1][1] * oper2.value[m[0], 0])
-                )
-
-                if other.is_sparse():
-                    state = State(
-                        data, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
-                    ).to_sparse()
-                else:
-                    state = State(
-                        data, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
-                    ).to_dense()
-
-                oper1.destroy()
-                oper2.unpersist()
-
-                return state
-            elif other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                oper2.data = oper2.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
-
-                j = oper1.data.join(
-                    oper2.data
-                )
-
-                oper1.destroy()
-                oper2.destroy()
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: "{} {} {}".format(m[0][0], m[0][1], m[1])
-                )
-
-                j.unpersist()
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-
-                return State(
-                    path, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
-                )
-            elif other.is_rdd():
-                oper2 = other.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                ).filter(
-                    lambda m: m[1][1] != value_type()
-                )
-
-                j = oper1.data.join(
-                    oper2
-                )
-
-                oper1.destroy()
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: (m[0][0], m[0][1], m[1])
-                )
-
-                j.unpersist()
-
-                return State(
-                    r, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
-                )
-            else:
-                # TODO
-                raise NotImplementedError
         elif self.is_rdd():
             oper1 = self.data.map(
                 lambda m: (m[1], (m[0], m[2]))
@@ -719,37 +507,6 @@ class Operator:
                 oper2.unpersist()
 
                 return state
-            elif other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                oper2.data = oper2.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
-
-                j = oper1.join(
-                    oper2.data
-                )
-
-                oper2.destroy()
-
-                r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-                ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: "{} {} {}".format(m[0][0], m[0][1], m[1])
-                )
-
-                j.unpersist()
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-
-                return State(
-                    path, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
-                )
             elif other.is_rdd():
                 oper2 = other.data.map(
                     lambda m: (m[0], (m[1], m[2]))
@@ -803,80 +560,8 @@ class Operator:
             else:
                 # TODO
                 raise NotImplementedError
-        elif self.is_path():
-            oper1 = self.to_rdd(min_partitions, True)
-
-            if other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                c = oper1.data.cartesian(
-                    oper2.data
-                )
-
-                r = c.map(
-                    lambda m: "{} {} {}".format(
-                        m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2]
-                    )
-                )
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-                c.unpersist()
-                oper1.destroy()
-                oper2.destroy()
-
-                return Operator(path, spark_context, shape, log_filename=self.__logger.filename)
-            elif other.is_rdd():
-                oper2 = other
-
-                c = oper1.data.cartesian(
-                    oper2.data
-                )
-
-                r = c.map(
-                    lambda m: (m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2])
-                )
-
-                return Operator(r, spark_context, shape, rdd_path=oper1.rdd_path, log_filename=self.__logger.filename)
-            else:
-                # TODO
-                raise NotImplementedError
         elif self.is_rdd():
-            if other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                c = self.data.cartesian(
-                    oper2.data
-                )
-
-                r = c.map(
-                    lambda m: "{} {} {}".format(
-                        m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2]
-                    )
-                )
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-                c.unpersist()
-                oper2.destroy()
-
-                return Operator(path, spark_context, shape, log_filename=self.__logger.filename)
-            elif other.is_rdd():
-                '''
-                c = self.data.cartesian(
-                    other.data
-                )
-
-                r = c.map(
-                    lambda m: (m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2])
-                )
-
-                return Operator(r, spark_context, shape, rdd_path=self.__rdd_path, log_filename=self.__logger.filename)
-                '''
+            if other.is_rdd():
                 oper2 = other.to_path(min_partitions, True)
 
                 so = ([], [], [])
@@ -911,7 +596,7 @@ class Operator:
                 ).saveAsTextFile(path)
 
                 return Operator(
-                    path, spark_context, shape, rdd_path=self.__rdd_path, log_filename=self.__logger.filename
+                    path, spark_context, shape, log_filename=self.__logger.filename
                 ).to_rdd(
                     min_partitions
                 )

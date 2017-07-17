@@ -555,6 +555,10 @@ class DiscreteTimeQuantumWalk:
             for i in range(self.__steps):
                 t_tmp = datetime.now()
 
+                app_id = self.__spark_context.applicationId
+                self.__metrics.log_executors(app_id=app_id)
+                self.__metrics.log_rdds(app_id=app_id)
+
                 result_tmp = wo.multiply(result, self.__min_partitions)
                 result_tmp.clear_rdd_path()
                 result.destroy()
@@ -582,6 +586,7 @@ class DiscreteTimeQuantumWalk:
             self.__logger.debug("Shape of final state: {}".format(result.shape))
 
             app_id = self.__spark_context.applicationId
+            self.__metrics.log_executors(app_id=app_id)
             self.__metrics.log_rdds(app_id=app_id)
 
         return result

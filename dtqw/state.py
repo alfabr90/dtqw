@@ -472,6 +472,7 @@ class State:
         if not is_state(other):
             raise TypeError('State instance expected (not "{}")'.format(type(other)))
 
+        value_type = complex
         spark_context = self.__spark_context
         mesh = self.__mesh
         num_particles = self.__num_particles
@@ -499,95 +500,47 @@ class State:
             else:
                 # TODO
                 raise NotImplementedError
-        elif self.is_path():
-            oper1 = self.to_rdd(min_partitions, True)
-
-            if other.is_path():
-                path = get_tmp_path()
-
-                oper2 = other.to_rdd(min_partitions, True)
-
-                c = oper1.data.cartesian(
-                    oper2.data
-                )
-
-                r = c.map(
-                    lambda m: "{} {} {}".format(
-                        m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2]
-                    )
-                )
-
-                r.saveAsTextFile(path)
-                r.unpersist()
-                c.unpersist()
-                oper1.destroy()
-                oper2.destroy()
-
-                return State(path, spark_context, mesh, shape, num_particles, log_filename=self.__logger.filename)
-            elif other.is_rdd():
-                oper2 = other
-
-                c = oper1.data.cartesian(
-                    oper2.data
-                )
-
-                r = c.map(
-                    lambda m: (m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2])
-                )
-
-                return State(
-                    r,
-                    spark_context,
-                    mesh,
-                    shape,
-                    num_particles,
-                    rdd_path=oper1.rdd_path,
-                    log_filename=self.__logger.filename
-                )
-            else:
-                # TODO
-                raise NotImplementedError
         elif self.is_rdd():
-            if other.is_path():
-                path = get_tmp_path()
+            if other.is_rdd():
+                oper2 = other.to_path(min_partitions, True)
 
-                oper2 = other.to_rdd(min_partitions, True)
+                so = ([], [], [])
 
-                c = self.data.cartesian(
-                    oper2.data
-                )
+                with fi.input(files=glob(oper2.data + '/part-*')) as f:
+                    for line in f:
+                        l = line.split()
+                        if value_type(l[2]) != value_type():
+                            so[0].append(int(l[0]))
+                            so[1].append(int(l[1]))
+                            so[2].append(value_type(l[2]))
 
-                r = c.map(
-                    lambda m: "{} {} {}".format(
-                        m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2]
-                    )
-                )
+                b = broadcast(spark_context, so)
 
-                r.saveAsTextFile(path)
-                r.unpersist()
-                c.unpersist()
+                del so
+
                 oper2.destroy()
 
-                return State(path, spark_context, mesh, shape, num_particles, log_filename=self.__logger.filename)
-            elif other.is_rdd():
-                oper1 = self.copy()
-                oper2 = other
+                def __map(m):
+                    base_i, base_j = m[0] * o_shape[0]
+                    k = []
+                    for i in range(len(b.value[2])):
+                        if b.value[2][i] != 0.0:
+                            k.append(
+                                "{} {} {}".format(base_i + b.value[0][i], 0, m[2] * b.value[2][i]))
+                    return "\n".join(k)
 
-                c = self.data.cartesian(
-                    oper2.data
-                )
+                path = get_tmp_path()
 
-                r = c.map(
-                    lambda m: (m[0][0] * o_shape[0] + m[1][0], m[0][1] * o_shape[1] + m[1][1], m[0][2] * m[1][2])
-                )
+                self.data.map(
+                    __map
+                ).saveAsTextFile(path)
 
                 return State(
-                    r,
+                    path,
                     spark_context,
                     mesh,
                     shape,
                     num_particles,
-                    rdd_path=oper1.rdd_path,
                     log_filename=self.__logger.filename
                 )
             else:
