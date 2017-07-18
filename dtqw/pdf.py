@@ -148,6 +148,25 @@ class PDF:
             # TODO
             raise NotImplementedError
 
+    def repartition(self, num_partitions):
+        if self.is_rdd():
+            if self.data.getNumPartitions() > num_partitions:
+                self.__logger.info(
+                    "As this RDD has more partitions than the desired, "
+                    "it will be coalesced into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.coalesce(num_partitions)
+            elif self.data.getNumPartitions() < num_partitions:
+                self.__logger.info(
+                    "As this RDD has less partitions than the desired, "
+                    "it will be repartitioned into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.repartition(num_partitions)
+            else:
+                self.__logger.info(
+                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
+                )
+
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
             if not self.data.is_cached:
@@ -163,19 +182,7 @@ class PDF:
     def sums_one(self, round_precision=10):
         ind = len(self.shape)
 
-        if self.is_path():
-            n = self.__spark_context.textFile(
-                self.data
-            ).map(
-                lambda m: float(m.split()[ind])
-            ).filter(
-                lambda m: m != 0.0
-            ).reduce(
-                lambda a, b: a + b
-            )
-
-            return round(n, round_precision) != 1.0
-        elif self.is_rdd():
+        if self.is_rdd():
             n = self.data.filter(
                 lambda m: m[ind] != 0.0
             ).reduce(
@@ -283,8 +290,8 @@ class PDF:
                     log_filename=self.__logger.filename
                 )
             else:
-                self.data = rdd
                 self.__rdd_path = oper.data
+                self.data = rdd
                 self.__format = 'rdd'
                 self.__memory_usage = self.__get_bytes()
 

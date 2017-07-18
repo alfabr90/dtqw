@@ -142,6 +142,25 @@ class Operator:
         elif self.is_sparse():
             return Operator(self.data.copy(), self.__spark_context, log_filename=self.__logger.filename)
 
+    def repartition(self, num_partitions):
+        if self.is_rdd():
+            if self.data.getNumPartitions() > num_partitions:
+                self.__logger.info(
+                    "As this RDD has more partitions than the desired, "
+                    "it will be coalesced into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.coalesce(num_partitions)
+            elif self.data.getNumPartitions() < num_partitions:
+                self.__logger.info(
+                    "As this RDD has less partitions than the desired, "
+                    "it will be repartitioned into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.repartition(num_partitions)
+            else:
+                self.__logger.info(
+                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
+                )
+
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
             self.data = self.data.map(lambda m: m)
@@ -199,6 +218,7 @@ class Operator:
 
             if self.is_rdd():
                 path = get_tmp_path()
+
                 self.data.map(
                     lambda m: "{} {} {}".format(m[0], m[1], m[2])
                 ).saveAsTextFile(path)

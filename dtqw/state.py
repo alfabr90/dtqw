@@ -118,19 +118,7 @@ class State:
         return self.__format == 'sparse'
 
     def is_unitary(self, round_precision=10):
-        if self.is_path():
-            n = self.data.map(
-                lambda m: complex(m.split()[2])
-            ).filter(
-                lambda m: m != complex()
-            ).map(
-                lambda m: math.sqrt(m.real ** 2 + m.imag ** 2)
-            ).reduce(
-                lambda a, b: a + b
-            )
-
-            return round(n, round_precision) != 1.0
-        elif self.is_rdd():
+        if self.is_rdd():
             n = self.data.filter(
                 lambda m: m[2] != complex()
             ).map(
@@ -208,6 +196,25 @@ class State:
                 self.__num_particles,
                 log_filename=self.__logger.filename
             )
+
+    def repartition(self, num_partitions):
+        if self.is_rdd():
+            if self.data.getNumPartitions() > num_partitions:
+                self.__logger.info(
+                    "As this RDD has more partitions than the desired, "
+                    "it will be coalesced into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.coalesce(num_partitions)
+            elif self.data.getNumPartitions() < num_partitions:
+                self.__logger.info(
+                    "As this RDD has less partitions than the desired, "
+                    "it will be repartitioned into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.repartition(num_partitions)
+            else:
+                self.__logger.info(
+                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
+                )
 
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
@@ -325,8 +332,8 @@ class State:
                     log_filename=self.__logger.filename
                 )
             else:
-                self.data = rdd
                 self.__rdd_path = oper.data
+                self.data = rdd
                 self.__format = 'rdd'
                 self.__memory_usage = get_size_of(rdd)
                 return self
@@ -625,6 +632,21 @@ class State:
             ).saveAsTextFile(path)
 
             s.unpersist()
+
+            full_measurement = np.zeros(dims, dtype=float)
+
+            ind = len(dims)
+
+            with fi.input(files=glob(path + '/part-*')) as f:
+                for line in f:
+                    l = line.split()
+                    for i in range(ind):
+                        l[i] = int(l[i])
+                    full_measurement[tuple(l[0:ind])] += float(l[ind])
+
+            remove_tmp_path(path)
+
+            pdf = PDF(full_measurement, self.__spark_context, self.__mesh, log_filename=self.__logger.filename)
         elif self.is_rdd():
             if self.__mesh.is_1d():
                 def __map(m):
@@ -656,67 +678,11 @@ class State:
             pdf = PDF(
                 full_measurement, self.__spark_context, self.__mesh, dims, log_filename=self.__logger.filename
             ).to_dense()
-
-            self.__logger.info("Checking if the probabilities sum one...")
-            if not pdf.sums_one():
-                # TODO
-                raise ValueError("PDFs must sum one")
-
-            self.__logger.info("Full measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
-
-            return pdf
-        elif self.is_path():
-            def __smap(m):
-                a = m.split()
-                return int(a[0]), complex(a[2])
-
-            if self.__mesh.is_1d():
-                def __map(m):
-                    a = []
-                    for p in range(num_p):
-                        a.append(int(m[0] / (cs_size ** (num_p - 1 - p))) % size)
-                    if num_p == 1:
-                        a.append("0")
-                    a.append((abs(m[1]) ** 2).real)
-                    return " ".join([str(i) for i in a])
-            elif self.__mesh.is_2d():
-                def __map(m):
-                    a = []
-                    for p in range(num_p):
-                        a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p) * size_y)) % size_x)
-                        a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p))) % size_y)
-                    a.append((abs(m[1]) ** 2).real)
-                    return " ".join([str(i) for i in a])
-            else:
-                # TODO
-                raise NotImplementedError
-
-            self.__spark_context.textFile(
-                self.data, minPartitions=min_partitions
-            ).map(
-                __smap
-            ).filter(
-                lambda m: m[1] != (0+0j)
-            ).map(
-                __map
-            ).saveAsTextFile(path)
         else:
             raise NotImplementedError
 
-        full_measurement = np.zeros(dims, dtype=float)
-
-        ind = len(dims)
-
-        with fi.input(files=glob(path + '/part-*')) as f:
-            for line in f:
-                l = line.split()
-                for i in range(ind):
-                    l[i] = int(l[i])
-                full_measurement[tuple(l[0:ind])] += float(l[ind])
-
-        remove_tmp_path(path)
-
-        pdf = PDF(full_measurement, self.__spark_context, self.__mesh, log_filename=self.__logger.filename)
+        app_id = self.__spark_context.applicationId
+        self.__metrics.log_rdds(app_id=app_id)
 
         self.__logger.info("Checking if the probabilities sum one...")
         if not pdf.sums_one():
@@ -725,9 +691,12 @@ class State:
 
         self.__logger.info("Full measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
 
+        app_id = self.__spark_context.applicationId
+        self.__metrics.log_rdds(app_id=app_id)
+
         return pdf
 
-    def filtered_measurement(self, full_measurement, min_partitions=8):
+    def filtered_measurement(self, full_measurement):
         self.__logger.info("Measuring the state of the system which the particles are at the same positions...")
         t1 = datetime.now()
 
@@ -779,6 +748,10 @@ class State:
             else:
                 # TODO
                 raise NotImplementedError
+
+            pdf = PDF(
+                filtered_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
+            )
         elif full_measurement.is_rdd():
             if self.__mesh.is_1d():
                 def __filter(m):
@@ -803,60 +776,9 @@ class State:
             pdf = PDF(
                 filtered_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
             ).to_dense()
-
-            self.__logger.info("Filtered measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
-
-            return pdf
-        elif full_measurement.is_path():
-            if self.__mesh.is_1d():
-                def __filter(m):
-                    a = m.split()
-                    for p in range(num_p):
-                        if a[0] != a[p]:
-                            return False
-                    return True
-
-                def __map(m):
-                    a = m.split()
-                    return "{} {} {}".format(int(a[0]), 0, float(a[num_p]))
-            elif self.__mesh.is_2d():
-                def __filter(m):
-                    a = m.split()
-                    for p in range(0, ind, ndim):
-                        if a[0] != a[p] or a[1] != a[p + 1]:
-                            return False
-                    return True
-
-                def __map(m):
-                    a = m.split()
-                    return "{} {} {}".format(int(a[0]), int(a[1]), float(a[ind]))
-            else:
-                # TODO
-                raise NotImplementedError
-
-            path = get_tmp_path()
-
-            self.__spark_context.textFile(
-                full_measurement, minPartitions=min_partitions
-            ).filter(
-                __filter
-            ).map(
-                __map
-            ).saveAsTextFile(path)
-
-            filtered_measurement = np.zeros(shape, dtype=float)
-
-            with fi.input(files=glob(path + '/part-*')) as f:
-                for line in f:
-                    l = line.split()
-                    full_measurement[int(l[0]), int(l[1])] += float(l[2])
-
-            remove_tmp_path(path)
         else:
             # TODO
             raise NotImplementedError
-
-        pdf = PDF(filtered_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename)
 
         self.__logger.info("Filtered measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
 
@@ -926,6 +848,19 @@ class State:
             ).saveAsTextFile(path)
 
             s.unpersist()
+
+            partial_measurement = np.zeros(shape, dtype=float)
+
+            with fi.input(files=glob(path + '/part-*')) as f:
+                for line in f:
+                    l = line.split()
+                    partial_measurement[int(l[0]), int(l[1])] += float(l[2])
+
+            remove_tmp_path(path)
+
+            pdf = PDF(
+                partial_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
+            )
         elif self.is_rdd():
             if self.__mesh.is_1d():
                 def __map(m):
@@ -953,66 +888,12 @@ class State:
             pdf = PDF(
                 partial_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
             ).to_dense()
-
-            self.__logger.info("Checking if the probabilities sum one...")
-            if not pdf.sums_one():
-                # TODO
-                raise ValueError("Probabilities must sum one")
-
-            self.__logger.info(
-                "Partial measurement for particle {} was done in {}s".format(
-                    particle + 1, (datetime.now() - t1).total_seconds()
-                )
-            )
-
-            return pdf
-        elif self.is_path():
-            path = get_tmp_path()
-
-            def __smap(m):
-                a = m.split()
-                return int(a[0]), complex(a[2])
-
-            if self.__mesh.is_1d():
-                def __map(m):
-                    a = []
-                    for p2 in range(num_p):
-                        a.append(int(m[0] / (cs_size ** (num_p - 1 - p2))) % size)
-                    return "{} {} {}".format(a[particle], 0, (abs(m[1]) ** 2).real)
-            elif self.__mesh.is_2d():
-                def __map(m):
-                    a = []
-                    for p2 in range(num_p):
-                        a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p2) * size_y)) % size_x)
-                        a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p2))) % size_y)
-                    return "{} {} {}".format(a[particle], a[particle + 1], (abs(m[1]) ** 2).real)
-            else:
-                # TODO
-                raise NotImplementedError
-
-            self.__spark_context.range(
-                self.data, numSlices=min_partitions
-            ).filter(
-                lambda m: s.value[m, 0] != (0+0j)
-            ).map(
-                __map
-            ).saveAsTextFile(path)
         else:
             # TODO
             raise NotImplementedError
 
-        partial_measurement = np.zeros(shape, dtype=float)
-
-        with fi.input(files=glob(path + '/part-*')) as f:
-            for line in f:
-                l = line.split()
-                partial_measurement[int(l[0]), int(l[1])] += float(l[2])
-
-        remove_tmp_path(path)
-
-        pdf = PDF(
-            partial_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
-        )
+        app_id = self.__spark_context.applicationId
+        self.__metrics.log_rdds(app_id=app_id)
 
         self.__logger.info("Checking if the probabilities sum one...")
         if not pdf.sums_one():
@@ -1024,6 +905,9 @@ class State:
                 particle + 1, (datetime.now() - t1).total_seconds()
             )
         )
+
+        app_id = self.__spark_context.applicationId
+        self.__metrics.log_rdds(app_id=app_id)
 
         return pdf
 

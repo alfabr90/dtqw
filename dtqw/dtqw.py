@@ -534,9 +534,6 @@ class DiscreteTimeQuantumWalk:
         result = initial_state
 
         if self.__steps > 0:
-            result = result.to_rdd(self.__min_partitions, True)
-            result.materialize()
-
             if not result.is_unitary():
                 raise ValueError("the initial state is not unitary")
 
@@ -546,7 +543,12 @@ class DiscreteTimeQuantumWalk:
                 self.__logger.info("Initial state path: {}".format(result.data))
             self.__logger.debug("Shape of initial state: {}".format(result.shape))
 
-            wo = self.__walk_operator = self.create_walk_operator(collision_phase)
+            result = result.to_path(self.__min_partitions, True)
+
+            self.__walk_operator = self.create_walk_operator(collision_phase)
+
+            wo_tmp = self.__walk_operator
+            self.__walk_operator.unpersist()
 
             self.__logger.info("Starting the walk...")
 
@@ -556,23 +558,28 @@ class DiscreteTimeQuantumWalk:
                 t_tmp = datetime.now()
 
                 app_id = self.__spark_context.applicationId
-                self.__metrics.log_executors(app_id=app_id)
                 self.__metrics.log_rdds(app_id=app_id)
 
+                wo = wo_tmp.to_rdd(self.__min_partitions, True)
+                result.to_rdd(self.__min_partitions)
                 result_tmp = wo.multiply(result, self.__min_partitions)
-                result_tmp.clear_rdd_path()
-                result.destroy()
-                result = result_tmp
 
                 self.__logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
 
                 t_tmp = datetime.now()
 
                 self.__logger.debug("Checking if the state is unitary...")
-                if not result.is_unitary():
+                if not result_tmp.is_unitary():
                     raise ValueError("the state is not unitary!")
 
                 self.__logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+
+                wo.destroy()
+                result.destroy()
+                result_tmp.to_path(self.__min_partitions)
+                result = result_tmp
+
+            result.to_rdd(self.__min_partitions)
 
             t2 = datetime.now()
             self.__execution_times['walk'] = (t2 - t1).total_seconds()
@@ -586,7 +593,6 @@ class DiscreteTimeQuantumWalk:
             self.__logger.debug("Shape of final state: {}".format(result.shape))
 
             app_id = self.__spark_context.applicationId
-            self.__metrics.log_executors(app_id=app_id)
             self.__metrics.log_rdds(app_id=app_id)
 
         return result
