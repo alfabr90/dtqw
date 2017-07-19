@@ -1,7 +1,6 @@
-__all__ = ['Logger']
-
-
 import logging
+
+__all__ = ['Logger']
 
 
 class Logger:
@@ -26,15 +25,15 @@ class Logger:
         self.__level = level
 
     def __write_message(self, level, name, message):
-        with open(self.__filename, 'a', ) as f:
+        with open(self.__filename, 'a') as f:
             f.write("{}:{}:{}\n".format(level, name, message))
 
     def blank(self):
-        with open(self.__filename, 'a', ) as f:
+        with open(self.__filename, 'a') as f:
             f.write("\n")
 
     def separator(self):
-        with open(self.__filename, 'a', ) as f:
+        with open(self.__filename, 'a') as f:
             f.write("# -------------------- #\n")
 
     def debug(self, message):

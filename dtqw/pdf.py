@@ -1,6 +1,3 @@
-__all__ = ['PDF', 'is_pdf']
-
-
 import os
 import shutil
 import numpy as np
@@ -10,9 +7,11 @@ import fileinput as fi
 from glob import glob
 from pyspark import RDD, StorageLevel
 
-from .logger import *
-from .metrics import *
+from .logger import Logger
+from .metrics import Metrics
 from .utils import convert_sparse, get_size_of, get_tmp_path, remove_tmp_path
+
+__all__ = ['PDF', 'is_pdf']
 
 
 class PDF:
@@ -199,9 +198,12 @@ class PDF:
             raise NotImplementedError
 
     def to_path(self, min_partitions=8, copy=False):
-        if not self.is_path():
-            buffer_size = 8196
-
+        if self.is_path():
+            if copy:
+                return self.copy()
+            else:
+                return self
+        else:
             if self.is_rdd():
                 path = get_tmp_path()
 
@@ -214,7 +216,7 @@ class PDF:
                 path = get_tmp_path()
                 os.mkdir(path)
 
-                files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+                files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
                 f = 0
 
@@ -233,7 +235,7 @@ class PDF:
                 path = get_tmp_path()
                 os.mkdir(path)
 
-                files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+                files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
                 f = 0
 
@@ -256,13 +258,17 @@ class PDF:
                 self.data = path
                 self.__format = 'path'
                 self.__memory_usage = self.__get_bytes()
-
-        return self
+                return self
 
     def to_rdd(self, min_partitions=8, copy=False):
         ind = len(self.shape)
 
-        if not self.is_rdd():
+        if self.is_rdd():
+            if copy:
+                return self.copy()
+            else:
+                return self
+        else:
             oper = self.to_path(min_partitions, copy)
 
             def __map(m):
@@ -294,13 +300,17 @@ class PDF:
                 self.data = rdd
                 self.__format = 'rdd'
                 self.__memory_usage = self.__get_bytes()
-
-        return self
+                return self
 
     def to_dense(self, copy=False):
         ind = len(self.shape)
 
-        if not self.is_dense():
+        if self.is_dense():
+            if copy:
+                return self.copy()
+            else:
+                return self
+        else:
             if self.is_path():
                 dense = np.zeros(self.shape, dtype=float)
 
@@ -328,14 +338,18 @@ class PDF:
                 self.data = dense
                 self.__format = 'dense'
                 self.__memory_usage = self.__get_bytes()
-
-        return self
+                return self
 
     def to_sparse(self, format='csc', copy=False):
         if len(self.shape) > 2:
             raise ValueError('sparse matrices must be of 2 dimensions (not "{}")'.format(len(self.shape)))
 
-        if not self.is_sparse():
+        if self.is_sparse():
+            if copy:
+                return self.copy()
+            else:
+                return self
+        else:
             if self.is_path():
                 sparse = sp.dok_matrix(self.shape, dtype=float)
 
@@ -371,8 +385,7 @@ class PDF:
                 self.data = sparse
                 self.__format = 'sparse'
                 self.__memory_usage = self.__get_bytes()
-
-        return self
+                return self
 
 
 def is_pdf(obj):

@@ -1,14 +1,13 @@
+import scipy.sparse as sp
+
+from .operator import Operator
+from .utils import get_tmp_path, braket, broadcast, remove_tmp_path
+
 __all__ = ['Mesh', 'is_mesh',
            'MESH_1D_LINE', 'MESH_1D_SEGMENT', 'MESH_1D_CYCLE',
            'MESH_2D_LATTICE_DIAGONAL', 'MESH_2D_LATTICE_NATURAL',
            'MESH_2D_BOX_DIAGONAL', 'MESH_2D_BOX_NATURAL',
            'MESH_2D_TORUS_DIAGONAL', 'MESH_2D_TORUS_NATURAL']
-
-
-import scipy.sparse as sp
-
-from .operator import *
-from .utils import get_tmp_path, braket, broadcast, remove_tmp_path
 
 
 MESH_1D_LINE = 0
@@ -79,13 +78,13 @@ class Mesh:
         buffer_size = 8196
 
         if self.__type == MESH_1D_LINE:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l = (-1) ** i
                     for x in range(self.__size):
                         f.write("{} {} {} {}\n".format(i, i, (x + l) % self.__size, x))
         elif self.__type == MESH_1D_SEGMENT:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l = (-1) ** i
                     for x in range(self.__size):
@@ -95,13 +94,13 @@ class Mesh:
                             bl = l
                         f.write("{} {} {} {}\n".format(i + bl, 1 - i, x + bl, x))
         elif self.__type == MESH_1D_CYCLE:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l = (-1) ** i
                     for x in range(self.__size):
                         f.write("{} {} {} {}\n".format(i, i, (x + l) % self.__size, x))
         elif self.__type == MESH_2D_LATTICE_DIAGONAL:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l1 = (-1) ** i
                     for j in range(cs):
@@ -117,7 +116,7 @@ class Mesh:
                                     )
                                 )
         elif self.__type == MESH_2D_LATTICE_NATURAL:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l = (-1) ** i
                     for j in range(cs):
@@ -133,7 +132,7 @@ class Mesh:
                                     )
                                 )
         elif self.__type == MESH_2D_BOX_DIAGONAL:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l1 = (-1) ** i
                     for j in range(cs):
@@ -153,7 +152,7 @@ class Mesh:
                                     )
                                 )
         elif self.__type == MESH_2D_BOX_NATURAL:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l = (-1) ** i
                     for j in range(cs):
@@ -174,7 +173,7 @@ class Mesh:
                                     )
                                 )
         elif self.__type == MESH_2D_TORUS_DIAGONAL:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l1 = (-1) ** i
                     for j in range(cs):
@@ -190,7 +189,7 @@ class Mesh:
                                     )
                                 )
         elif self.__type == MESH_2D_TORUS_NATURAL:
-            with open(path, 'w', buffer_size) as f:
+            with open(path, 'w') as f:
                 for i in range(cs):
                     l = (-1) ** i
                     for j in range(cs):

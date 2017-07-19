@@ -359,7 +359,7 @@ def sparse_to_disk(var, value_type=complex, min_partitions=8, dir=None):
         data_size = len(ind) * len(ind[2]) * get_size_of(value_type())
         buffer_size = get_buffer_size(data_size)
 
-        files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+        files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
         f = 0
 
@@ -387,7 +387,7 @@ def dense_to_disk(var, value_type=complex, min_partitions=8, dir=None):
         data_size = len(ind) * len(ind[0]) * get_size_of(value_type())
         buffer_size = get_buffer_size(data_size)
 
-        files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+        files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
         f = 0
 

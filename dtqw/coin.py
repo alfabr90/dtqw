@@ -1,13 +1,12 @@
-__all__ = ['Coin', 'is_coin',
-           'HADAMARD_1D', 'HADAMARD_2D', 'GROVER_2D', 'FOURIER_2D']
-
-
 import math
 import numpy as np
 import scipy.sparse as sp
 
-from .operator import *
-from .mesh import *
+from .operator import Operator
+from .mesh import is_mesh
+
+__all__ = ['Coin', 'is_coin',
+           'HADAMARD_1D', 'HADAMARD_2D', 'GROVER_2D', 'FOURIER_2D']
 
 
 HADAMARD_1D = 0

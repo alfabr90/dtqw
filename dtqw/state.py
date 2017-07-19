@@ -1,6 +1,3 @@
-__all__ = ['State', 'is_state']
-
-
 import os
 import shutil
 import math
@@ -9,14 +6,16 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
 import fileinput as fi
 
-from datetime import datetime
 from glob import glob
+from datetime import datetime
 from pyspark import RDD, StorageLevel
 
-from .pdf import *
-from .logger import *
-from .metrics import *
+from .logger import Logger
+from .metrics import Metrics
+from .pdf import PDF, is_pdf
 from .utils import is_shape, convert_sparse, get_size_of, get_tmp_path, remove_tmp_path, broadcast
+
+__all__ = ['State', 'is_state']
 
 
 class State:
@@ -235,8 +234,6 @@ class State:
             else:
                 return self
         else:
-            buffer_size = 8196
-
             if self.is_rdd():
                 path = get_tmp_path()
                 self.data.map(
@@ -248,7 +245,7 @@ class State:
                 path = get_tmp_path()
                 os.mkdir(path)
 
-                files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+                files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
                 f = 0
 
@@ -266,7 +263,7 @@ class State:
                 path = get_tmp_path()
                 os.mkdir(path)
 
-                files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+                files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
                 f = 0
 
@@ -358,22 +355,6 @@ class State:
 
                 for i in self.data.collect():
                     dense[i[0], i[1]] += i[2]
-                '''
-                path = get_tmp_path()
-
-                self.data.map(
-                    lambda m: "{} {} {}".format(m[0], m[1], m[2])
-                ).saveAsTextFile(path)
-
-                dense = np.zeros(self.shape, dtype=complex)
-
-                with fi.input(files=glob(path + '/part-*')) as f:
-                    for line in f:
-                        l = line.split()
-                        dense[int(l[0]), int(l[1])] += complex(l[2])
-
-                remove_tmp_path(path)
-                '''
             elif self.is_sparse():
                 dense = self.data.toarray()
             else:
@@ -436,24 +417,6 @@ class State:
                     ),
                     format
                 )
-                '''
-                path = get_tmp_path()
-
-                self.data.map(
-                    lambda m: "{} {} {}".format(m[0], m[1], m[2])
-                ).saveAsTextFile(path)
-
-                sparse = sp.dok_matrix(self.shape, dtype=complex)
-
-                with fi.input(files=glob(path + '/part-*')) as f:
-                    for line in f:
-                        l = line.split()
-                        sparse[int(l[0]), int(l[1])] += complex(l[2])
-
-                remove_tmp_path(path)
-
-                sparse = convert_sparse(sparse, format)
-                '''
             elif self.is_dense():
                 sparse = convert_sparse(sp.coo_matrix(self.data), format)
             else:
@@ -515,11 +478,11 @@ class State:
 
                 with fi.input(files=glob(oper2.data + '/part-*')) as f:
                     for line in f:
-                        l = line.split()
-                        if value_type(l[2]) != value_type():
-                            so[0].append(int(l[0]))
-                            so[1].append(int(l[1]))
-                            so[2].append(value_type(l[2]))
+                            l = line.split()
+                            if value_type(l[2]) != value_type():
+                                so[0].append(int(l[0]))
+                                so[1].append(int(l[1]))
+                                so[2].append(value_type(l[2]))
 
                 b = broadcast(spark_context, so)
 
@@ -845,7 +808,7 @@ class State:
                 lambda m: s.value[m, 0] != (0+0j)
             ).map(
                 __map
-            ).saveAsTextFile(path)
+            ).saveAsTextFile(path, "org.apache.hadoop.io.compress.GzipCodec")
 
             s.unpersist()
 

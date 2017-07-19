@@ -1,22 +1,20 @@
 import cmath
-from datetime import datetime
 import csv
 import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+
+from datetime import datetime
 from mpl_toolkits.mplot3d import Axes3D
-import scipy.sparse as sp
-from scipy.sparse.linalg import norm
-from pyspark import RDD, StorageLevel
+from pyspark import StorageLevel
 
+from .logger import Logger
+from .metrics import Metrics
 from .mesh import *
-from .state import *
-from .operator import *
-from .metrics import *
-
-from .logger import *
-from .utils import SAVE_MODE_MEMORY, SAVE_MODE_DISK, get_tmp_path, remove_tmp_path, create_dir
+from .state import is_state
+from .operator import Operator, is_operator
+from .utils import SAVE_MODE_MEMORY, SAVE_MODE_DISK, create_dir
 
 
 class DiscreteTimeQuantumWalk:
@@ -547,8 +545,8 @@ class DiscreteTimeQuantumWalk:
 
             self.__walk_operator = self.create_walk_operator(collision_phase)
 
-            wo_tmp = self.__walk_operator
-            self.__walk_operator.unpersist()
+            self.__walk_operator.to_path(self.__min_partitions)
+            wo = self.__walk_operator
 
             self.__logger.info("Starting the walk...")
 
@@ -560,8 +558,10 @@ class DiscreteTimeQuantumWalk:
                 app_id = self.__spark_context.applicationId
                 self.__metrics.log_rdds(app_id=app_id)
 
-                wo = wo_tmp.to_rdd(self.__min_partitions, True)
+                wo.to_rdd(self.__min_partitions)
+                # wo.persist()
                 result.to_rdd(self.__min_partitions)
+                # result.persist()
                 result_tmp = wo.multiply(result, self.__min_partitions)
 
                 self.__logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
@@ -574,7 +574,10 @@ class DiscreteTimeQuantumWalk:
 
                 self.__logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
 
-                wo.destroy()
+                app_id = self.__spark_context.applicationId
+                self.__metrics.log_rdds(app_id=app_id)
+
+                wo.unpersist()
                 result.destroy()
                 result_tmp.to_path(self.__min_partitions)
                 result = result_tmp

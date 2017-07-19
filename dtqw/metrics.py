@@ -1,10 +1,9 @@
-__all__ = ['Metrics']
-
-
 import urllib.request
 import json
 
-from .logger import *
+from .logger import Logger
+
+__all__ = ['Metrics']
 
 
 class Metrics:

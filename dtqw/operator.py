@@ -1,6 +1,3 @@
-__all__ = ['Operator', 'is_operator']
-
-
 import os
 import shutil
 import math
@@ -9,14 +6,15 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
 import fileinput as fi
 
-from datetime import datetime
 from glob import glob
 from pyspark import RDD, StorageLevel
 
-from .logger import *
-from .metrics import *
-from .state import *
+from .logger import Logger
+from .metrics import Metrics
+from .state import State, is_state
 from .utils import is_shape, convert_sparse, broadcast, get_size_of, get_tmp_path, remove_tmp_path
+
+__all__ = ['Operator', 'is_operator']
 
 
 class Operator:
@@ -214,8 +212,6 @@ class Operator:
             else:
                 return self
         else:
-            buffer_size = 8196
-
             if self.is_rdd():
                 path = get_tmp_path()
 
@@ -228,7 +224,7 @@ class Operator:
                 path = get_tmp_path()
                 os.mkdir(path)
 
-                files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+                files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
                 f = 0
 
@@ -246,7 +242,7 @@ class Operator:
                 path = get_tmp_path()
                 os.mkdir(path)
 
-                files = [open(path + "/part-" + str(i), 'w', buffer_size) for i in range(min_partitions)]
+                files = [open(path + "/part-" + str(i), 'w') for i in range(min_partitions)]
 
                 f = 0
 
