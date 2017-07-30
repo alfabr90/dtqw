@@ -1,18 +1,17 @@
+import fileinput as fi
+import math
 import os
 import shutil
-import math
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
-import fileinput as fi
-
 from glob import glob
 from pyspark import RDD, StorageLevel
 
-from .logger import Logger
-from .metrics import Metrics
 from .state import State, is_state
-from .utils import is_shape, convert_sparse, broadcast, get_size_of, get_tmp_path, remove_tmp_path
+from dtqw.utils.logger import Logger
+from dtqw.utils.metrics import Metrics
+from dtqw.utils.utils import is_shape, convert_sparse, broadcast, get_size_of, get_tmp_path, remove_tmp_path
 
 __all__ = ['Operator', 'is_operator']
 

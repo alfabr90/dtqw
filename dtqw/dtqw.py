@@ -9,12 +9,12 @@ from datetime import datetime
 from mpl_toolkits.mplot3d import Axes3D
 from pyspark import StorageLevel
 
-from .logger import Logger
-from .metrics import Metrics
 from .mesh import *
-from .state import is_state
-from .operator import Operator, is_operator
-from .utils import SAVE_MODE_MEMORY, SAVE_MODE_DISK, create_dir
+from .utils.utils import SAVE_MODE_MEMORY, create_dir
+from dtqw.utils.logger import Logger
+from dtqw.utils.metrics import Metrics
+from dtqw.math.state import is_state
+from dtqw.math.operator import Operator, is_operator
 
 
 class DiscreteTimeQuantumWalk:

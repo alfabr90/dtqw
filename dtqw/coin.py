@@ -1,8 +1,9 @@
 import math
+
 import numpy as np
 import scipy.sparse as sp
 
-from .operator import Operator
+from .math.operator import Operator
 from .mesh import is_mesh
 
 __all__ = ['Coin', 'is_coin',

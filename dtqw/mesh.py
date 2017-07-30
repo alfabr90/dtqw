@@ -1,7 +1,7 @@
 import scipy.sparse as sp
 
-from .operator import Operator
-from .utils import get_tmp_path, braket, broadcast, remove_tmp_path
+from .math.operator import Operator
+from .utils.utils import get_tmp_path, braket, broadcast, remove_tmp_path
 
 __all__ = ['Mesh', 'is_mesh',
            'MESH_1D_LINE', 'MESH_1D_SEGMENT', 'MESH_1D_CYCLE',
