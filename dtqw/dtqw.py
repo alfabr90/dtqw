@@ -21,9 +21,6 @@ class DiscreteTimeQuantumWalk:
     def __init__(self, spark_context, coin, mesh,
                  num_particles=1, min_partitions=8, save_mode=SAVE_MODE_MEMORY,
                  storage_level=StorageLevel.MEMORY_ONLY, log_filename='log.txt'):
-        if num_particles < 1:
-            raise Exception("There must be at least one particle!")
-
         self.__min_partitions = min_partitions
         self.__save_mode = save_mode
         self.__storage_level = storage_level
@@ -65,6 +62,10 @@ class DiscreteTimeQuantumWalk:
             'walk_operator': 0,
             'state': 0
         }
+
+        if num_particles < 1:
+            self.__logger.error("Invalid number of particles")
+            raise ValueError("invalid number of particles")
 
     @property
     def spark_context(self):
@@ -123,42 +124,48 @@ class DiscreteTimeQuantumWalk:
         if is_operator(co):
             self.__coin_operator = co
         else:
-            raise TypeError("Operator instance expected")
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(co)))
+            raise TypeError('operator instance expected, not "{}"'.format(type(co)))
 
     @shift_operator.setter
     def shift_operator(self, so):
         if is_operator(so):
             self.__shift_operator = so
         else:
-            raise TypeError("Operator instance expected")
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(so)))
+            raise TypeError('operator instance expected, not "{}"'.format(type(so)))
 
     @unitary_operator.setter
     def unitary_operator(self, uo):
         if is_operator(uo):
             self.__unitary_operator = uo
         else:
-            raise TypeError("Operator instance expected")
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(uo)))
+            raise TypeError('operator instance expected, not "{}"'.format(type(uo)))
 
     @interaction_operator.setter
     def interaction_operator(self, io):
         if is_operator(io):
             self.__interaction_operator = io
         else:
-            raise TypeError("Operator instance expected")
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(io)))
+            raise TypeError('operator instance expected, not "{}"'.format(type(io)))
 
     @multiparticles_unitary_operator.setter
     def multiparticles_unitary_operator(self, mu):
         if is_operator(mu):
             self.__multiparticles_unitary_operator = mu
         else:
-            raise TypeError("Operator instance expected")
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(mu)))
+            raise TypeError('operator instance expected, not "{}"'.format(type(mu)))
 
     @walk_operator.setter
     def walk_operator(self, wo):
         if is_operator(wo):
             self.__walk_operator = wo
         else:
-            raise TypeError("Operator instance expected")
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(wo)))
+            raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
 
     def create_coin_operator(self):
         self.__logger.info("Building coin operator...")
@@ -280,6 +287,9 @@ class DiscreteTimeQuantumWalk:
                     if a[0] != a[i] or a[1] != a[i + 1]:
                         return m, m, 1
                 return m, m, cp
+        else:
+            self.__logger.error("Mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.__spark_context.range(
             shape[0], numSlices=self.__min_partitions
@@ -426,6 +436,9 @@ class DiscreteTimeQuantumWalk:
                 mesh = "Segment"
             elif self.__mesh.type == MESH_1D_CYCLE:
                 mesh = "Cycle"
+            else:
+                self.__logger.error("Mesh type not implemented")
+                raise NotImplementedError("mesh type not implemented")
 
             if self.__num_particles == 1:
                 particles = str(self.__num_particles) + " Particle on a "
@@ -446,6 +459,9 @@ class DiscreteTimeQuantumWalk:
                 mesh = "Diagonal Torus"
             elif self.__mesh.type == MESH_2D_TORUS_NATURAL:
                 mesh = "Natural Torus"
+            else:
+                self.__logger.error("Mesh type not implemented")
+                raise NotImplementedError("mesh type not implemented")
 
             if self.__num_particles == 1:
                 particles = str(self.__num_particles) + " Particle on a "
@@ -462,6 +478,9 @@ class DiscreteTimeQuantumWalk:
                 mesh = "SEGMENT"
             elif self.__mesh.type == MESH_1D_CYCLE:
                 mesh = "CYCLE"
+            else:
+                self.__logger.error("Mesh type not implemented")
+                raise NotImplementedError("mesh type not implemented")
 
             size = str(self.__mesh.size)
 
@@ -481,6 +500,9 @@ class DiscreteTimeQuantumWalk:
                 mesh = "TORUS_DIAGONAL"
             elif self.__mesh.type == MESH_2D_TORUS_NATURAL:
                 mesh = "TORUS_NATURAL"
+            else:
+                self.__logger.error("Mesh type not implemented")
+                raise NotImplementedError("mesh type not implemented")
 
             size = str(self.__mesh.size[0]) + "-" + str(self.__mesh.size[1])
 
@@ -509,26 +531,27 @@ class DiscreteTimeQuantumWalk:
 
     def walk(self, steps, initial_state, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None):
         if not is_state(initial_state):
-            raise TypeError('State instance expected (not "{}"'.format(type(initial_state)))
+            self.__logger.error('State instance expected, not "{}"'.format(type(initial_state)))
+            raise TypeError('State instance expected, not "{}"'.format(type(initial_state)))
 
         if self.__mesh.is_1d():
             if self.__mesh.type == MESH_1D_LINE:
                 if steps > int((self.__mesh.size - 1) / 2):
-                    raise ValueError("the number of steps cannot be greater than the size of the lattice")
+                    self.__logger.error("Invalid number of steps")
+                    raise ValueError("invalid number of steps")
         elif self.__mesh.is_2d():
             if self.__mesh.type == MESH_2D_LATTICE_DIAGONAL or self.__mesh.type == MESH_2D_LATTICE_NATURAL:
                 if steps > int((self.__mesh.size[0] - 1) / 2) or steps > int((self.__mesh.size[1] - 1) / 2):
-                    raise ValueError("the number of steps cannot be greater than the size of the lattice")
+                    self.__logger.error("Invalid number of steps")
+                    raise ValueError("invalid number of steps")
 
         if mul_mode == MUL_BLOCK:
             if num_blocks is None:
-                raise ValueError(
-                    "expected a valid number of blocks for block multiplications. {} was given".format(num_blocks)
-                )
+                self.__logger.error("Invalid number of blocks")
+                raise ValueError("invalid number of blocks")
             elif num_blocks <= 0:
-                raise ValueError(
-                    "expected a valid number of blocks for block multiplications. {} was given".format(num_blocks)
-                )
+                self.__logger.error("Invalid number of blocks")
+                raise ValueError("invalid number of blocks")
 
         self.__steps = steps
 
@@ -543,6 +566,7 @@ class DiscreteTimeQuantumWalk:
 
         if self.__steps > 0:
             if not result.is_unitary():
+                self.__logger.error("The initial state is not unitary")
                 raise ValueError("the initial state is not unitary")
 
             self.__logger.info("Initial state is consuming {} bytes".format(result.memory_usage))
@@ -574,6 +598,7 @@ class DiscreteTimeQuantumWalk:
 
                     self.__logger.debug("Checking if the state is unitary...")
                     if not result.is_unitary():
+                        self.__logger.error("The state is not unitary")
                         raise ValueError("the state is not unitary")
 
                     # print(result.to_sparse(copy=True).data)
@@ -608,6 +633,7 @@ class DiscreteTimeQuantumWalk:
 
                     self.__logger.debug("Checking if the state is unitary...")
                     if not result_tmp.is_unitary():
+                        self.__logger.error("The state is not unitary")
                         raise ValueError("the state is not unitary")
 
                     self.__logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
@@ -663,6 +689,7 @@ class DiscreteTimeQuantumWalk:
 
                     self.__logger.debug("Checking if the state is unitary...")
                     if not result.is_unitary():
+                        self.__logger.error("The state is not unitary")
                         raise ValueError("the state is not unitary")
 
                     self.__logger.debug(
@@ -677,6 +704,7 @@ class DiscreteTimeQuantumWalk:
                 result.to_rdd(self.__min_partitions)
                 result.materialize()
             else:
+                self.__logger.error("Invalid multiplication mode")
                 raise ValueError("invalid multiplication mode")
 
             t2 = datetime.now()
@@ -736,7 +764,8 @@ class DiscreteTimeQuantumWalk:
                 with open(f, 'w') as f:
                     f.write(str_times)
         else:
-            raise Exception("Unsupported file extension!")
+            self.__logger.error("Invalid file extension")
+            raise ValueError("invalid file extension")
 
     def export_memory(self, extension='csv', path=None):
         if extension == 'csv':
@@ -778,7 +807,8 @@ class DiscreteTimeQuantumWalk:
                 with open(f, 'w') as f:
                     f.write(str_memory)
         else:
-            raise Exception("Unsupported file extension!")
+            self.__logger.error("Invalid file extension")
+            raise ValueError("invalid file extension")
 
     @staticmethod
     def __build_onedim_plot(pdf, axis, labels, title):
