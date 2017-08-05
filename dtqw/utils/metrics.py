@@ -17,6 +17,10 @@ class Metrics:
 
         if result is not None:
             result = json.loads(result.decode('utf-8'))
+        else:
+            self.__logger.warning(
+                'Request to "{}" is empty'.format(self.__base_url + 'applications' + url_suffix)
+            )
 
         return result
 
@@ -59,7 +63,8 @@ class Metrics:
     def log_executors(self, data=None, app_id=None):
         if data is None:
             if app_id is None:
-                raise ValueError("expected an application id")
+                self.__logger.error('Expected an application id, not "{}"'.format(type(app_id)))
+                raise ValueError('expected an application id, not "{}"'.format(type(app_id)))
             data = self.get_executors(app_id)
 
         self.__logger.info("Printing executors data...")
@@ -73,7 +78,8 @@ class Metrics:
     def log_rdds(self, data=None, app_id=None):
         if data is None:
             if app_id is None:
-                raise ValueError("expected an application id")
+                self.__logger.error('Expected an application id, not "{}"'.format(type(app_id)))
+                raise ValueError('expected an application id, not "{}"'.format(type(app_id)))
             data = self.get_rdds(app_id)
 
         self.__logger.info("Printing RDDs data...")
@@ -87,8 +93,12 @@ class Metrics:
 
     def log_rdd(self, data=None, app_id=None, rdd_id=None):
         if data is None:
-            if app_id is None or rdd_id is None:
-                raise ValueError("expected an application id and a RDD id")
+            if app_id is None:
+                self.__logger.error('Expected an application id, not "{}"'.format(type(app_id)))
+                raise ValueError('expected an application id, not "{}"'.format(type(app_id)))
+            if rdd_id is None:
+                self.__logger.error('Expected a RDD id, not "{}"'.format(type(rdd_id)))
+                raise ValueError('expected a RDD id, not "{}"'.format(type(rdd_id)))
             data = self.get_rdd(app_id, rdd_id)
 
         self.__logger.info("Printing RDD (id {}) data...".format(rdd_id))

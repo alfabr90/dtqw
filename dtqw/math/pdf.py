@@ -1,10 +1,10 @@
-import fileinput as fi
 import os
 import shutil
-from glob import glob
-
+import fileinput as fi
 import numpy as np
 import scipy.sparse as sp
+
+from glob import glob
 from pyspark import RDD, StorageLevel
 
 from dtqw.utils.logger import Logger
@@ -37,7 +37,8 @@ class PDF:
         elif sp.isspmatrix(arg1):
             self.__from_sparse(arg1)
         else:
-            raise TypeError
+            self.__logger.error("Invalid argument to instantiate a PDF object")
+            raise TypeError("invalid argument to instantiate a PDF object")
 
     @property
     def spark_context(self):
@@ -107,11 +108,15 @@ class PDF:
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
+        else:
+            self.__logger.warning("It is not possible to persist a non RDD format PDF")
 
     def unpersist(self):
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
+        else:
+            self.__logger.warning("It is not possible to unpersist a non RDD format PDF")
 
     def destroy(self):
         self.unpersist()
@@ -123,6 +128,61 @@ class PDF:
             self.__rdd_path = None
 
         self.data = None
+
+    def repartition(self, num_partitions):
+        if self.is_rdd():
+            if self.data.getNumPartitions() > num_partitions:
+                self.__logger.info(
+                    "As this RDD has more partitions than the desired, "
+                    "it will be coalesced into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.coalesce(num_partitions)
+            elif self.data.getNumPartitions() < num_partitions:
+                self.__logger.info(
+                    "As this RDD has less partitions than the desired, "
+                    "it will be repartitioned into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.repartition(num_partitions)
+            else:
+                self.__logger.info(
+                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
+                )
+        self.__logger.warning("It is not possible to do a repartition on a non RDD format PDF")
+
+    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if self.is_rdd():
+            if not self.data.is_cached:
+                self.persist(storage_level)
+            self.data.count()
+        else:
+            self.__logger.warning("It is not possible to materialize a non RDD format PDF")
+
+    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if self.is_rdd():
+            self.materialize(storage_level)
+            remove_tmp_path(self.__rdd_path)
+            self.__rdd_path = None
+        else:
+            self.__logger.warning("It is not possible to clear the path of a non RDD format PDF")
+
+    def sums_one(self, round_precision=10):
+        ind = len(self.shape)
+
+        if self.is_rdd():
+            n = self.data.filter(
+                lambda m: m[ind] != 0.0
+            ).reduce(
+                lambda a, b: a + b
+            )
+
+            return round(n, round_precision) != 1.0
+        elif self.is_dense():
+            return round(self.data.sum(), round_precision) == 1.0
+        elif self.is_sparse():
+            return round(self.data.sum(), round_precision) == 1.0
+        else:
+            self.__logger.error("Operation not implemented for this PDF format")
+            raise NotImplementedError("operation not implemented for this PDF format")
 
     def copy(self):
         if self.is_path():
@@ -144,58 +204,8 @@ class PDF:
         elif self.is_sparse():
             return PDF(self.data.copy(), self.__spark_context, self.__mesh, log_filename=self.__logger.filename)
         else:
-            # TODO
-            raise NotImplementedError
-
-    def repartition(self, num_partitions):
-        if self.is_rdd():
-            if self.data.getNumPartitions() > num_partitions:
-                self.__logger.info(
-                    "As this RDD has more partitions than the desired, "
-                    "it will be coalesced into {} partitions".format(num_partitions)
-                )
-                self.data = self.data.coalesce(num_partitions)
-            elif self.data.getNumPartitions() < num_partitions:
-                self.__logger.info(
-                    "As this RDD has less partitions than the desired, "
-                    "it will be repartitioned into {} partitions".format(num_partitions)
-                )
-                self.data = self.data.repartition(num_partitions)
-            else:
-                self.__logger.info(
-                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
-                )
-
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.is_rdd():
-            if not self.data.is_cached:
-                self.persist(storage_level)
-            self.data.count()
-
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.is_rdd():
-            self.materialize(storage_level)
-            remove_tmp_path(self.__rdd_path)
-            self.__rdd_path = None
-
-    def sums_one(self, round_precision=10):
-        ind = len(self.shape)
-
-        if self.is_rdd():
-            n = self.data.filter(
-                lambda m: m[ind] != 0.0
-            ).reduce(
-                lambda a, b: a + b
-            )
-
-            return round(n, round_precision) != 1.0
-        elif self.is_dense():
-            return round(self.data.sum(), round_precision) == 1.0
-        elif self.is_sparse():
-            return round(self.data.sum(), round_precision) == 1.0
-        else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this PDF format")
+            raise NotImplementedError("operation not implemented for this PDF format")
 
     def to_path(self, min_partitions=8, copy=False):
         if self.is_path():
@@ -248,8 +258,8 @@ class PDF:
 
                 del ind
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this PDF format")
+                raise NotImplementedError("operation not implemented for this PDF format")
 
             if copy:
                 return PDF(path, self.__spark_context, self.__mesh, self.shape, log_filename=self.__logger.filename)
@@ -328,8 +338,8 @@ class PDF:
             elif self.is_sparse():
                 dense = self.data.toarray()
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this PDF format")
+                raise NotImplementedError("operation not implemented for this PDF format")
 
             if copy:
                 return PDF(dense, self.__spark_context, self.__mesh, log_filename=self.__logger.filename)
@@ -342,7 +352,8 @@ class PDF:
 
     def to_sparse(self, format='csc', copy=False):
         if len(self.shape) > 2:
-            raise ValueError('sparse matrices must be of 2 dimensions (not "{}")'.format(len(self.shape)))
+            self.__logger.error('Sparse matrices must be of 2 dimensions, not "{}"'.format(len(self.shape)))
+            raise ValueError('sparse matrices must be of 2 dimensions, not "{}"'.format(len(self.shape)))
 
         if self.is_sparse():
             if copy:
@@ -375,8 +386,8 @@ class PDF:
             elif self.is_dense():
                 sparse = convert_sparse(sp.coo_matrix(self.data), format)
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this PDF format")
+                raise NotImplementedError("operation not implemented for this PDF format")
 
             if copy:
                 return PDF(sparse, self.__spark_context, self.__mesh, log_filename=self.__logger.filename)

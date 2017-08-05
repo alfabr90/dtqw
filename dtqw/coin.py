@@ -5,6 +5,7 @@ import scipy.sparse as sp
 
 from .math.operator import Operator
 from .mesh import is_mesh
+from dtqw.utils.logger import Logger
 
 __all__ = ['Coin', 'is_coin',
            'HADAMARD_1D', 'HADAMARD_2D', 'GROVER_2D', 'FOURIER_2D']
@@ -17,9 +18,10 @@ FOURIER_2D = 3
 
 
 class Coin:
-    def __init__(self, type):
+    def __init__(self, type, log_filename='log.txt'):
         self.__type = type
         self.__data = self.__define_data()
+        self.__logger = Logger(__name__, log_filename)
 
     @property
     def type(self):
@@ -34,7 +36,8 @@ class Coin:
 
     def __define_data(self):
         if not self.__validate():
-            raise ValueError("not a valid coin")
+            self.__logger.error("Invalid coin")
+            raise ValueError("invalid coin")
 
         if self.__type == HADAMARD_1D:
             return sp.coo_matrix(
@@ -77,22 +80,10 @@ class Coin:
     def is_2d(self):
         return self.__type == HADAMARD_2D or self.__type == GROVER_2D or self.__type == FOURIER_2D
 
-    def to_string(self):
-        if self.__type == HADAMARD_1D:
-            return "HADAMARD_1D"
-        elif self.__type == HADAMARD_2D:
-            return "HADAMARD_2D"
-        elif self.__type == GROVER_2D:
-            return "GROVER_2D"
-        elif self.__type == FOURIER_2D:
-            return "FOURIER_2D"
-        else:
-            # TODO
-            raise NotImplementedError
-
     def create_operator(self, mesh, spark_context, log_filename='log.txt'):
         if not is_mesh(mesh):
-            raise TypeError('expected mesh (not "{}")'.format(type(mesh)))
+            self.__logger.error('Expected mesh, not "{}"'.format(type(mesh)))
+            raise TypeError('expected mesh, not "{}"'.format(type(mesh)))
 
         if mesh.is_1d():
             return Operator(sp.kron(self.__data, sp.identity(mesh.size)), spark_context, log_filename=log_filename)
@@ -103,7 +94,7 @@ class Coin:
                 log_filename=log_filename
             )
         else:
-            # TODO
+            self.__logger.error("Mesh dimension not implemented")
             raise NotImplementedError
 
 

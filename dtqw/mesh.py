@@ -2,6 +2,7 @@ import scipy.sparse as sp
 
 from .math.operator import Operator
 from .utils.utils import get_tmp_path, braket, broadcast, remove_tmp_path
+from dtqw.utils.logger import Logger
 
 __all__ = ['Mesh', 'is_mesh',
            'MESH_1D_LINE', 'MESH_1D_SEGMENT', 'MESH_1D_CYCLE',
@@ -23,9 +24,10 @@ MESH_2D_BOX_NATURAL = 2 ** 12 + 1
 
 
 class Mesh:
-    def __init__(self, type, size):
+    def __init__(self, type, size, log_filename='log.txt'):
         self.__type = type
         self.__size = self.__define_size(size)
+        self.__logger = Logger(__name__, log_filename)
 
     @property
     def type(self):
@@ -48,13 +50,15 @@ class Mesh:
             else:
                 return False
         else:
-            raise NotImplementedError
+            self.__logger.error("Mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
 
         return True
 
     def __define_size(self, size):
         if not self.__validate(size):
-            raise ValueError("not a valid size")
+            self.__logger.error("Invalid size")
+            raise ValueError("invalid size")
 
         if self.__type == MESH_1D_LINE:
             return 2 * size + 1
@@ -75,7 +79,6 @@ class Mesh:
         path = get_tmp_path()
 
         cs = 2
-        buffer_size = 8196
 
         if self.__type == MESH_1D_LINE:
             with open(path, 'w') as f:
@@ -205,8 +208,8 @@ class Mesh:
                                     )
                                 )
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Mesh type not implemented")
+            raise NotImplementedError("mesh type not implemented")
 
         c = broadcast(spark_context, sp.identity(cs, format='csc'))
 
@@ -237,8 +240,8 @@ class Mesh:
                     'csc'
                 )
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension no implemented")
 
         sparse = spark_context.textFile(
             path, minPartitions=min_partitions

@@ -1,13 +1,13 @@
-import fileinput as fi
-import math
 import os
 import shutil
-from datetime import datetime
-from glob import glob
-
+import fileinput as fi
+import math
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
+
+from datetime import datetime
+from glob import glob
 from pyspark import RDD, StorageLevel
 
 from .pdf import PDF, is_pdf
@@ -35,7 +35,8 @@ class State:
 
         if shape is not None:
             if not is_shape(shape):
-                raise ValueError
+                self.__logger.error("Invalid shape")
+                raise ValueError("invalid shape")
 
         if type(arg1) == str:
             self.__from_path(arg1, shape)
@@ -45,8 +46,11 @@ class State:
             self.__from_dense(arg1)
         elif sp.isspmatrix(arg1):
             self.__from_sparse(arg1)
+        elif isinstance(arg1, (list, tuple)):
+            self.__from_block(arg1, shape)
         else:
-            raise TypeError
+            self.__logger.error("Invalid argument to instantiate a State object")
+            raise TypeError("invalid argument to instantiate a State object")
 
     @property
     def spark_context(self):
@@ -101,6 +105,12 @@ class State:
         self.__format = 'sparse'
         self.__memory_usage = self.__get_bytes()
 
+    def __from_block(self, blocks, shape):
+        self.data = blocks
+        self.shape = shape
+        self.__format = 'block'
+        self.__memory_usage = self.__get_bytes()
+
     def __get_bytes(self):
         return get_size_of(self.data)
 
@@ -116,34 +126,29 @@ class State:
     def is_sparse(self):
         return self.__format == 'sparse'
 
-    def is_unitary(self, round_precision=10):
-        if self.is_rdd():
-            n = self.data.filter(
-                lambda m: m[2] != complex()
-            ).map(
-                lambda m: math.sqrt(m[2].real ** 2 + m[2].imag ** 2)
-            ).reduce(
-                lambda a, b: a + b
-            )
-
-            return round(n, round_precision) != 1.0
-        elif self.is_dense():
-            return round(np.linalg.norm(self.data), round_precision) == 1.0
-        elif self.is_sparse():
-            return round(splinalg.norm(self.data), round_precision) == 1.0
-        else:
-            # TODO
-            raise NotImplementedError
+    def is_block(self):
+        return self.__format == 'block'
 
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
+        elif self.is_block():
+            for b1 in self.data:
+                b1.persist(storage_level)
+        else:
+            self.__logger.warning("It is not possible to persist a non RDD format State")
 
     def unpersist(self):
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
+        elif self.is_block():
+            if self.data is not None:
+                for b1 in self.data:
+                    b1.unpersist()
+        else:
+            self.__logger.warning("It is not possible to unpersist a non RDD format State")
 
     def destroy(self):
         self.unpersist()
@@ -153,8 +158,88 @@ class State:
         elif self.is_rdd():
             remove_tmp_path(self.__rdd_path)
             self.__rdd_path = None
+        elif self.is_block():
+            if self.data is not None:
+                for b1 in self.data:
+                    b1.destroy()
 
         self.data = None
+
+    def repartition(self, num_partitions):
+        if self.is_rdd():
+            if self.data.getNumPartitions() > num_partitions:
+                self.__logger.info(
+                    "As this RDD has more partitions than the desired, "
+                    "it will be coalesced into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.coalesce(num_partitions)
+            elif self.data.getNumPartitions() < num_partitions:
+                self.__logger.info(
+                    "As this RDD has less partitions than the desired, "
+                    "it will be repartitioned into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.repartition(num_partitions)
+            else:
+                self.__logger.info(
+                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
+                )
+        else:
+            self.__logger.warning("It is not possible to do a repartition on a non RDD format State")
+
+    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if self.is_rdd():
+            self.data = self.data.map(lambda m: m)
+            if not self.data.is_cached:
+                self.persist(storage_level)
+            self.data.count()
+        elif self.is_block():
+            for b1 in self.data:
+                b1.materialize()
+        else:
+            self.__logger.warning("It is not possible to materialize a non RDD format State")
+
+    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if self.is_rdd():
+            self.materialize(storage_level)
+            remove_tmp_path(self.__rdd_path)
+            self.__rdd_path = None
+        elif self.is_block():
+            for b1 in self.data:
+                b1.clear_rdd_path(storage_level)
+        else:
+            self.__logger.warning("It is not possible to clear the path of a non RDD format State")
+
+    def is_unitary(self, round_precision=10):
+        if self.is_rdd():
+            n = self.data.filter(
+                lambda m: m[1] != complex()
+            ).map(
+                lambda m: math.sqrt(m[1].real ** 2 + m[1].imag ** 2)
+            ).reduce(
+                lambda a, b: a + b
+            )
+
+            return round(n, round_precision) != 1.0
+        elif self.is_block():
+            n = 0
+
+            for block in self.data:
+                n += block.data.filter(
+                    lambda m: m[1] != complex()
+                ).map(
+                    lambda m: math.sqrt(m[1].real ** 2 + m[1].imag ** 2)
+                ).reduce(
+                    lambda a, b: a + b
+                )
+
+            return round(n, round_precision) != 1.0
+        elif self.is_dense():
+            return round(np.linalg.norm(self.data), round_precision) == 1.0
+        elif self.is_sparse():
+            return round(splinalg.norm(self.data), round_precision) == 1.0
+        else:
+            self.__logger.error("State format not implemented")
+            raise NotImplementedError("State format not implemented")
 
     def copy(self):
         if self.is_path():
@@ -195,37 +280,23 @@ class State:
                 self.__num_particles,
                 log_filename=self.__logger.filename
             )
+        elif self.is_block():
+            blocks = []
 
-    def repartition(self, num_partitions):
-        if self.is_rdd():
-            if self.data.getNumPartitions() > num_partitions:
-                self.__logger.info(
-                    "As this RDD has more partitions than the desired, "
-                    "it will be coalesced into {} partitions".format(num_partitions)
-                )
-                self.data = self.data.coalesce(num_partitions)
-            elif self.data.getNumPartitions() < num_partitions:
-                self.__logger.info(
-                    "As this RDD has less partitions than the desired, "
-                    "it will be repartitioned into {} partitions".format(num_partitions)
-                )
-                self.data = self.data.repartition(num_partitions)
-            else:
-                self.__logger.info(
-                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
-                )
+            for b1 in self.data:
+                blocks.append(b1.copy())
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.is_rdd():
-            if not self.data.is_cached:
-                self.persist(storage_level)
-            self.data.count()
-
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.is_rdd():
-            self.materialize(storage_level)
-            remove_tmp_path(self.__rdd_path)
-            self.__rdd_path = None
+            return State(
+                blocks,
+                self.__spark_context,
+                self.__mesh,
+                self.shape,
+                self.__num_particles,
+                log_filename=self.__logger.filename
+            )
+        else:
+            self.__logger.error("Operation not implemented for this State format")
+            raise NotImplementedError("operation not implemented for this State format")
 
     def to_path(self, min_partitions=8, copy=False):
         if self.is_path():
@@ -236,8 +307,9 @@ class State:
         else:
             if self.is_rdd():
                 path = get_tmp_path()
+
                 self.data.map(
-                    lambda m: "{} {} {}".format(m[0], m[1], m[2])
+                    lambda m: "{} {}".format(m[0], m[1])
                 ).saveAsTextFile(path)
             elif self.is_dense():
                 ind = self.data.nonzero()
@@ -250,7 +322,7 @@ class State:
                 f = 0
 
                 for i in range(len(ind[0])):
-                    files[f].write("{} {} {}\n".format(ind[0][i], ind[1][i], self.data[ind[0][i], ind[1][i]]))
+                    files[f].write("{} {}\n".format(ind[0][i], self.data[ind[0][i], ind[1][i]]))
                     f = (f + 1) % min_partitions
 
                 for f in files:
@@ -268,7 +340,7 @@ class State:
                 f = 0
 
                 for i in range(len(ind[2])):
-                    files[f].write("{} {} {}\n".format(ind[0][i], ind[1][i], ind[2][i]))
+                    files[f].write("{} {}\n".format(ind[0][i], ind[2][i]))
                     f = (f + 1) % min_partitions
 
                 for f in files:
@@ -276,8 +348,8 @@ class State:
 
                 del ind
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             if copy:
                 return State(
@@ -304,19 +376,40 @@ class State:
         else:
             value_type = complex
 
-            oper = self.to_path(min_partitions, copy)
+            if self.is_block():
+                rdd = self.__spark_context.emptyRDD()
 
-            def __map(m):
-                a = m.split()
-                return int(a[0]), int(a[1]), value_type(a[2])
+                if len(self.data):
+                    block_shape = self.data[0].shape
 
-            rdd = self.__spark_context.textFile(
-                oper.data, minPartitions=min_partitions
-            ).map(
-                __map
-            ).filter(
-                lambda m: m[2] != value_type()
-            )
+                    for i in range(len(self.data)):
+                        rdd = rdd.union(
+                            self.data[i].data.map(
+                                lambda m: (m[0] + i * block_shape[0], m[1])
+                            )
+                        )
+
+                    rdd = rdd.filter(
+                        lambda m: m[1] != value_type()
+                    )
+
+                rdd_path = self.__rdd_path
+            else:
+                oper = self.to_path(min_partitions, copy)
+
+                def __map(m):
+                    a = m.split()
+                    return int(a[0]), value_type(a[1])
+
+                rdd = self.__spark_context.textFile(
+                    oper.data, minPartitions=min_partitions
+                ).map(
+                    __map
+                ).filter(
+                    lambda m: m[1] != value_type()
+                )
+
+                rdd_path = oper.data
 
             if copy:
                 return State(
@@ -325,11 +418,11 @@ class State:
                     self.__mesh,
                     self.shape,
                     self.__num_particles,
-                    rdd_path=oper.data,
+                    rdd_path=rdd_path,
                     log_filename=self.__logger.filename
                 )
             else:
-                self.__rdd_path = oper.data
+                self.__rdd_path = rdd_path
                 self.data = rdd
                 self.__format = 'rdd'
                 self.__memory_usage = get_size_of(rdd)
@@ -348,18 +441,18 @@ class State:
                 with fi.input(files=glob(self.data + '/part-*')) as f:
                     for line in f:
                         l = line.split()
-                        dense[int(l[0]), int(l[1])] += complex(l[2])
+                        dense[int(l[0]), 0] += complex(l[1])
             elif self.is_rdd():
                 # '''
                 dense = np.zeros(self.shape, dtype=complex)
 
                 for i in self.data.collect():
-                    dense[i[0], i[1]] += i[2]
+                    dense[i[0], 0] += i[1]
             elif self.is_sparse():
                 dense = self.data.toarray()
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             if copy:
                 return State(
@@ -395,7 +488,7 @@ class State:
                 with fi.input(files=glob(self.data + '/part-*')) as f:
                     for line in f:
                         l = line.split()
-                        sparse[int(l[0]), int(l[1])] = complex(l[2])
+                        sparse[int(l[0]), 0] = complex(l[1])
 
                 sparse = convert_sparse(sparse, format)
             elif self.is_rdd():
@@ -404,12 +497,12 @@ class State:
 
                 def __map(m):
                     k = sp.dok_matrix(shape, dtype=complex)
-                    k[m[0], m[1]] = m[2]
+                    k[m[0], 0] = m[1]
                     return k.tocsc()
 
                 sparse = convert_sparse(
                     self.data.filter(
-                        lambda m: m[2] != complex()
+                        lambda m: m[1] != complex()
                     ).map(
                         __map
                     ).reduce(
@@ -420,8 +513,8 @@ class State:
             elif self.is_dense():
                 sparse = convert_sparse(sp.coo_matrix(self.data), format)
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             if copy:
                 return State(
@@ -438,9 +531,59 @@ class State:
                 self.__memory_usage = get_size_of(sparse)
                 return self
 
+    def to_block(self, num_blocks, min_partitions=8, copy=False):
+        if self.is_block():
+            if copy:
+                return self.copy()
+            else:
+                return self
+        else:
+            oper = self.to_rdd(min_partitions, copy)
+
+            if self.shape[0] % num_blocks != 0:
+                self.__logger.error("Incompatible number of blocks")
+                raise ValueError("incompatible number of blocks")
+
+            blocks = []
+            block_shape = (int(self.shape[0] / num_blocks), 1)
+
+            for i in range(num_blocks):
+                blocks.append(
+                    State(
+                        oper.data.filter(
+                            lambda m, i=i: i * block_shape[0] <= m[0] < (i + 1) * block_shape[0]
+                        ).map(
+                            lambda m, i=i: (m[0] - i * block_shape[0], m[1])
+                        ),
+                        self.__spark_context,
+                        self.__mesh,
+                        block_shape,
+                        self.__num_particles,
+                        rdd_path=self.__rdd_path,
+                        log_filename=self.__logger.filename
+                    )
+                )
+
+            if copy:
+                return State(
+                    blocks,
+                    self.__spark_context,
+                    self.__mesh,
+                    self.shape,
+                    self.__num_particles,
+                    rdd_path=oper.rdd_path,
+                    log_filename=self.__logger.filename
+                )
+            else:
+                self.data = blocks
+                self.__format = 'block'
+                self.__memory_usage = self.__get_bytes()
+                return self
+
     def kron(self, other, min_partitions=8):
         if not is_state(other):
-            raise TypeError('State instance expected (not "{}")'.format(type(other)))
+            self.__logger.error('State instance expected, not "{}"'.format(type(other)))
+            raise TypeError('State instance expected, not "{}"'.format(type(other)))
 
         value_type = complex
         spark_context = self.__spark_context
@@ -468,21 +611,20 @@ class State:
                     log_filename=self.__logger.filename
                 )
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
         elif self.is_rdd():
             if other.is_rdd():
                 oper2 = other.to_path(min_partitions, True)
 
-                so = ([], [], [])
+                so = ([], [])
 
                 with fi.input(files=glob(oper2.data + '/part-*')) as f:
                     for line in f:
                             l = line.split()
                             if value_type(l[2]) != value_type():
                                 so[0].append(int(l[0]))
-                                so[1].append(int(l[1]))
-                                so[2].append(value_type(l[2]))
+                                so[1].append(value_type(l[1]))
 
                 b = broadcast(spark_context, so)
 
@@ -491,12 +633,12 @@ class State:
                 oper2.destroy()
 
                 def __map(m):
-                    base_i, base_j = m[0] * o_shape[0]
+                    base_i = m[0] * o_shape[0]
                     k = []
-                    for i in range(len(b.value[2])):
-                        if b.value[2][i] != 0.0:
+                    for i in range(len(b.value[1])):
+                        if b.value[1][i] != value_type():
                             k.append(
-                                "{} {} {}".format(base_i + b.value[0][i], 0, m[2] * b.value[2][i]))
+                                "{} {}".format(base_i + b.value[0][i], m[1] * b.value[1][i]))
                     return "\n".join(k)
 
                 path = get_tmp_path()
@@ -514,11 +656,11 @@ class State:
                     log_filename=self.__logger.filename
                 )
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this State format")
+            raise NotImplementedError("operation not implemented for this State format")
 
     def full_measurement(self, min_partitions=8):
         self.__logger.info("Measuring the state of the system...")
@@ -556,8 +698,8 @@ class State:
             cs_size_y = cs * size_y
             r = (cs_size_x * cs_size_y) ** num_p
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
 
         if self.is_dense() or self.is_sparse():
             if self.is_sparse():
@@ -583,8 +725,8 @@ class State:
                     a.append((abs(s.value[m, 0]) ** 2).real)
                     return " ".join([str(i) for i in a])
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             self.__spark_context.range(
                 r, numSlices=min_partitions
@@ -617,8 +759,8 @@ class State:
                     for p in range(num_p):
                         a.append(int(m[0] / (cs_size ** (num_p - 1 - p))) % size)
                     if num_p == 1:
-                        a.append(m[1])
-                    a.append((abs(m[2]) ** 2).real)
+                        a.append(0)
+                    a.append((abs(m[1]) ** 2).real)
                     return a
             elif self.__mesh.is_2d():
                 def __map(m):
@@ -626,14 +768,14 @@ class State:
                     for p in range(num_p):
                         a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p) * size_y)) % size_x)
                         a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p))) % size_y)
-                    a.append((abs(m[2]) ** 2).real)
+                    a.append((abs(m[1]) ** 2).real)
                     return a
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             full_measurement = self.data.filter(
-                lambda m: m[2] != (0+0j)
+                lambda m: m[1] != (0+0j)
             ).map(
                 __map
             )
@@ -642,14 +784,15 @@ class State:
                 full_measurement, self.__spark_context, self.__mesh, dims, log_filename=self.__logger.filename
             ).to_dense()
         else:
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this State format")
+            raise NotImplementedError("operation not implemented for this State format")
 
         app_id = self.__spark_context.applicationId
         self.__metrics.log_rdds(app_id=app_id)
 
         self.__logger.info("Checking if the probabilities sum one...")
         if not pdf.sums_one():
-            # TODO
+            self.__logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
         self.__logger.info("Full measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
@@ -664,7 +807,8 @@ class State:
         t1 = datetime.now()
 
         if not is_pdf(full_measurement):
-            raise TypeError("PDF instance expected")
+            self.__logger.error('PDF instance expected, not "{}"'.format(type(full_measurement)))
+            raise TypeError('PDF instance expected, not "{}"'.format(type(full_measurement)))
 
         if self.__mesh.is_1d():
             ndim = 1
@@ -680,8 +824,8 @@ class State:
             size_y = self.__mesh.size[1]
             shape = (size_x, size_y)
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
 
         if full_measurement.is_dense() or full_measurement.is_sparse():
             if self.__mesh.is_1d():
@@ -709,8 +853,8 @@ class State:
                         if full_measurement.data[tuple(t)] != 0.0:
                             filtered_measurement[x, y] = full_measurement.data[tuple(t)]
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             pdf = PDF(
                 filtered_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
@@ -729,8 +873,8 @@ class State:
                             return False
                     return True
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
 
             filtered_measurement = full_measurement.filter(
                 __filter
@@ -740,8 +884,8 @@ class State:
                 filtered_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
             ).to_dense()
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this State format")
+            raise NotImplementedError("operation not implemented for this State format")
 
         self.__logger.info("Filtered measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
 
@@ -770,8 +914,8 @@ class State:
             cs_size_y = cs * size_y
             shape = (size_x, size_y)
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
 
         if self.is_dense() or self.is_sparse():
             path = get_tmp_path()
@@ -799,8 +943,8 @@ class State:
 
                 r = (cs_size_x * cs_size_y) ** num_p
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Mesh dimension not implemented")
+                raise NotImplementedError("mesh dimension not implemented")
 
             self.__spark_context.range(
                 r, numSlices=min_partitions
@@ -808,7 +952,7 @@ class State:
                 lambda m: s.value[m, 0] != (0+0j)
             ).map(
                 __map
-            ).saveAsTextFile(path, "org.apache.hadoop.io.compress.GzipCodec")
+            ).saveAsTextFile(path)
 
             s.unpersist()
 
@@ -830,20 +974,20 @@ class State:
                     a = []
                     for p2 in range(num_p):
                         a.append(int(m[0] / (cs_size ** (num_p - 1 - p2))) % size)
-                    return a[particle], m[1], (abs(m[2]) ** 2).real
+                    return a[particle], 0, (abs(m[1]) ** 2).real
             elif self.__mesh.is_2d():
                 def __map(m):
                     a = []
                     for p2 in range(num_p):
                         a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p2) * size_y)) % size_x)
                         a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p2))) % size_y)
-                    return a[particle], a[particle + 1], (abs(m[2]) ** 2).real
+                    return a[particle], a[particle + 1], (abs(m[1]) ** 2).real
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Mesh dimension not implemented")
+                raise NotImplementedError("mesh dimension not implemented")
 
             partial_measurement = self.data.filter(
-                lambda m: m[2] != (0+0j)
+                lambda m: m[1] != (0+0j)
             ).map(
                 __map
             )
@@ -852,16 +996,16 @@ class State:
                 partial_measurement, self.__spark_context, self.__mesh, shape, log_filename=self.__logger.filename
             ).to_dense()
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this State format")
+            raise NotImplementedError("operation not implemented for this State format")
 
         app_id = self.__spark_context.applicationId
         self.__metrics.log_rdds(app_id=app_id)
 
         self.__logger.info("Checking if the probabilities sum one...")
         if not pdf.sums_one():
-            # TODO
-            raise ValueError("Probabilities must sum one")
+            self.__logger.error("PDFs must sum one")
+            raise ValueError("PDFs must sum one")
 
         self.__logger.info(
             "Partial measurement for particle {} was done in {}s".format(

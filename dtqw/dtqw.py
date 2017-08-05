@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from pyspark import StorageLevel
 
 from .mesh import *
-from .utils.utils import SAVE_MODE_MEMORY, create_dir
+from .utils.utils import SAVE_MODE_MEMORY, MUL_BROADCAST, MUL_BLOCK, MUL_RDD, create_dir
 from dtqw.utils.logger import Logger
 from dtqw.utils.metrics import Metrics
 from dtqw.math.state import is_state
@@ -507,7 +507,7 @@ class DiscreteTimeQuantumWalk:
         if self.__walk_operator is not None:
             self.__walk_operator.destroy()
 
-    def walk(self, steps, initial_state, collision_phase=None):
+    def walk(self, steps, initial_state, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None):
         if not is_state(initial_state):
             raise TypeError('State instance expected (not "{}"'.format(type(initial_state)))
 
@@ -519,6 +519,16 @@ class DiscreteTimeQuantumWalk:
             if self.__mesh.type == MESH_2D_LATTICE_DIAGONAL or self.__mesh.type == MESH_2D_LATTICE_NATURAL:
                 if steps > int((self.__mesh.size[0] - 1) / 2) or steps > int((self.__mesh.size[1] - 1) / 2):
                     raise ValueError("the number of steps cannot be greater than the size of the lattice")
+
+        if mul_mode == MUL_BLOCK:
+            if num_blocks is None:
+                raise ValueError(
+                    "expected a valid number of blocks for block multiplications. {} was given".format(num_blocks)
+                )
+            elif num_blocks <= 0:
+                raise ValueError(
+                    "expected a valid number of blocks for block multiplications. {} was given".format(num_blocks)
+                )
 
         self.__steps = steps
 
@@ -541,48 +551,133 @@ class DiscreteTimeQuantumWalk:
                 self.__logger.info("Initial state path: {}".format(result.data))
             self.__logger.debug("Shape of initial state: {}".format(result.shape))
 
-            result = result.to_path(self.__min_partitions, True)
-
             self.__walk_operator = self.create_walk_operator(collision_phase)
 
-            self.__walk_operator.to_path(self.__min_partitions)
-            wo = self.__walk_operator
+            if mul_mode == MUL_BROADCAST:
+                t1 = datetime.now()
 
-            self.__logger.info("Starting the walk...")
+                result.to_dense()
 
-            t1 = datetime.now()
+                wo = self.__walk_operator
 
-            for i in range(self.__steps):
-                t_tmp = datetime.now()
+                self.__logger.info("Starting the walk...")
 
-                app_id = self.__spark_context.applicationId
-                self.__metrics.log_rdds(app_id=app_id)
+                for i in range(self.__steps):
+                    t_tmp = datetime.now()
 
-                wo.to_rdd(self.__min_partitions)
-                # wo.persist()
+                    result = wo.multiply(result, self.__min_partitions)
+
+                    self.__logger.debug(
+                        "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+
+                    t_tmp = datetime.now()
+
+                    self.__logger.debug("Checking if the state is unitary...")
+                    if not result.is_unitary():
+                        raise ValueError("the state is not unitary")
+
+                    # print(result.to_sparse(copy=True).data)
+
+                    self.__logger.debug(
+                        "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+            elif mul_mode == MUL_RDD:
+                t1 = datetime.now()
+
+                result = result.to_path(self.__min_partitions, True)
+
+                self.__walk_operator.to_path(self.__min_partitions)
+                wo = self.__walk_operator
+
+                self.__logger.info("Starting the walk...")
+
+                for i in range(self.__steps):
+                    t_tmp = datetime.now()
+
+                    app_id = self.__spark_context.applicationId
+                    self.__metrics.log_rdds(app_id=app_id)
+
+                    wo.to_rdd(self.__min_partitions)
+                    # wo.persist()
+                    result.to_rdd(self.__min_partitions)
+                    # result.persist()
+                    result_tmp = wo.multiply(result, self.__min_partitions)
+
+                    self.__logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+
+                    t_tmp = datetime.now()
+
+                    self.__logger.debug("Checking if the state is unitary...")
+                    if not result_tmp.is_unitary():
+                        raise ValueError("the state is not unitary")
+
+                    self.__logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+
+                    app_id = self.__spark_context.applicationId
+                    self.__metrics.log_rdds(app_id=app_id)
+
+                    wo.unpersist()
+                    result.destroy()
+                    result_tmp.to_path(self.__min_partitions)
+                    result = result_tmp
+
                 result.to_rdd(self.__min_partitions)
-                # result.persist()
-                result_tmp = wo.multiply(result, self.__min_partitions)
+            elif mul_mode == MUL_BLOCK:
+                t1 = datetime.now()
 
-                self.__logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
-
-                t_tmp = datetime.now()
-
-                self.__logger.debug("Checking if the state is unitary...")
-                if not result_tmp.is_unitary():
-                    raise ValueError("the state is not unitary!")
-
-                self.__logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+                # print(result.to_dense(copy=True).data)
+                result = result.to_block(num_blocks, self.__min_partitions, True)
 
                 app_id = self.__spark_context.applicationId
                 self.__metrics.log_rdds(app_id=app_id)
+
+                # self.__walk_operator.to_path(self.__min_partitions)
+                # print(self.__walk_operator.to_dense(copy=True).data)
+                self.__walk_operator.unpersist()
+
+                app_id = self.__spark_context.applicationId
+                self.__metrics.log_rdds(app_id=app_id)
+
+                wo = self.__walk_operator.to_block(num_blocks, self.__min_partitions)
+                wo.materialize()
+
+                self.__logger.info("Starting the walk...")
+
+                for i in range(self.__steps):
+                    t_tmp = datetime.now()
+
+                    app_id = self.__spark_context.applicationId
+                    self.__metrics.log_rdds(app_id=app_id)
+
+                    result_tmp = wo.multiply(result, self.__min_partitions)
+
+                    app_id = self.__spark_context.applicationId
+                    self.__metrics.log_rdds(app_id=app_id)
+
+                    result.destroy()
+                    result = result_tmp
+
+                    self.__logger.debug(
+                        "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+
+                    t_tmp = datetime.now()
+
+                    self.__logger.debug("Checking if the state is unitary...")
+                    if not result.is_unitary():
+                        raise ValueError("the state is not unitary")
+
+                    self.__logger.debug(
+                        "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+
+                    # result.to_rdd(self.__min_partitions)
+                    # print(result.to_sparse(copy=True).data)
+                    # result.to_block(num_blocks, self.__min_partitions)
 
                 wo.unpersist()
-                result.destroy()
-                result_tmp.to_path(self.__min_partitions)
-                result = result_tmp
 
-            result.to_rdd(self.__min_partitions)
+                result.to_rdd(self.__min_partitions)
+                result.materialize()
+            else:
+                raise ValueError("invalid multiplication mode")
 
             t2 = datetime.now()
             self.__execution_times['walk'] = (t2 - t1).total_seconds()

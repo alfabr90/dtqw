@@ -1,10 +1,11 @@
-import fileinput as fi
-import math
 import os
 import shutil
+import fileinput as fi
+import math
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
+
 from glob import glob
 from pyspark import RDD, StorageLevel
 
@@ -31,7 +32,8 @@ class Operator:
 
         if shape is not None:
             if not is_shape(shape):
-                raise ValueError("Not a valid shape")
+                self.__logger.error("Invalid shape")
+                raise ValueError("invalid shape")
 
         if type(arg1) == str:
             self.__from_path(arg1, shape, value_type)
@@ -41,16 +43,19 @@ class Operator:
             self.__from_dense(arg1)
         elif sp.isspmatrix(arg1):
             self.__from_sparse(arg1)
+        elif isinstance(arg1, (list, tuple)):
+            self.__from_block(arg1, shape, value_type)
         else:
-            raise TypeError
-
-    @property
-    def format(self):
-        return self.__format
+            self.__logger.error("Invalid argument to instantiate an Operator object")
+            raise TypeError("invalid argument to instantiate an Operator object")
 
     @property
     def spark_context(self):
         return self.__spark_context
+
+    @property
+    def format(self):
+        return self.__format
 
     @property
     def value_type(self):
@@ -93,18 +98,53 @@ class Operator:
         self.__value_type = sparse.dtype.type
         self.__memory_usage = self.__get_bytes()
 
+    def __from_block(self, blocks, shape, value_type):
+        self.data = blocks
+        self.shape = shape
+        self.__format = 'block'
+        self.__value_type = value_type
+        self.__memory_usage = self.__get_bytes()
+
     def __get_bytes(self):
         return get_size_of(self.data)
+
+    def is_path(self):
+        return self.__format == 'path'
+
+    def is_rdd(self):
+        return self.__format == 'rdd'
+
+    def is_dense(self):
+        return self.__format == 'dense'
+
+    def is_sparse(self):
+        return self.__format == 'sparse'
+
+    def is_block(self):
+        return self.__format == 'block'
 
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
+        elif self.is_block():
+            for b1 in self.data:
+                for b2 in b1:
+                    b2.persist(storage_level)
+        else:
+            self.__logger.warning("It is not possible to persist a non RDD format Operator")
 
     def unpersist(self):
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
+        elif self.is_block():
+            if self.data is not None:
+                for b1 in self.data:
+                    for b2 in b1:
+                        b2.unpersist()
+        else:
+            self.__logger.warning("It is not possible to unpersist a non RDD format Operator")
 
     def destroy(self):
         self.unpersist()
@@ -114,8 +154,93 @@ class Operator:
         elif self.is_rdd():
             remove_tmp_path(self.__rdd_path)
             self.__rdd_path = None
+        elif self.is_block():
+            if self.data is not None:
+                for b1 in self.data:
+                    for b2 in b1:
+                        b2.destroy()
 
         self.data = None
+
+    def repartition(self, num_partitions):
+        if self.is_rdd():
+            if self.data.getNumPartitions() > num_partitions:
+                self.__logger.info(
+                    "As this RDD has more partitions than the desired, "
+                    "it will be coalesced into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.coalesce(num_partitions)
+            elif self.data.getNumPartitions() < num_partitions:
+                self.__logger.info(
+                    "As this RDD has less partitions than the desired, "
+                    "it will be repartitioned into {} partitions".format(num_partitions)
+                )
+                self.data = self.data.repartition(num_partitions)
+            else:
+                self.__logger.info(
+                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
+                )
+        else:
+            self.__logger.warning("It is not possible to do a repartition on a non RDD format Operator")
+
+    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if self.is_rdd():
+            self.data = self.data.map(lambda m: m)
+            if not self.data.is_cached:
+                self.persist(storage_level)
+            self.data.count()
+        elif self.is_block():
+            for b1 in self.data:
+                for b2 in b1:
+                    b2.materialize()
+        else:
+            self.__logger.warning("It is not possible to materialize a non RDD format Operator")
+
+    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if self.is_rdd():
+            self.materialize(storage_level)
+            remove_tmp_path(self.__rdd_path)
+            self.__rdd_path = None
+        elif self.is_block():
+            for b1 in self.data:
+                for b2 in b1:
+                    b2.clear_rdd_path(storage_level)
+        else:
+            self.__logger.warning("It is not possible to clear the path of a non RDD format Operator")
+
+    def is_unitary(self, round_precision=10):
+        value_type = self.__value_type
+
+        if self.is_rdd():
+            n = self.data.filter(
+                lambda m: m[2] != value_type
+            ).map(
+                lambda m: math.sqrt(m[2].real ** 2 + m[2].imag ** 2)
+            ).reduce(
+                lambda a, b: a + b
+            )
+
+            return round(n, round_precision) != 1.0
+        elif self.is_block():
+            n = 0
+
+            for block in self.data:
+                n += block.data.filter(
+                    lambda m: m[2] != value_type
+                ).map(
+                    lambda m: math.sqrt(m[2].real ** 2 + m[2].imag ** 2)
+                ).reduce(
+                    lambda a, b: a + b
+                )
+
+            return round(n, round_precision) != 1.0
+        elif self.is_dense():
+            return round(splinalg.norm(self.data), round_precision) == 1.0
+        elif self.is_sparse():
+            return round(np.linalg.norm(self.data), round_precision) == 1.0
+        else:
+            self.__logger.error("Operation not implemented for this Operator format")
+            raise NotImplementedError("operation not implemented for this Operator format")
 
     def copy(self):
         if self.is_path():
@@ -138,71 +263,21 @@ class Operator:
             return Operator(self.data.copy(), self.__spark_context, log_filename=self.__logger.filename)
         elif self.is_sparse():
             return Operator(self.data.copy(), self.__spark_context, log_filename=self.__logger.filename)
+        elif self.is_block():
+            blocks = []
 
-    def repartition(self, num_partitions):
-        if self.is_rdd():
-            if self.data.getNumPartitions() > num_partitions:
-                self.__logger.info(
-                    "As this RDD has more partitions than the desired, "
-                    "it will be coalesced into {} partitions".format(num_partitions)
-                )
-                self.data = self.data.coalesce(num_partitions)
-            elif self.data.getNumPartitions() < num_partitions:
-                self.__logger.info(
-                    "As this RDD has less partitions than the desired, "
-                    "it will be repartitioned into {} partitions".format(num_partitions)
-                )
-                self.data = self.data.repartition(num_partitions)
-            else:
-                self.__logger.info(
-                    "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
-                )
+            for b1 in self.data:
+                blk = []
+                for b2 in b1:
+                    blk.append(b2.copy())
+                blocks.append(blk)
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.is_rdd():
-            self.data = self.data.map(lambda m: m)
-            if not self.data.is_cached:
-                self.persist(storage_level)
-            self.data.count()
-
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.is_rdd():
-            self.materialize(storage_level)
-            remove_tmp_path(self.__rdd_path)
-            self.__rdd_path = None
-
-    def is_unitary(self, round_precision=10):
-        value_type = self.__value_type
-
-        if self.is_path():
-            n = self.data.map(
-                lambda m: value_type(m.split()[2])
-            ).filter(
-                lambda m: m != value_type
-            ).map(
-                lambda m: math.sqrt(m.real ** 2 + m.imag ** 2)
-            ).reduce(
-                lambda a, b: a + b
+            return Operator(
+                blocks, self.__spark_context, self.shape, self.__value_type, log_filename=self.__logger.filename
             )
-
-            return round(n, round_precision) != 1.0
-        elif self.is_rdd():
-            n = self.data.filter(
-                lambda m: m[2] != value_type
-            ).map(
-                lambda m: math.sqrt(m[2].real ** 2 + m[2].imag ** 2)
-            ).reduce(
-                lambda a, b: a + b
-            )
-
-            return round(n, round_precision) != 1.0
-        elif self.is_dense():
-            return round(splinalg.norm(self.data), round_precision) == 1.0
-        elif self.is_sparse():
-            return round(np.linalg.norm(self.data), round_precision) == 1.0
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this Operator format")
+            raise NotImplementedError("operation not implemented for this Operator format")
 
     def to_path(self, min_partitions=8, copy=False):
         if self.is_path():
@@ -254,8 +329,8 @@ class Operator:
 
                 del ind
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
 
             if copy:
                 return Operator(
@@ -277,26 +352,49 @@ class Operator:
         else:
             value_type = complex
 
-            oper = self.to_path(min_partitions, copy)
+            if self.is_block():
+                rdd = self.__spark_context.emptyRDD()
 
-            def __map(m):
-                a = m.split()
-                return int(a[0]), int(a[1]), value_type(a[2])
+                if len(self.data):
+                    if len(self.data[0]):
+                        block_shape = self.data[0][0].shape
 
-            rdd = self.__spark_context.textFile(
-                oper.data, minPartitions=min_partitions
-            ).map(
-                __map
-            ).filter(
-                lambda m: m[2] != value_type()
-            )
+                        for i in range(len(self.data)):
+                            for j in range(len(self.data)):
+                                rdd = rdd.union(
+                                    self.data[i].data.map(
+                                        lambda m: (m[0] + i * block_shape[0], m[1] + j * block_shape[1], m[2])
+                                    )
+                                )
+
+                        rdd = rdd.filter(
+                            lambda m: m[2] != value_type()
+                        )
+
+                rdd_path = self.__rdd_path
+            else:
+                oper = self.to_path(min_partitions, copy)
+
+                def __map(m):
+                    a = m.split()
+                    return int(a[0]), int(a[1]), value_type(a[2])
+
+                rdd = self.__spark_context.textFile(
+                    oper.data, minPartitions=min_partitions
+                ).map(
+                    __map
+                ).filter(
+                    lambda m: m[2] != value_type()
+                )
+
+                rdd_path = oper.data
 
             if copy:
                 return Operator(
                     rdd, self.__spark_context, self.shape, rdd_path=oper.data, log_filename=self.__logger.filename
                 )
             else:
-                self.__rdd_path = oper.data
+                self.__rdd_path = rdd_path
                 self.data = rdd
                 self.__format = 'rdd'
                 self.__memory_usage = self.__get_bytes()
@@ -324,8 +422,8 @@ class Operator:
             elif self.is_sparse():
                 dense = self.data.toarray()
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
 
             if copy:
                 return Operator(dense, self.__spark_context, log_filename=self.__logger.filename)
@@ -369,8 +467,8 @@ class Operator:
             elif self.is_dense():
                 sparse = convert_sparse(sp.coo_matrix(self.data), format)
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
 
             if copy:
                 return Operator(sparse, self.__spark_context, log_filename=self.__logger.filename)
@@ -381,20 +479,58 @@ class Operator:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def is_path(self):
-        return self.__format == 'path'
+    def to_block(self, num_blocks, min_partitions=8, copy=False):
+        if self.is_block():
+            if copy:
+                return self.copy()
+            else:
+                return self
+        else:
+            oper = self.to_rdd(min_partitions, copy)
 
-    def is_rdd(self):
-        return self.__format == 'rdd'
+            if self.shape[0] % num_blocks != 0 or self.shape[1] % num_blocks != 0:
+                self.__logger.error("Incompatible number of blocks")
+                raise ValueError("incompatible number of blocks")
 
-    def is_dense(self):
-        return self.__format == 'dense'
+            blocks = []
+            block_shape = (int(self.shape[0] / num_blocks), int(self.shape[1] / num_blocks))
 
-    def is_sparse(self):
-        return self.__format == 'sparse'
+            for i in range(num_blocks):
+                blk = []
+                for j in range(num_blocks):
+                    blk.append(
+                        Operator(
+                            oper.data.filter(
+                                lambda m, i=i, j=j: i * block_shape[0] <= m[0] < (i + 1) * block_shape[0] and
+                                          j * block_shape[1] <= m[1] < (j + 1) * block_shape[1]
+                            ).map(
+                                lambda m, i=i, j=j: (m[0] - i * block_shape[0], m[1] - j * block_shape[1], m[2])
+                            ),
+                            self.__spark_context,
+                            block_shape,
+                            rdd_path=self.__rdd_path,
+                            log_filename=self.__logger.filename
+                        )
+                    )
+                blocks.append(blk)
+
+            if copy:
+                return Operator(
+                    blocks,
+                    self.__spark_context,
+                    self.shape,
+                    rdd_path=oper.rdd_path,
+                    log_filename=self.__logger.filename
+                )
+            else:
+                self.data = blocks
+                self.__format = 'block'
+                self.__memory_usage = self.__get_bytes()
+                return self
 
     def __multiply_operator(self, other, min_partitions=8):
         if self.shape[1] != other.shape[0]:
+            self.__logger.error("Incompatible shapes {} and {}".format(self.shape, other.shape))
             raise ValueError('incompatible shapes {} and {}'.format(self.shape, other.shape))
 
         value_type = self.__value_type
@@ -421,8 +557,8 @@ class Operator:
 
                 return Operator(data, spark_context, shape, log_filename=self.__logger.filename)
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
         elif self.is_rdd():
             oper1 = self.data.map(
                 lambda m: (m[1], (m[0], m[2]))
@@ -449,15 +585,16 @@ class Operator:
 
                 return Operator(r, spark_context, shape, log_filename=self.__logger.filename)
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this Operator format")
+            raise NotImplementedError("operation not implemented for this Operator format")
 
     def __multiply_state(self, other, min_partitions=8):
         if self.shape[1] != other.shape[0]:
-            raise ValueError('incompatible shapes {} and {}'.format(self.shape, other.shape))
+            self.__logger.error("Incompatible shapes {} and {}".format(self.shape, other.shape))
+            raise ValueError("incompatible shapes {} and {}".format(self.shape, other.shape))
 
         value_type = complex
         spark_context = self.__spark_context
@@ -475,7 +612,7 @@ class Operator:
                 data = self.__spark_context.range(
                     shape[0], numSlices=min_partitions
                 ).map(
-                    lambda m: (m, 0, (oper1.value[m, :] * oper2.value)[0, 0])
+                    lambda m: (m, (oper1.value[m, :] * oper2.value)[0, 0])
                 )
 
                 if other.is_sparse():
@@ -491,8 +628,8 @@ class Operator:
                 oper2.unpersist()
                 return state
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
         elif self.is_rdd():
             oper1 = self.data.map(
                 lambda m: (m[1], (m[0], m[2]))
@@ -503,11 +640,11 @@ class Operator:
                     oper2 = broadcast(other.spark_context, other.data.toarray())
                 else:
                     oper2 = broadcast(other.spark_context, other.data)
-
+                # print(oper2.value)
                 data = oper1.filter(
                     lambda m: oper2.value[m[0], 0] != value_type()
                 ).map(
-                    lambda m: (m[1][0], 0, m[1][1] * oper2.value[m[0], 0])
+                    lambda m: (m[1][0], m[1][1] * oper2.value[m[0], 0])
                 )
 
                 if other.is_sparse():
@@ -523,20 +660,16 @@ class Operator:
 
                 return state
             elif other.is_rdd():
-                oper2 = other.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
-                )
+                oper2 = other.data
 
                 j = oper1.join(
                     oper2
                 )
 
                 r = j.map(
-                    lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
+                    lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
                 ).reduceByKey(
                     lambda a, b: a + b, numPartitions=min_partitions
-                ).map(
-                    lambda m: (m[0][0], m[0][1], m[1])
                 )
 
                 j.unpersist()
@@ -545,11 +678,90 @@ class Operator:
                     r, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
                 )
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
+        elif self.is_block():
+            if len(self.data) == 0:
+                self.__logger.error("No blocks in Operator")
+                raise ValueError("no blocks in Operator")
+
+            s_blocks = len(self.data[0])
+
+            if s_blocks == 0:
+                self.__logger.error("No blocks in Operator")
+                raise ValueError("no blocks in Operator")
+
+            if other.is_block():
+                if len(other.data) == 0:
+                    self.__logger.error("None blocks in State")
+                    raise ValueError("no blocks in State")
+
+                o_blocks = len(other.data)
+
+                if s_blocks != o_blocks:
+                    self.__logger.error("Incompatible number of blocks {} and {}".format(s_blocks, o_blocks))
+                    raise ValueError("incompatible number of blocks {} and {}".format(s_blocks, o_blocks))
+
+                tmp_blocks = []
+
+                block_shape = self.data[0][0].shape
+
+                for i in range(len(self.data)):
+                    blk = []
+                    oper2 = broadcast(other.spark_context, other.data[i].to_dense(True).data)
+                    # print("result:", i)
+                    # print(other.data[i].to_dense(copy=True).data)
+                    for j in range(len(self.data)):
+                        # print("operator:", j, ",", i)
+                        # print(self.data[j][i].to_sparse(copy=True).data)
+                        data = self.data[j][i].data.filter(
+                            lambda m: oper2.value[m[1], 0] != value_type()
+                        ).map(
+                            lambda m, i=i: (m[0] + j * block_shape[0], m[2] * oper2.value[m[1], 0])
+                        )
+
+                        blk.append(
+                            State(
+                                data,
+                                spark_context,
+                                other.mesh,
+                                block_shape,
+                                other.num_particles,
+                                log_filename=self.__logger.filename
+                            ).to_path(min_partitions).to_rdd(min_partitions)
+                        )
+
+                    oper2.unpersist()
+
+                    tmp_blocks.append(blk)
+
+                rdd = spark_context.emptyRDD()
+
+                for i in tmp_blocks:
+                    for j in i:
+                        rdd = rdd.union(j.data)
+                # print(rdd.collect())
+                r = rdd.reduceByKey(
+                    lambda a, b: a + b, numPartitions=min_partitions
+                )
+                # print(r.collect())
+                state = State(
+                    r, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
+                ).to_path(min_partitions)
+
+                r.unpersist()
+
+                for i in tmp_blocks:
+                    for j in i:
+                        j.destroy()
+
+                return state.to_block(o_blocks, min_partitions)
+            else:
+                self.__logger.error("Operation not implemented for this State format")
+                raise NotImplementedError("operation not implemented for this State format")
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this Operator format")
+            raise NotImplementedError("operation not implemented for this Operator format")
 
     def multiply(self, other, min_partitions=8):
         if is_operator(other):
@@ -557,11 +769,13 @@ class Operator:
         elif is_state(other):
             return self.__multiply_state(other, min_partitions)
         else:
-            raise TypeError("State or Operator instance expected")
+            self.__logger.error('State or Operator instance expected, not "{}"'.format(type(other)))
+            raise TypeError('State or Operator instance expected, not "{}"'.format(type(other)))
 
     def kron(self, other, min_partitions=8):
         if not is_operator(other):
-            raise TypeError('Operator instance expected (not "{}")'.format(type(other)))
+            self.__logger.error('Operator instance expected, not "{}"'.format(type(other)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(other)))
 
         value_type = complex
         spark_context = self.__spark_context
@@ -573,8 +787,8 @@ class Operator:
             if other.is_sparse():
                 return Operator(sp.kron(self.data, other.data), spark_context, log_filename=self.__logger.filename)
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
         elif self.is_rdd():
             if other.is_rdd():
                 oper2 = other.to_path(min_partitions, True)
@@ -599,7 +813,7 @@ class Operator:
                     base_i, base_j = m[0] * o_shape[0], m[1] * o_shape[1]
                     k = []
                     for i in range(len(b.value[2])):
-                        if b.value[2][i] != 0.0:
+                        if b.value[2][i] != value_type():
                             k.append(
                                 "{} {} {}".format(base_i + b.value[0][i], base_j + b.value[1][i], m[2] * b.value[2][i]))
                     return "\n".join(k)
@@ -616,11 +830,11 @@ class Operator:
                     min_partitions
                 )
             else:
-                # TODO
-                raise NotImplementedError
+                self.__logger.error("Operation not implemented for this Operator format")
+                raise NotImplementedError("operation not implemented for this Operator format")
         else:
-            # TODO
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this Operator format")
+            raise NotImplementedError("operation not implemented for this Operator format")
 
 
 def is_operator(obj):
