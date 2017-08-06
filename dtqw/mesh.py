@@ -75,6 +75,21 @@ class Mesh:
             or self.__type == MESH_2D_BOX_DIAGONAL or self.__type == MESH_2D_BOX_NATURAL \
             or self.__type == MESH_2D_TORUS_DIAGONAL or self.__type == MESH_2D_TORUS_NATURAL
 
+    def check_steps(self, steps):
+        if self.is_1d():
+            if self.__type == MESH_1D_LINE:
+                if steps > int((self.__size - 1) / 2):
+                    return False
+        elif self.is_2d():
+            if self.__type == MESH_2D_LATTICE_DIAGONAL or self.__type == MESH_2D_LATTICE_NATURAL:
+                if steps > int((self.__size[0] - 1) / 2) or steps > int((self.__size[1] - 1) / 2):
+                    return False
+        else:
+            self.__logger.error("Operation not implemented for this mesh dimension")
+            raise NotImplementedError("operation not implemented for this mesh dimension")
+
+        return True
+
     def create_operator(self, spark_context, min_partitions=8, log_filename='log.txt'):
         path = get_tmp_path()
 
@@ -208,8 +223,8 @@ class Mesh:
                                     )
                                 )
         else:
-            self.__logger.error("Mesh type not implemented")
-            raise NotImplementedError("mesh type not implemented")
+            self.__logger.error("Operation not implemented for this mesh type")
+            raise NotImplementedError("operation not implemented for this mesh type")
 
         c = broadcast(spark_context, sp.identity(cs, format='csc'))
 
@@ -240,8 +255,8 @@ class Mesh:
                     'csc'
                 )
         else:
-            self.__logger.error("Mesh dimension not implemented")
-            raise NotImplementedError("mesh dimension no implemented")
+            self.__logger.error("Operation not implemented for this mesh dimension")
+            raise NotImplementedError("operation not implemented for this mesh dimension")
 
         sparse = spark_context.textFile(
             path, minPartitions=min_partitions

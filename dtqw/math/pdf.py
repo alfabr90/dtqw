@@ -111,12 +111,16 @@ class PDF:
         else:
             self.__logger.warning("It is not possible to persist a non RDD format PDF")
 
+        return self
+
     def unpersist(self):
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
         else:
             self.__logger.warning("It is not possible to unpersist a non RDD format PDF")
+
+        return self
 
     def destroy(self):
         self.unpersist()
@@ -128,6 +132,7 @@ class PDF:
             self.__rdd_path = None
 
         self.data = None
+        return self
 
     def repartition(self, num_partitions):
         if self.is_rdd():
@@ -149,6 +154,8 @@ class PDF:
                 )
         self.__logger.warning("It is not possible to do a repartition on a non RDD format PDF")
 
+        return self
+
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
             if not self.data.is_cached:
@@ -157,6 +164,8 @@ class PDF:
         else:
             self.__logger.warning("It is not possible to materialize a non RDD format PDF")
 
+        return self
+
     def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
             self.materialize(storage_level)
@@ -164,6 +173,8 @@ class PDF:
             self.__rdd_path = None
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format PDF")
+
+        return self
 
     def sums_one(self, round_precision=10):
         ind = len(self.shape)

@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from pyspark import StorageLevel
 
 from .mesh import *
-from .utils.utils import SAVE_MODE_MEMORY, MUL_BROADCAST, MUL_BLOCK, MUL_RDD, create_dir
+from .utils.utils import SAVE_MODE_MEMORY, MUL_BROADCAST, MUL_BLOCK, create_dir
 from dtqw.utils.logger import Logger
 from dtqw.utils.metrics import Metrics
 from dtqw.math.state import is_state
@@ -298,7 +298,7 @@ class DiscreteTimeQuantumWalk:
         )
 
         result = Operator(rdd, self.__spark_context, shape)
-        result.clear_rdd_path()
+        result.materialize()
 
         self.__execution_times['interaction_operator'] = (datetime.now() - t1).total_seconds()
         self.__memory_usage['interaction_operator'] = result.memory_usage
@@ -331,13 +331,11 @@ class DiscreteTimeQuantumWalk:
         other = self.__unitary_operator.to_rdd(self.__min_partitions, True)
         other.clear_rdd_path()
 
-        result = self.__unitary_operator  # .to_rdd(self.__min_partitions, True)
+        result = self.__unitary_operator
 
         for p in range(self.__num_particles - 1):
             result_tmp = result.kron(other, self.__min_partitions)
-            result_tmp.to_path(self.__min_partitions)
-            result_tmp.to_rdd(self.__min_partitions)
-            result_tmp.materialize()
+            result_tmp.to_rdd(self.__min_partitions).materialize()
             result.destroy()
             result = result_tmp
 
@@ -366,7 +364,15 @@ class DiscreteTimeQuantumWalk:
 
         return result
 
-    def create_walk_operator(self, collision_phase=None):
+    def create_walk_operator(self, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None):
+        if mul_mode == MUL_BLOCK:
+            if num_blocks is None:
+                self.__logger.error("Invalid number of blocks")
+                raise ValueError("invalid number of blocks")
+            elif num_blocks <= 0:
+                self.__logger.error("Invalid number of blocks")
+                raise ValueError("invalid number of blocks")
+
         if self.__num_particles == 1:
             self.__logger.info("With just one particle, the walk operator is the unitary operator")
 
@@ -374,7 +380,13 @@ class DiscreteTimeQuantumWalk:
                 self.__logger.info("No unitary operator has been set. A new one will be built")
                 self.__unitary_operator = self.create_unitary_operator()
 
+            t1 = datetime.now()
+
             result = self.__unitary_operator
+
+            if mul_mode == MUL_BLOCK:
+                self.__logger.info("Transforming walk operator to block format...")
+                result.to_block(num_blocks, self.__min_partitions).materialize()
         else:
             if collision_phase is None:
                 self.__logger.info("No collision phase has been defined. "
@@ -384,7 +396,17 @@ class DiscreteTimeQuantumWalk:
                     self.__logger.info("No multiparticles unitary operator has been set. A new one will be built")
                     self.__multiparticles_unitary_operator = self.create_multiparticles_unitary_operator()
 
+                t1 = datetime.now()
+
+                self.__multiparticles_unitary_operator.clear_rdd_path()
                 result = self.__multiparticles_unitary_operator
+
+                app_id = self.__spark_context.applicationId
+                self.__metrics.log_rdds(app_id=app_id)
+
+                if mul_mode == MUL_BLOCK:
+                    self.__logger.info("Transforming walk operator to block format...")
+                    result.to_block(num_blocks, self.__min_partitions).materialize()
             else:
                 self.__logger.info("Building walk operator...")
 
@@ -397,34 +419,57 @@ class DiscreteTimeQuantumWalk:
                     self.__interaction_operator = self.create_interaction_operator(collision_phase)
 
                 t1 = datetime.now()
+                '''
+                if mul_mode == MUL_BLOCK:
+                    self.__logger.info("Transforming multiparticles unitary operator to block format...")
+                    self.__multiparticles_unitary_operator.to_block(num_blocks, self.__min_partitions).materialize()
+                    self.__logger.info("Transforming interaction operator to block format...")
+                    self.__interaction_operator.to_block(num_blocks, self.__min_partitions).materialize()
+                '''
+                self.__multiparticles_unitary_operator.clear_rdd_path()
+                self.__interaction_operator.clear_rdd_path()
+
+                # app_id = self.__spark_context.applicationId
+                # self.__metrics.log_rdds(app_id=app_id)
 
                 result = self.__multiparticles_unitary_operator.multiply(
                     self.__interaction_operator,
                     self.__min_partitions
                 )
-                result.to_path(self.__min_partitions)
-                result.to_rdd(self.__min_partitions)
+
                 result.materialize()
+
+                self.__logger.debug(
+                    "Multiplication between multiparticles unitary operator and "
+                    "interaction operator was done in {}s".format((datetime.now() - t1).total_seconds())
+                )
+                # print(result.to_rdd(self.__min_partitions, True).to_dense().data)
+                app_id = self.__spark_context.applicationId
+                self.__metrics.log_rdds(app_id=app_id)
+
+                if mul_mode == MUL_BLOCK:
+                    self.__logger.info("Transforming walk operator to block format...")
+                    result.to_block(num_blocks, self.__min_partitions).materialize()
 
                 self.__multiparticles_unitary_operator.destroy()
                 self.__interaction_operator.destroy()
 
-                self.__execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
-                self.__memory_usage['walk_operator'] = result.memory_usage
+        self.__execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
+        self.__memory_usage['walk_operator'] = result.memory_usage
 
-                self.__logger.info(
-                    "Walk operator was built in {}s".format(self.__execution_times['walk_operator'])
-                )
-                self.__logger.info(
-                    "Walk operator is consuming {} bytes".format(self.__memory_usage['walk_operator'])
-                )
-                self.__logger.debug("Walk operator format: {}".format(result.format))
-                if result.is_path():
-                    self.__logger.info("Walk operator path: {}".format(result.data))
-                self.__logger.debug("Shape of walk operator: {}".format(result.shape))
+        self.__logger.info(
+            "Walk operator was built in {}s".format(self.__execution_times['walk_operator'])
+        )
+        self.__logger.info(
+            "Walk operator is consuming {} bytes".format(self.__memory_usage['walk_operator'])
+        )
+        self.__logger.debug("Walk operator format: {}".format(result.format))
+        if result.is_path():
+            self.__logger.info("Walk operator path: {}".format(result.data))
+        self.__logger.debug("Shape of walk operator: {}".format(result.shape))
 
-                app_id = self.__spark_context.applicationId
-                self.__metrics.log_rdds(app_id=app_id)
+        app_id = self.__spark_context.applicationId
+        self.__metrics.log_rdds(app_id=app_id)
 
         return result
 
@@ -534,16 +579,9 @@ class DiscreteTimeQuantumWalk:
             self.__logger.error('State instance expected, not "{}"'.format(type(initial_state)))
             raise TypeError('State instance expected, not "{}"'.format(type(initial_state)))
 
-        if self.__mesh.is_1d():
-            if self.__mesh.type == MESH_1D_LINE:
-                if steps > int((self.__mesh.size - 1) / 2):
-                    self.__logger.error("Invalid number of steps")
-                    raise ValueError("invalid number of steps")
-        elif self.__mesh.is_2d():
-            if self.__mesh.type == MESH_2D_LATTICE_DIAGONAL or self.__mesh.type == MESH_2D_LATTICE_NATURAL:
-                if steps > int((self.__mesh.size[0] - 1) / 2) or steps > int((self.__mesh.size[1] - 1) / 2):
-                    self.__logger.error("Invalid number of steps")
-                    raise ValueError("invalid number of steps")
+        if not self.__mesh.check_steps(steps):
+            self.__logger.error("Invalid number of steps")
+            raise ValueError("invalid number of steps")
 
         if mul_mode == MUL_BLOCK:
             if num_blocks is None:
@@ -575,14 +613,15 @@ class DiscreteTimeQuantumWalk:
                 self.__logger.info("Initial state path: {}".format(result.data))
             self.__logger.debug("Shape of initial state: {}".format(result.shape))
 
-            self.__walk_operator = self.create_walk_operator(collision_phase)
+            self.__walk_operator = self.create_walk_operator(collision_phase, mul_mode, num_blocks)
+            self.__walk_operator.clear_rdd_path()
+
+            wo = self.__walk_operator
 
             if mul_mode == MUL_BROADCAST:
                 t1 = datetime.now()
 
                 result.to_dense()
-
-                wo = self.__walk_operator
 
                 self.__logger.info("Starting the walk...")
 
@@ -605,52 +644,11 @@ class DiscreteTimeQuantumWalk:
 
                     self.__logger.debug(
                         "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
-            elif mul_mode == MUL_RDD:
-                t1 = datetime.now()
-
-                result = result.to_path(self.__min_partitions, True)
-
-                self.__walk_operator.to_path(self.__min_partitions)
-                wo = self.__walk_operator
-
-                self.__logger.info("Starting the walk...")
-
-                for i in range(self.__steps):
-                    t_tmp = datetime.now()
-
-                    app_id = self.__spark_context.applicationId
-                    self.__metrics.log_rdds(app_id=app_id)
-
-                    wo.to_rdd(self.__min_partitions)
-                    # wo.persist()
-                    result.to_rdd(self.__min_partitions)
-                    # result.persist()
-                    result_tmp = wo.multiply(result, self.__min_partitions)
-
-                    self.__logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
-
-                    t_tmp = datetime.now()
-
-                    self.__logger.debug("Checking if the state is unitary...")
-                    if not result_tmp.is_unitary():
-                        self.__logger.error("The state is not unitary")
-                        raise ValueError("the state is not unitary")
-
-                    self.__logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
-
-                    app_id = self.__spark_context.applicationId
-                    self.__metrics.log_rdds(app_id=app_id)
-
-                    wo.unpersist()
-                    result.destroy()
-                    result_tmp.to_path(self.__min_partitions)
-                    result = result_tmp
-
-                result.to_rdd(self.__min_partitions)
             elif mul_mode == MUL_BLOCK:
                 t1 = datetime.now()
 
                 # print(result.to_dense(copy=True).data)
+                self.__logger.info("Transforming initial state to block format...")
                 result = result.to_block(num_blocks, self.__min_partitions, True)
 
                 app_id = self.__spark_context.applicationId
@@ -658,21 +656,18 @@ class DiscreteTimeQuantumWalk:
 
                 # self.__walk_operator.to_path(self.__min_partitions)
                 # print(self.__walk_operator.to_dense(copy=True).data)
-                self.__walk_operator.unpersist()
+                # self.__walk_operator.unpersist()
 
-                app_id = self.__spark_context.applicationId
-                self.__metrics.log_rdds(app_id=app_id)
+                # app_id = self.__spark_context.applicationId
+                # self.__metrics.log_rdds(app_id=app_id)
 
-                wo = self.__walk_operator.to_block(num_blocks, self.__min_partitions)
-                wo.materialize()
+                # wo = self.__walk_operator.to_block(num_blocks, self.__min_partitions)
+                # wo.materialize()
 
                 self.__logger.info("Starting the walk...")
 
                 for i in range(self.__steps):
                     t_tmp = datetime.now()
-
-                    app_id = self.__spark_context.applicationId
-                    self.__metrics.log_rdds(app_id=app_id)
 
                     result_tmp = wo.multiply(result, self.__min_partitions)
 
@@ -700,12 +695,12 @@ class DiscreteTimeQuantumWalk:
                     # result.to_block(num_blocks, self.__min_partitions)
 
                 wo.unpersist()
-
-                result.to_rdd(self.__min_partitions)
-                result.materialize()
             else:
                 self.__logger.error("Invalid multiplication mode")
                 raise ValueError("invalid multiplication mode")
+
+            result.to_rdd(self.__min_partitions)
+            result.materialize()
 
             t2 = datetime.now()
             self.__execution_times['walk'] = (t2 - t1).total_seconds()

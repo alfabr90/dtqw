@@ -139,6 +139,8 @@ class State:
         else:
             self.__logger.warning("It is not possible to persist a non RDD format State")
 
+        return self
+
     def unpersist(self):
         if self.is_rdd():
             if self.data is not None:
@@ -149,6 +151,8 @@ class State:
                     b1.unpersist()
         else:
             self.__logger.warning("It is not possible to unpersist a non RDD format State")
+
+        return self
 
     def destroy(self):
         self.unpersist()
@@ -164,6 +168,7 @@ class State:
                     b1.destroy()
 
         self.data = None
+        return self
 
     def repartition(self, num_partitions):
         if self.is_rdd():
@@ -186,17 +191,21 @@ class State:
         else:
             self.__logger.warning("It is not possible to do a repartition on a non RDD format State")
 
+        return self
+
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
-            self.data = self.data.map(lambda m: m)
+            # self.data = self.data.map(lambda m: m)
             if not self.data.is_cached:
                 self.persist(storage_level)
             self.data.count()
         elif self.is_block():
             for b1 in self.data:
-                b1.materialize()
+                b1.materialize(storage_level)
         else:
             self.__logger.warning("It is not possible to materialize a non RDD format State")
+
+        return self
 
     def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.is_rdd():
@@ -205,9 +214,17 @@ class State:
             self.__rdd_path = None
         elif self.is_block():
             for b1 in self.data:
+                b1.materialize(storage_level)
+
+            remove_tmp_path(self.__rdd_path)
+            self.__rdd_path = None
+
+            for b1 in self.data:
                 b1.clear_rdd_path(storage_level)
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format State")
+
+        return self
 
     def is_unitary(self, round_precision=10):
         if self.is_rdd():
@@ -402,7 +419,7 @@ class State:
                     return int(a[0]), value_type(a[1])
 
                 rdd = self.__spark_context.textFile(
-                    oper.data, minPartitions=min_partitions
+                    oper.data  # , minPartitions=min_partitions
                 ).map(
                     __map
                 ).filter(
@@ -575,6 +592,19 @@ class State:
                     log_filename=self.__logger.filename
                 )
             else:
+                for i in range(num_blocks):
+                    t1 = datetime.now()
+                    self.__logger.debug("Materializing State block {}...".format(i))
+
+                    blocks[i].materialize()
+
+                    self.__logger.debug(
+                        "State block {} was materialized in {}s".format(
+                            i, (datetime.now() - t1).total_seconds()
+                        )
+                    )
+
+                self.unpersist()
                 self.data = blocks
                 self.__format = 'block'
                 self.__memory_usage = self.__get_bytes()
@@ -729,7 +759,7 @@ class State:
                 raise NotImplementedError("operation not implemented for this State format")
 
             self.__spark_context.range(
-                r, numSlices=min_partitions
+                r  # , numSlices=min_partitions
             ).filter(
                 lambda m: s.value[m, 0] != (0+0j)
             ).map(
@@ -947,7 +977,7 @@ class State:
                 raise NotImplementedError("mesh dimension not implemented")
 
             self.__spark_context.range(
-                r, numSlices=min_partitions
+                r  # , numSlices=min_partitions
             ).filter(
                 lambda m: s.value[m, 0] != (0+0j)
             ).map(

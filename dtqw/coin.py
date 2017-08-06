@@ -94,8 +94,8 @@ class Coin:
                 log_filename=log_filename
             )
         else:
-            self.__logger.error("Mesh dimension not implemented")
-            raise NotImplementedError
+            self.__logger.error("Operation not implemented for this mesh dimension")
+            raise NotImplementedError("operation not implemented for this mesh dimension")
 
 
 def is_coin(obj):
