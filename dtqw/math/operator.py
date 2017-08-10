@@ -124,7 +124,10 @@ class Operator:
     def is_block(self):
         return self.__format == 'block'
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
@@ -191,7 +194,10 @@ class Operator:
 
         return self
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             # self.data = self.data.map(lambda m: m)
             if not self.data.is_cached:
@@ -209,7 +215,10 @@ class Operator:
 
         return self
 
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def clear_rdd_path(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
@@ -305,7 +314,7 @@ class Operator:
             self.__logger.error("Operation not implemented for this Operator format")
             raise NotImplementedError("operation not implemented for this Operator format")
 
-    def to_path(self, min_partitions=8, copy=False):
+    def to_path(self, copy=False):
         if self.is_path():
             if copy:
                 return self.copy()
@@ -369,7 +378,7 @@ class Operator:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def to_rdd(self, min_partitions=8, copy=False):
+    def to_rdd(self, copy=False):
         if self.is_rdd():
             if copy:
                 return self.copy()
@@ -505,7 +514,7 @@ class Operator:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def to_block(self, num_blocks, min_partitions=8, copy=False):
+    def to_block(self, num_blocks, copy=False):
         if self.is_block():
             if copy:
                 return self.copy()
@@ -555,7 +564,7 @@ class Operator:
                         t1 = datetime.now()
                         self.__logger.debug("Materializing Operator block {},{}...".format(i, j))
 
-                        blocks[i][j].materialize()
+                        blocks[i][j].materialize(storage_level)
 
                         self.__logger.debug(
                             "Operator block {},{} was materialized in {}s".format(
@@ -569,7 +578,7 @@ class Operator:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def __multiply_operator(self, other, min_partitions=8):
+    def __multiply_operator(self, other):
         if self.shape[1] != other.shape[0]:
             self.__logger.error("Incompatible shapes {} and {}".format(self.shape, other.shape))
             raise ValueError('incompatible shapes {} and {}'.format(self.shape, other.shape))
@@ -682,7 +691,7 @@ class Operator:
                             tmp_blocks2.append(
                                 Operator(
                                     r, spark_context, block_shape, log_filename=log_filename
-                                ).materialize()
+                                ).materialize(storage_level)
                             )
 
                         rdd = spark_context.emptyRDD()
@@ -723,7 +732,7 @@ class Operator:
             self.__logger.error("Operation not implemented for this Operator format")
             raise NotImplementedError("operation not implemented for this Operator format")
 
-    def __multiply_state(self, other, min_partitions=8):
+    def __multiply_state(self, other):
         if self.shape[1] != other.shape[0]:
             self.__logger.error("Incompatible shapes {} and {}".format(self.shape, other.shape))
             raise ValueError("incompatible shapes {} and {}".format(self.shape, other.shape))
@@ -858,7 +867,7 @@ class Operator:
                                 block_shape,
                                 other.num_particles,
                                 log_filename=self.__logger.filename
-                            ).materialize()
+                            ).materialize(storage_level)
                         )
 
                     oper2.unpersist()
@@ -883,7 +892,7 @@ class Operator:
                     for j in i:
                         j.destroy()
 
-                return state.to_block(o_blocks, min_partitions)
+                return state.to_block(o_blocks)
             else:
                 self.__logger.error("Operation not implemented for this State format")
                 raise NotImplementedError("operation not implemented for this State format")
@@ -891,16 +900,16 @@ class Operator:
             self.__logger.error("Operation not implemented for this Operator format")
             raise NotImplementedError("operation not implemented for this Operator format")
 
-    def multiply(self, other, min_partitions=8):
+    def multiply(self, other):
         if is_operator(other):
-            return self.__multiply_operator(other, min_partitions)
+            return self.__multiply_operator(other)
         elif is_state(other):
-            return self.__multiply_state(other, min_partitions)
+            return self.__multiply_state(other)
         else:
             self.__logger.error('State or Operator instance expected, not "{}"'.format(type(other)))
             raise TypeError('State or Operator instance expected, not "{}"'.format(type(other)))
 
-    def kron(self, other, min_partitions=8):
+    def kron(self, other):
         if not is_operator(other):
             self.__logger.error('Operator instance expected, not "{}"'.format(type(other)))
             raise TypeError('Operator instance expected, not "{}"'.format(type(other)))

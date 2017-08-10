@@ -104,7 +104,10 @@ class PDF:
     def is_sparse(self):
         return self.__format == 'sparse'
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
@@ -156,7 +159,10 @@ class PDF:
 
         return self
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.persist(storage_level)
@@ -166,7 +172,10 @@ class PDF:
 
         return self
 
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def clear_rdd_path(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
@@ -218,7 +227,7 @@ class PDF:
             self.__logger.error("Operation not implemented for this PDF format")
             raise NotImplementedError("operation not implemented for this PDF format")
 
-    def to_path(self, min_partitions=8, copy=False):
+    def to_path(self, copy=False):
         if self.is_path():
             if copy:
                 return self.copy()
@@ -281,7 +290,7 @@ class PDF:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def to_rdd(self, min_partitions=8, copy=False):
+    def to_rdd(self, copy=False):
         ind = len(self.shape)
 
         if self.is_rdd():

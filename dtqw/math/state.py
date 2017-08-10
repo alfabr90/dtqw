@@ -129,7 +129,10 @@ class State:
     def is_block(self):
         return self.__format == 'block'
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
@@ -193,7 +196,10 @@ class State:
 
         return self
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             # self.data = self.data.map(lambda m: m)
             if not self.data.is_cached:
@@ -207,7 +213,10 @@ class State:
 
         return self
 
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def clear_rdd_path(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
@@ -315,7 +324,7 @@ class State:
             self.__logger.error("Operation not implemented for this State format")
             raise NotImplementedError("operation not implemented for this State format")
 
-    def to_path(self, min_partitions=8, copy=False):
+    def to_path(self, copy=False):
         if self.is_path():
             if copy:
                 return self.copy()
@@ -384,7 +393,7 @@ class State:
                 self.__memory_usage = get_size_of(path)
                 return self
 
-    def to_rdd(self, min_partitions=8, copy=False):
+    def to_rdd(self, copy=False):
         if self.is_rdd():
             if copy:
                 return self.copy()
@@ -548,7 +557,7 @@ class State:
                 self.__memory_usage = get_size_of(sparse)
                 return self
 
-    def to_block(self, num_blocks, min_partitions=8, copy=False):
+    def to_block(self, storage_level=None, copy=False):
         if self.is_block():
             if copy:
                 return self.copy()
@@ -596,7 +605,7 @@ class State:
                     t1 = datetime.now()
                     self.__logger.debug("Materializing State block {}...".format(i))
 
-                    blocks[i].materialize()
+                    blocks[i].materialize(storage_level)
 
                     self.__logger.debug(
                         "State block {} was materialized in {}s".format(
@@ -610,7 +619,7 @@ class State:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def kron(self, other, min_partitions=8):
+    def kron(self, other):
         if not is_state(other):
             self.__logger.error('State instance expected, not "{}"'.format(type(other)))
             raise TypeError('State instance expected, not "{}"'.format(type(other)))
@@ -692,7 +701,7 @@ class State:
             self.__logger.error("Operation not implemented for this State format")
             raise NotImplementedError("operation not implemented for this State format")
 
-    def full_measurement(self, min_partitions=8):
+    def full_measurement(self):
         self.__logger.info("Measuring the state of the system...")
         t1 = datetime.now()
 
@@ -921,7 +930,7 @@ class State:
 
         return pdf
 
-    def __partial_measurement(self, particle, min_partitions):
+    def __partial_measurement(self, particle):
         self.__logger.info("Measuring the state of the system for particle {}...".format(particle + 1))
         t1 = datetime.now()
 
@@ -1048,8 +1057,8 @@ class State:
 
         return pdf
 
-    def partial_measurements(self, particles, min_partitions=8):
-        return [self.__partial_measurement(p, min_partitions) for p in particles]
+    def partial_measurements(self, particles):
+        return [self.__partial_measurement(p) for p in particles]
 
 
 def is_state(obj):
