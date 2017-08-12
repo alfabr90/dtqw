@@ -286,7 +286,7 @@ class DiscreteTimeQuantumWalk:
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.__spark_context.range(
-            shape[0], numSlices=self.__min_partitions
+            shape[0]
         ).map(
             __map
         )
@@ -438,7 +438,7 @@ class DiscreteTimeQuantumWalk:
                     "Multiplication between multiparticles unitary operator and "
                     "interaction operator was done in {}s".format((datetime.now() - t1).total_seconds())
                 )
-                # print(result.to_rdd(, True).to_dense().data)
+                # print(result.to_rdd(True).to_dense().data)
 
                 self.__metrics.log_executors(app_id=app_id)
                 self.__metrics.log_rdds(app_id=app_id)
@@ -525,7 +525,7 @@ class DiscreteTimeQuantumWalk:
 
             size = str(self.__mesh.size)
 
-            return "DTQW1D_{}_{}_{}_{}_{}".format(
+            return "DTQW1D_{}_{}_{}_{}".format(
                 mesh, size, self.__steps, self.__num_particles
             )
         elif self.__mesh.is_2d():
@@ -547,7 +547,7 @@ class DiscreteTimeQuantumWalk:
 
             size = str(self.__mesh.size[0]) + "-" + str(self.__mesh.size[1])
 
-            return "DTQW2D_{}_{}_{}_{}_{}".format(
+            return "DTQW2D_{}_{}_{}_{}".format(
                 mesh, size, self.__steps, self.__num_particles
             )
 
@@ -594,7 +594,6 @@ class DiscreteTimeQuantumWalk:
 
         self.__logger.info("Steps: {}".format(self.__steps))
         self.__logger.info("Space size: {}".format(self.__mesh.size))
-        self.__logger.info("Nº of partitions: {}".format())
         self.__logger.info("Nº of particles: {}".format(self.__num_particles))
         if self.__num_particles > 1:
             self.__logger.info("Collision phase: {}".format(collision_phase))
