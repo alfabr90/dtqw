@@ -124,14 +124,21 @@ class Operator:
     def is_block(self):
         return self.__format == 'block'
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
+                self.__logger.info("RDD {} was persisted".format(self.data.id()))
+            else:
+                self.__logger.info("RDD {} has already been persisted".format(self.data.id()))
         elif self.is_block():
-            for b1 in self.data:
-                for b2 in b1:
-                    b2.persist(storage_level)
+            for i in range(len(self.data)):
+                for j in range(len(self.data)):
+                    self.__logger.info("Persisting block {},{}...".format(i, j))
+                    self.data[i][j].persist(storage_level)
         else:
             self.__logger.warning("It is not possible to persist a non RDD format Operator")
 
@@ -141,11 +148,15 @@ class Operator:
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
+                self.__logger.info("RDD {} was unpersisted".format(self.data.id()))
+            else:
+                self.__logger.info("The RDD has already been unpersisted")
         elif self.is_block():
             if self.data is not None:
-                for b1 in self.data:
-                    for b2 in b1:
-                        b2.unpersist()
+                for i in range(len(self.data)):
+                    for j in range(len(self.data)):
+                        self.__logger.info("Unpersisting block {},{}...".format(i, j))
+                        self.data[i][j].unpersist()
         else:
             self.__logger.warning("It is not possible to unpersist a non RDD format Operator")
 
@@ -161,11 +172,13 @@ class Operator:
             self.__rdd_path = None
         elif self.is_block():
             if self.data is not None:
-                for b1 in self.data:
-                    for b2 in b1:
-                        b2.destroy()
+                for i in range(len(self.data)):
+                    for j in range(len(self.data)):
+                        self.__logger.info("Destroying block {},{}...".format(i, j))
+                        self.data[i][j].destroy()
 
         self.data = None
+        self.__logger.info("Operator was destroyed")
         return self
 
     def repartition(self, num_partitions):
@@ -191,44 +204,49 @@ class Operator:
 
         return self
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
-            # self.data = self.data.map(lambda m: m)
             if not self.data.is_cached:
+                self.data = self.data.filter(lambda m: m is not None)
                 self.persist(storage_level)
-            self.data.count()
+                self.data.count()
+                self.__logger.info("Operator was materialized")
+            else:
+                self.__logger.info("RDD {} has already been persisted".format(self.data.id()))
         elif self.is_block():
-            for b1 in self.data:
-                for b2 in b1:
-                    # self.__logger.debug("Materializing block...")
-                    # self.__logger.debug("Block is cached? {}".format(b2.data.is_cached))
-                    b2.materialize(storage_level)
-                    # self.__logger.debug("Block is cached? {}".format(b2.data.is_cached))
+            for i in range(len(self.data)):
+                for j in range(len(self.data)):
+                    self.__logger.info("Materializing block {},{}...".format(i, j))
+                    self.data[i][j].materialize(storage_level)
+
+            # self.__logger.info("Operator was materialized")
         else:
             self.__logger.warning("It is not possible to materialize a non RDD format Operator")
 
         return self
 
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def clear_rdd_path(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
+            self.__logger.info("Path was removed")
             self.__rdd_path = None
         elif self.is_block():
-            for b1 in self.data:
-                for b2 in b1:
-                    # self.__logger.debug("Materializing block...")
-                    # self.__logger.debug("Block is cached? {}".format(b2.data.is_cached))
-                    b2.materialize(storage_level)
-                    # self.__logger.debug("Block is cached? {}".format(b2.data.is_cached))
-
+            self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
+            self.__logger.info("Path was removed")
             self.__rdd_path = None
 
-            for b1 in self.data:
-                for b2 in b1:
-                    # self.__logger.debug("Clearing RDD path: {}".format(b2.rdd_path))
-                    b2.clear_rdd_path(storage_level)
+            for i in range(len(self.data)):
+                for j in range(len(self.data)):
+                    self.__logger.info("Removing path of block {},{}...".format(i, j))
+                    self.data[i][j].clear_rdd_path(storage_level)
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format Operator")
 
@@ -279,6 +297,7 @@ class Operator:
                     shutil.copy(os.path.join(self.data, i), path)
             else:
                 shutil.copy(self.data, path)
+
             return Operator(
                 path, self.__spark_context, self.shape, self.__value_type, log_filename=self.__logger.filename
             )
@@ -406,7 +425,7 @@ class Operator:
                     return int(a[0]), int(a[1]), value_type(a[2])
 
                 rdd = self.__spark_context.textFile(
-                    oper.data, minPartitions=min_partitions
+                    oper.data  # , minPartitions=min_partitions
                 ).map(
                     __map
                 ).filter(
@@ -505,7 +524,7 @@ class Operator:
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def to_block(self, num_blocks, min_partitions=8, copy=False):
+    def to_block(self, num_blocks, min_partitions=8, storage_level=None, copy=False):
         if self.is_block():
             if copy:
                 return self.copy()
@@ -541,6 +560,19 @@ class Operator:
                     )
                 blocks.append(blk)
 
+            for i in range(num_blocks):
+                for j in range(num_blocks):
+                    t1 = datetime.now()
+                    self.__logger.debug("Materializing Operator block {},{}...".format(i, j))
+
+                    blocks[i][j].materialize(storage_level)
+
+                    self.__logger.debug(
+                        "Operator block {},{} was materialized in {}s".format(
+                            i, j, (datetime.now() - t1).total_seconds()
+                        )
+                    )
+
             if copy:
                 return Operator(
                     blocks,
@@ -550,26 +582,13 @@ class Operator:
                     log_filename=self.__logger.filename
                 )
             else:
-                for i in range(num_blocks):
-                    for j in range(num_blocks):
-                        t1 = datetime.now()
-                        self.__logger.debug("Materializing Operator block {},{}...".format(i, j))
-
-                        blocks[i][j].materialize()
-
-                        self.__logger.debug(
-                            "Operator block {},{} was materialized in {}s".format(
-                                i, j, (datetime.now() - t1).total_seconds()
-                            )
-                        )
-
-                self.unpersist()
+                self.destroy()
                 self.data = blocks
                 self.__format = 'block'
                 self.__memory_usage = self.__get_bytes()
                 return self
 
-    def __multiply_operator(self, other, min_partitions=8):
+    def __multiply_operator(self, other, min_partitions=8, storage_level=None):
         if self.shape[1] != other.shape[0]:
             self.__logger.error("Incompatible shapes {} and {}".format(self.shape, other.shape))
             raise ValueError('incompatible shapes {} and {}'.format(self.shape, other.shape))
@@ -682,7 +701,7 @@ class Operator:
                             tmp_blocks2.append(
                                 Operator(
                                     r, spark_context, block_shape, log_filename=log_filename
-                                ).materialize()
+                                ).materialize(storage_level)
                             )
 
                         rdd = spark_context.emptyRDD()
@@ -723,7 +742,7 @@ class Operator:
             self.__logger.error("Operation not implemented for this Operator format")
             raise NotImplementedError("operation not implemented for this Operator format")
 
-    def __multiply_state(self, other, min_partitions=8):
+    def __multiply_state(self, other, min_partitions=8, storage_level=None):
         if self.shape[1] != other.shape[0]:
             self.__logger.error("Incompatible shapes {} and {}".format(self.shape, other.shape))
             raise ValueError("incompatible shapes {} and {}".format(self.shape, other.shape))
@@ -836,14 +855,23 @@ class Operator:
 
                 block_shape = self.data[0][0].shape
 
+                t1 = datetime.now()
+
                 for i in range(len(self.data)):
                     tmp_blocks = []
+
                     oper2 = broadcast(other.spark_context, other.data[i].to_dense(True).data)
                     # print("result:", i)
                     # print(other.data[i].to_dense(copy=True).data)
                     for j in range(len(self.data)):
                         # print("operator:", j, ",", i)
                         # print(self.data[j][i].to_sparse(copy=True).data)
+                        self.__logger.info(
+                            "Multiplying operator block {},{} (RDD {}) by state block {}...".format(
+                                j, i, self.data[j][i].data.id(), j
+                            )
+                        )
+
                         data = self.data[j][i].data.filter(
                             lambda m: oper2.value[m[1], 0] != value_type()
                         ).map(
@@ -858,32 +886,49 @@ class Operator:
                                 block_shape,
                                 other.num_particles,
                                 log_filename=self.__logger.filename
-                            ).materialize()
+                            ).materialize(storage_level)
                         )
 
                     oper2.unpersist()
 
                     blocks.append(tmp_blocks)
 
+                self.__logger.debug(
+                    "Multiplication of blocks was done in {}s".format((datetime.now() - t1).total_seconds())
+                )
+
                 rdd = spark_context.emptyRDD()
+
+                t1 = datetime.now()
 
                 for i in blocks:
                     for j in i:
                         rdd = rdd.union(j.data)
-                # print(rdd.collect())
+
+                self.__logger.debug("Union of all blocks was done in {}s".format((datetime.now() - t1).total_seconds()))
+
+                t1 = datetime.now()
+
                 rdd = rdd.reduceByKey(
                     lambda a, b: a + b  # , numPartitions=min_partitions
                 )
                 # print(rdd.collect())
                 state = State(
                     rdd, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
-                ).to_path(min_partitions)
+                ).materialize(storage_level)  # to_path(min_partitions)
 
-                for i in blocks:
-                    for j in i:
-                        j.destroy()
+                self.__logger.debug(
+                    "ReduceByKey of all blocks was done in {}s".format((datetime.now() - t1).total_seconds())
+                )
 
-                return state.to_block(o_blocks, min_partitions)
+                for i in range(len(blocks)):
+                    for j in range(len(blocks)):
+                        self.__logger.info(
+                            "Destroying temporary block {},{} of operator-state multiplication...".format(i, j)
+                        )
+                        blocks[i][j].destroy()
+
+                return state.to_block(o_blocks, min_partitions, storage_level)
             else:
                 self.__logger.error("Operation not implemented for this State format")
                 raise NotImplementedError("operation not implemented for this State format")
@@ -891,11 +936,11 @@ class Operator:
             self.__logger.error("Operation not implemented for this Operator format")
             raise NotImplementedError("operation not implemented for this Operator format")
 
-    def multiply(self, other, min_partitions=8):
+    def multiply(self, other, min_partitions=8, storage_level=None):
         if is_operator(other):
-            return self.__multiply_operator(other, min_partitions)
+            return self.__multiply_operator(other, min_partitions, storage_level)
         elif is_state(other):
-            return self.__multiply_state(other, min_partitions)
+            return self.__multiply_state(other, min_partitions, storage_level)
         else:
             self.__logger.error('State or Operator instance expected, not "{}"'.format(type(other)))
             raise TypeError('State or Operator instance expected, not "{}"'.format(type(other)))

@@ -259,7 +259,7 @@ class Mesh:
             raise NotImplementedError("operation not implemented for this mesh dimension")
 
         sparse = spark_context.textFile(
-            path, minPartitions=min_partitions
+            path  # , minPartitions=min_partitions
         ).map(
             __map
         ).reduce(

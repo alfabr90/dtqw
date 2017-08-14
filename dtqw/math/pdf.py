@@ -104,10 +104,16 @@ class PDF:
     def is_sparse(self):
         return self.__format == 'sparse'
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
+                self.__logger.info("RDD {} was persisted".format(self.data.id()))
+            else:
+                self.__logger.info("RDD {} has already been persisted".format(self.data.id()))
         else:
             self.__logger.warning("It is not possible to persist a non RDD format PDF")
 
@@ -117,6 +123,9 @@ class PDF:
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
+                self.__logger.info("RDD {} was unpersisted".format(self.data.id()))
+            else:
+                self.__logger.info("The RDD has already been unpersisted")
         else:
             self.__logger.warning("It is not possible to unpersist a non RDD format PDF")
 
@@ -132,6 +141,7 @@ class PDF:
             self.__rdd_path = None
 
         self.data = None
+        self.__logger.info("PDF was destroyed")
         return self
 
     def repartition(self, num_partitions):
@@ -152,24 +162,34 @@ class PDF:
                 self.__logger.info(
                     "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
                 )
-        self.__logger.warning("It is not possible to do a repartition on a non RDD format PDF")
+        else:
+            self.__logger.warning("It is not possible to do a repartition on a non RDD format PDF")
 
         return self
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
+                self.data = self.data.filter(lambda m: m is not None)
                 self.persist(storage_level)
+                self.__logger.info("PDF was materialized")
             self.data.count()
         else:
             self.__logger.warning("It is not possible to materialize a non RDD format PDF")
 
         return self
 
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def clear_rdd_path(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
+            self.__logger.info("Path was removed")
             self.__rdd_path = None
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format PDF")
@@ -300,7 +320,7 @@ class PDF:
                 return a
 
             rdd = self.__spark_context.textFile(
-                oper.data, minPartitions=min_partitions
+                oper.data  # , minPartitions=min_partitions
             ).map(
                 __map
             ).filter(

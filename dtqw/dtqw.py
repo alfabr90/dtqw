@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from pyspark import StorageLevel
 
 from .mesh import *
-from .utils.utils import SAVE_MODE_MEMORY, MUL_BROADCAST, MUL_BLOCK, create_dir
+from .utils.utils import MUL_BROADCAST, MUL_BLOCK, create_dir
 from dtqw.utils.logger import Logger
 from dtqw.utils.metrics import Metrics
 from dtqw.math.state import is_state
@@ -19,22 +19,18 @@ from dtqw.math.operator import Operator, is_operator
 
 class DiscreteTimeQuantumWalk:
     def __init__(self, spark_context, coin, mesh,
-                 num_particles=1, min_partitions=8, save_mode=SAVE_MODE_MEMORY,
-                 storage_level=StorageLevel.MEMORY_ONLY, log_filename='log.txt'):
-        self.__min_partitions = min_partitions
-        self.__save_mode = save_mode
-        self.__storage_level = storage_level
-
+                 num_particles=1, min_partitions=8, log_filename='log.txt'):
         self.__spark_context = spark_context
         self.__coin = coin
         self.__mesh = mesh
         self.__num_particles = num_particles
+        self.__min_partitions = min_partitions
 
         self.__coin_operator = None
         self.__shift_operator = None
         self.__unitary_operator = None
         self.__interaction_operator = None
-        self.__multiparticles_unitary_operator = None
+        self.__multiparticle_unitary_operator = None
         self.__walk_operator = None
 
         self.__steps = 0
@@ -47,7 +43,7 @@ class DiscreteTimeQuantumWalk:
             'shift_operator': 0.0,
             'unitary_operator': 0.0,
             'interaction_operator': 0.0,
-            'multiparticles_unitary_operator': 0.0,
+            'multiparticle_unitary_operator': 0.0,
             'walk_operator': 0.0,
             'walk': 0.0,
             'export_plot': 0.0
@@ -58,7 +54,7 @@ class DiscreteTimeQuantumWalk:
             'shift_operator': 0,
             'unitary_operator': 0,
             'interaction_operator': 0,
-            'multiparticles_unitary_operator': 0,
+            'multiparticle_unitary_operator': 0,
             'walk_operator': 0,
             'state': 0
         }
@@ -104,8 +100,8 @@ class DiscreteTimeQuantumWalk:
         return self.__interaction_operator
 
     @property
-    def multiparticles_unitary_operator(self):
-        return self.__multiparticles_unitary_operator
+    def multiparticle_unitary_operator(self):
+        return self.__multiparticle_unitary_operator
 
     @property
     def walk_operator(self):
@@ -151,10 +147,10 @@ class DiscreteTimeQuantumWalk:
             self.__logger.error('Operator instance expected, not "{}"'.format(type(io)))
             raise TypeError('operator instance expected, not "{}"'.format(type(io)))
 
-    @multiparticles_unitary_operator.setter
-    def multiparticles_unitary_operator(self, mu):
+    @multiparticle_unitary_operator.setter
+    def multiparticle_unitary_operator(self, mu):
         if is_operator(mu):
-            self.__multiparticles_unitary_operator = mu
+            self.__multiparticle_unitary_operator = mu
         else:
             self.__logger.error('Operator instance expected, not "{}"'.format(type(mu)))
             raise TypeError('operator instance expected, not "{}"'.format(type(mu)))
@@ -167,7 +163,7 @@ class DiscreteTimeQuantumWalk:
             self.__logger.error('Operator instance expected, not "{}"'.format(type(wo)))
             raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
 
-    def create_coin_operator(self):
+    def create_coin_operator(self, storage_level=None):
         self.__logger.info("Building coin operator...")
         t1 = datetime.now()
 
@@ -188,7 +184,7 @@ class DiscreteTimeQuantumWalk:
 
         return result
 
-    def create_shift_operator(self):
+    def create_shift_operator(self, storage_level=None):
         self.__logger.info("Building shift operator...")
         t1 = datetime.now()
 
@@ -211,7 +207,7 @@ class DiscreteTimeQuantumWalk:
 
         return result
 
-    def create_unitary_operator(self):
+    def create_unitary_operator(self, storage_level=None):
         self.__logger.info("Building unitary operator...")
 
         if self.__coin_operator is None:
@@ -225,9 +221,7 @@ class DiscreteTimeQuantumWalk:
         t1 = datetime.now()
 
         result = self.__shift_operator.multiply(self.__coin_operator, self.__min_partitions)
-        result.to_path(self.__min_partitions)
-        result.to_rdd(self.__min_partitions)
-        result.materialize()
+        result.to_path(self.__min_partitions).to_rdd(self.__min_partitions).materialize(storage_level)
 
         self.__coin_operator.destroy()
         self.__shift_operator.destroy()
@@ -247,7 +241,7 @@ class DiscreteTimeQuantumWalk:
 
         return result
 
-    def create_interaction_operator(self, phase):
+    def create_interaction_operator(self, phase, storage_level=None):
         self.__logger.info("Building interaction operator...")
         t1 = datetime.now()
 
@@ -292,13 +286,14 @@ class DiscreteTimeQuantumWalk:
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.__spark_context.range(
-            shape[0], numSlices=self.__min_partitions
+            shape[0]  # , numSlices=self.__min_partitions
         ).map(
             __map
         )
 
         result = Operator(rdd, self.__spark_context, shape)
-        result.materialize()
+        self.__logger.info("Materializing interaction operator...")
+        result.materialize(storage_level)
 
         self.__execution_times['interaction_operator'] = (datetime.now() - t1).total_seconds()
         self.__memory_usage['interaction_operator'] = result.memory_usage
@@ -319,8 +314,8 @@ class DiscreteTimeQuantumWalk:
 
         return result
 
-    def create_multiparticles_unitary_operator(self):
-        self.__logger.info("Building multiparticles unitary operator...")
+    def create_multiparticle_unitary_operator(self, storage_level=None):
+        self.__logger.info("Building multiparticle unitary operator...")
 
         if self.__unitary_operator is None:
             self.__logger.info("No unitary operator has been set. A new one will be built")
@@ -334,37 +329,36 @@ class DiscreteTimeQuantumWalk:
         result = self.__unitary_operator
 
         for p in range(self.__num_particles - 1):
-            result_tmp = result.kron(other, self.__min_partitions)
-            result_tmp.to_rdd(self.__min_partitions).materialize()
+            result_tmp = result.kron(other, self.__min_partitions).to_rdd(self.__min_partitions).materialize(storage_level)
             result.destroy()
             result = result_tmp
 
         other.destroy()
 
-        self.__execution_times['multiparticles_unitary_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['multiparticles_unitary_operator'] = result.memory_usage
+        self.__execution_times['multiparticle_unitary_operator'] = (datetime.now() - t1).total_seconds()
+        self.__memory_usage['multiparticle_unitary_operator'] = result.memory_usage
 
         self.__logger.info(
-            "Multiparticles unitary operator was built in {}s".format(
-                self.__execution_times['multiparticles_unitary_operator']
+            "Multiparticle unitary operator was built in {}s".format(
+                self.__execution_times['multiparticle_unitary_operator']
             )
         )
         self.__logger.info(
-            "Multiparticles unitary operator is consuming {} bytes".format(
-                self.__memory_usage['multiparticles_unitary_operator']
+            "Multiparticle unitary operator is consuming {} bytes".format(
+                self.__memory_usage['multiparticle_unitary_operator']
             )
         )
-        self.__logger.debug("Multiparticles unitary operator format: {}".format(result.format))
+        self.__logger.debug("Multiparticle unitary operator format: {}".format(result.format))
         if result.is_path():
-            self.__logger.info("Multiparticles unitary operator path: {}".format(result.data))
-        self.__logger.debug("Shape of multiparticles unitary operator: {}".format(result.shape))
+            self.__logger.info("Multiparticle unitary operator path: {}".format(result.data))
+        self.__logger.debug("Shape of multiparticle unitary operator: {}".format(result.shape))
 
         app_id = self.__spark_context.applicationId
         self.__metrics.log_rdds(app_id=app_id)
 
         return result
 
-    def create_walk_operator(self, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None):
+    def create_walk_operator(self, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None, storage_level=None):
         if mul_mode == MUL_BLOCK:
             if num_blocks is None:
                 self.__logger.error("Invalid number of blocks")
@@ -388,33 +382,33 @@ class DiscreteTimeQuantumWalk:
 
             if mul_mode == MUL_BLOCK:
                 self.__logger.info("Transforming walk operator to block format...")
-                result.to_block(num_blocks, self.__min_partitions).materialize()
+                result.to_block(num_blocks, self.__min_partitions, storage_level).materialize(storage_level)
         else:
             if collision_phase is None:
                 self.__logger.info("No collision phase has been defined. "
-                                   "The walk operator will be the multiparticles unitary operator")
+                                   "The walk operator will be the multiparticle unitary operator")
 
-                if self.__multiparticles_unitary_operator is None:
-                    self.__logger.info("No multiparticles unitary operator has been set. A new one will be built")
-                    self.__multiparticles_unitary_operator = self.create_multiparticles_unitary_operator()
+                if self.__multiparticle_unitary_operator is None:
+                    self.__logger.info("No multiparticle unitary operator has been set. A new one will be built")
+                    self.__multiparticle_unitary_operator = self.create_multiparticle_unitary_operator()
 
                 t1 = datetime.now()
 
-                self.__multiparticles_unitary_operator.clear_rdd_path()
-                result = self.__multiparticles_unitary_operator
+                self.__multiparticle_unitary_operator.clear_rdd_path()
+                result = self.__multiparticle_unitary_operator
 
                 self.__metrics.log_executors(app_id=app_id)
                 self.__metrics.log_rdds(app_id=app_id)
 
                 if mul_mode == MUL_BLOCK:
                     self.__logger.info("Transforming walk operator to block format...")
-                    result.to_block(num_blocks, self.__min_partitions).materialize()
+                    result.to_block(num_blocks,self.__min_partitions, storage_level).materialize(storage_level)
             else:
                 self.__logger.info("Building walk operator...")
 
-                if self.__multiparticles_unitary_operator is None:
-                    self.__logger.info("No multiparticles unitary operator has been set. A new one will be built")
-                    self.__multiparticles_unitary_operator = self.create_multiparticles_unitary_operator()
+                if self.__multiparticle_unitary_operator is None:
+                    self.__logger.info("No multiparticle unitary operator has been set. A new one will be built")
+                    self.__multiparticle_unitary_operator = self.create_multiparticle_unitary_operator()
 
                 if self.__interaction_operator is None:
                     self.__logger.info("No interaction operator has been set. A new one will be built")
@@ -423,45 +417,57 @@ class DiscreteTimeQuantumWalk:
                 t1 = datetime.now()
                 '''
                 if mul_mode == MUL_BLOCK:
-                    self.__logger.info("Transforming multiparticles unitary operator to block format...")
-                    self.__multiparticles_unitary_operator.to_block(num_blocks, self.__min_partitions).materialize()
+                    self.__logger.info("Transforming multiparticle unitary operator to block format...")
+                    self.__multiparticle_unitary_operator.to_block(num_blocks,self.__min_partitions, storage_level).materialize(storage_level)
                     self.__logger.info("Transforming interaction operator to block format...")
-                    self.__interaction_operator.to_block(num_blocks, self.__min_partitions).materialize()
+                    self.__interaction_operator.to_block(num_blocks,self.__min_partitions, storage_level).materialize(storage_level)
                 '''
-                self.__multiparticles_unitary_operator.clear_rdd_path()
-                self.__interaction_operator.clear_rdd_path()
+                self.__logger.info("Cleaning multiparticle unitary operator path...")
+                self.__multiparticle_unitary_operator.clear_rdd_path(storage_level)
+                self.__logger.info("Cleaning interaction operator path...")
+                self.__interaction_operator.clear_rdd_path(storage_level)
 
                 self.__metrics.log_executors(app_id=app_id)
                 self.__metrics.log_rdds(app_id=app_id)
 
-                result = self.__multiparticles_unitary_operator.multiply(
+                self.__logger.info("Multiplying multiparticle unitary operator with interaction operation...")
+                result = self.__multiparticle_unitary_operator.multiply(
                     self.__interaction_operator,
                     self.__min_partitions
                 )
 
-                result.materialize()
-                result.to_path(self.__min_partitions)
-
-                self.__logger.debug(
-                    "Multiplication between multiparticles unitary operator and "
-                    "interaction operator was done in {}s".format((datetime.now() - t1).total_seconds())
-                )
-                # print(result.to_rdd(self.__min_partitions, True).to_dense().data)
-
-                self.__multiparticles_unitary_operator.destroy()
-                self.__interaction_operator.destroy()
+                result.materialize(storage_level)
+                # self.__logger.debug(result.data.toDebugString())
 
                 self.__metrics.log_executors(app_id=app_id)
                 self.__metrics.log_rdds(app_id=app_id)
 
-                result.to_rdd(self.__min_partitions)
+                # result.to_path(self.__min_partitions)
+
+                self.__logger.info("Destroying multiparticle unitary operator...")
+                self.__multiparticle_unitary_operator.destroy()
+                self.__logger.info("Destroying interaction operator...")
+                self.__interaction_operator.destroy()
+
+                self.__logger.debug(
+                    "Multiplication between multiparticle unitary operator and "
+                    "interaction operator was done in {}s".format((datetime.now() - t1).total_seconds())
+                )
+                # print(result.to_rdd(True).to_dense().data)
+
+                self.__metrics.log_executors(app_id=app_id)
+                self.__metrics.log_rdds(app_id=app_id)
+
+                # result.to_rdd(self.__min_partitions).materialize(storage_level)
 
                 if mul_mode == MUL_BLOCK:
                     self.__logger.info("Transforming walk operator to block format...")
-                    result.to_block(num_blocks, self.__min_partitions)
+                    result.to_block(num_blocks, self.__min_partitions, storage_level)  # .materialize(storage_level)
 
-                result.materialize()
-                result.clear_rdd_path()
+                # result.materialize()
+                # result.clear_rdd_path()
+                # self.__multiparticle_unitary_operator.destroy()
+                # self.__interaction_operator.destroy()
 
         self.__execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
         self.__memory_usage['walk_operator'] = result.memory_usage
@@ -577,13 +583,13 @@ class DiscreteTimeQuantumWalk:
         if self.__interaction_operator is not None:
             self.__interaction_operator.destroy()
 
-        if self.__multiparticles_unitary_operator is not None:
-            self.__multiparticles_unitary_operator.destroy()
+        if self.__multiparticle_unitary_operator is not None:
+            self.__multiparticle_unitary_operator.destroy()
 
         if self.__walk_operator is not None:
             self.__walk_operator.destroy()
 
-    def walk(self, steps, initial_state, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None):
+    def walk(self, steps, initial_state, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None, storage_level=None):
         if not is_state(initial_state):
             self.__logger.error('State instance expected, not "{}"'.format(type(initial_state)))
             raise TypeError('State instance expected, not "{}"'.format(type(initial_state)))
@@ -591,6 +597,9 @@ class DiscreteTimeQuantumWalk:
         if not self.__mesh.check_steps(steps):
             self.__logger.error("Invalid number of steps")
             raise ValueError("invalid number of steps")
+
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
 
         if mul_mode == MUL_BLOCK:
             if num_blocks is None:
@@ -622,7 +631,8 @@ class DiscreteTimeQuantumWalk:
                 self.__logger.info("Initial state path: {}".format(result.data))
             self.__logger.debug("Shape of initial state: {}".format(result.shape))
 
-            self.__walk_operator = self.create_walk_operator(collision_phase, mul_mode, num_blocks)
+            self.__walk_operator = self.create_walk_operator(collision_phase, mul_mode, num_blocks, storage_level)
+            self.__logger.info("Cleaning walk operator path...")
             self.__walk_operator.clear_rdd_path()
 
             wo = self.__walk_operator
@@ -658,7 +668,7 @@ class DiscreteTimeQuantumWalk:
 
                 # print(result.to_dense(copy=True).data)
                 self.__logger.info("Transforming initial state to block format...")
-                result = result.to_block(num_blocks, self.__min_partitions, True)
+                result = result.to_block(num_blocks,self.__min_partitions, storage_level, True)
 
                 app_id = self.__spark_context.applicationId
                 self.__metrics.log_rdds(app_id=app_id)
@@ -670,15 +680,15 @@ class DiscreteTimeQuantumWalk:
                 # app_id = self.__spark_context.applicationId
                 # self.__metrics.log_rdds(app_id=app_id)
 
-                # wo = self.__walk_operator.to_block(num_blocks, self.__min_partitions)
-                # wo.materialize()
+                # wo = self.__walk_operator.to_block(num_blocks,self.__min_partitions, storage_level)
+                # wo.materialize(storage_level)
 
                 self.__logger.info("Starting the walk...")
 
                 for i in range(self.__steps):
                     t_tmp = datetime.now()
 
-                    result_tmp = wo.multiply(result, self.__min_partitions)
+                    result_tmp = wo.multiply(result, self.__min_partitions, storage_level)
 
                     app_id = self.__spark_context.applicationId
                     self.__metrics.log_rdds(app_id=app_id)
@@ -701,7 +711,7 @@ class DiscreteTimeQuantumWalk:
 
                     # result.to_rdd(self.__min_partitions)
                     # print(result.to_sparse(copy=True).data)
-                    # result.to_block(num_blocks, self.__min_partitions)
+                    # result.to_block(num_blocks,self.__min_partitions, storage_level)
 
                 wo.unpersist()
             else:
@@ -709,7 +719,7 @@ class DiscreteTimeQuantumWalk:
                 raise ValueError("invalid multiplication mode")
 
             result.to_rdd(self.__min_partitions)
-            result.materialize()
+            result.materialize(storage_level)
 
             t2 = datetime.now()
             self.__execution_times['walk'] = (t2 - t1).total_seconds()
@@ -748,8 +758,8 @@ class DiscreteTimeQuantumWalk:
                 "Shift operator in {}s".format(self.__execution_times['shift_operator']),
                 "Unitary operator in {}s".format(self.__execution_times['unitary_operator']),
                 "Interaction operator in {}s".format(self.__execution_times['interaction_operator']),
-                "Multiparticles unitary operator in {}s".format(
-                    self.__execution_times['multiparticles_unitary_operator']
+                "Multiparticle unitary operator in {}s".format(
+                    self.__execution_times['multiparticle_unitary_operator']
                 ),
                 "Walk operator in {}s".format(self.__execution_times['walk_operator']),
                 "Walk in {}s".format(self.__execution_times['walk']),
@@ -792,7 +802,7 @@ class DiscreteTimeQuantumWalk:
                 "Shift operator is consuming {} bytes".format(self.__memory_usage['shift_operator']),
                 "Unitary operator is consuming {} bytes".format(self.__memory_usage['unitary_operator']),
                 "Interaction operator is consuming {} bytes".format(self.__memory_usage['interaction_operator']),
-                "Multiparticles unitary operator is consuming {} bytes".format(
+                "Multiparticle unitary operator is consuming {} bytes".format(
                     self.__memory_usage['unitary_operator']
                 ),
                 "Walk operator is consuming {} bytes".format(self.__memory_usage['walk_operator']),

@@ -129,13 +129,20 @@ class State:
     def is_block(self):
         return self.__format == 'block'
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             if not self.data.is_cached:
                 self.data.persist(storage_level)
+                self.__logger.info("RDD {} was persisted".format(self.data.id()))
+            else:
+                self.__logger.info("RDD {} has already been persisted".format(self.data.id()))
         elif self.is_block():
-            for b1 in self.data:
-                b1.persist(storage_level)
+            for i in range(len(self.data)):
+                self.__logger.info("Persisting block {}...".format(i))
+                self.data[i].persist(storage_level)
         else:
             self.__logger.warning("It is not possible to persist a non RDD format State")
 
@@ -145,10 +152,14 @@ class State:
         if self.is_rdd():
             if self.data is not None:
                 self.data.unpersist()
+                self.__logger.info("RDD {} was unpersisted".format(self.data.id()))
+            else:
+                self.__logger.info("The RDD has already been unpersisted")
         elif self.is_block():
             if self.data is not None:
-                for b1 in self.data:
-                    b1.unpersist()
+                for i in range(len(self.data)):
+                    self.__logger.info("Unpersisting block {}...".format(i))
+                    self.data[i].unpersist()
         else:
             self.__logger.warning("It is not possible to unpersist a non RDD format State")
 
@@ -164,10 +175,12 @@ class State:
             self.__rdd_path = None
         elif self.is_block():
             if self.data is not None:
-                for b1 in self.data:
-                    b1.destroy()
+                for i in range(len(self.data)):
+                    self.__logger.info("Destroying block {}...".format(i))
+                    self.data[i].destroy()
 
         self.data = None
+        self.__logger.info("State was destroyed")
         return self
 
     def repartition(self, num_partitions):
@@ -193,34 +206,47 @@ class State:
 
         return self
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
-            # self.data = self.data.map(lambda m: m)
             if not self.data.is_cached:
+                self.data = self.data.filter(lambda m: m is not None)
                 self.persist(storage_level)
-            self.data.count()
+                self.data.count()
+                self.__logger.info("State was materialized")
+            else:
+                self.__logger.info("RDD {} has already been persisted".format(self.data.id()))
         elif self.is_block():
-            for b1 in self.data:
-                b1.materialize(storage_level)
+            for i in range(len(self.data)):
+                self.__logger.info("Materializing block {}...".format(i))
+                self.data[i].materialize(storage_level)
+
+            # self.__logger.info("Operator was materialized")
         else:
             self.__logger.warning("It is not possible to materialize a non RDD format State")
 
         return self
 
-    def clear_rdd_path(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def clear_rdd_path(self, storage_level=None):
+        if storage_level is None:
+            storage_level = StorageLevel.MEMORY_AND_DISK
+
         if self.is_rdd():
             self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
+            self.__logger.info("Path was removed")
             self.__rdd_path = None
         elif self.is_block():
-            for b1 in self.data:
-                b1.materialize(storage_level)
-
+            self.materialize(storage_level)
             remove_tmp_path(self.__rdd_path)
+            self.__logger.info("Path was removed")
             self.__rdd_path = None
 
-            for b1 in self.data:
-                b1.clear_rdd_path(storage_level)
+            for i in range(len(self.data)):
+                self.__logger.info("Removing path of block {}...".format(i))
+                self.data[i].clear_rdd_path(storage_level)
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format State")
 
@@ -402,7 +428,7 @@ class State:
                     for i in range(len(self.data)):
                         rdd = rdd.union(
                             self.data[i].data.map(
-                                lambda m: (m[0] + i * block_shape[0], m[1])
+                                lambda m, i=i: (m[0] + i * block_shape[0], m[1])
                             )
                         )
 
@@ -442,7 +468,7 @@ class State:
                 self.__rdd_path = rdd_path
                 self.data = rdd
                 self.__format = 'rdd'
-                self.__memory_usage = get_size_of(rdd)
+                self.__memory_usage = self.__get_bytes()
                 return self
 
     def to_dense(self, copy=False):
@@ -483,7 +509,7 @@ class State:
                 self.destroy()
                 self.data = dense
                 self.__format = 'dense'
-                self.__memory_usage = get_size_of(dense)
+                self.__memory_usage = self.__get_bytes()
                 return self
 
     def to_sparse(self, format='csr', copy=False):
@@ -545,10 +571,10 @@ class State:
                 self.destroy()
                 self.data = sparse
                 self.__format = 'sparse'
-                self.__memory_usage = get_size_of(sparse)
+                self.__memory_usage = self.__get_bytes()
                 return self
 
-    def to_block(self, num_blocks, min_partitions=8, copy=False):
+    def to_block(self, num_blocks, min_partitions=8, storage_level=None, copy=False):
         if self.is_block():
             if copy:
                 return self.copy()
@@ -581,6 +607,18 @@ class State:
                     )
                 )
 
+            for i in range(num_blocks):
+                t1 = datetime.now()
+                self.__logger.debug("Materializing State block {}...".format(i))
+
+                blocks[i].materialize(storage_level)
+
+                self.__logger.debug(
+                    "State block {} was materialized in {}s".format(
+                        i, (datetime.now() - t1).total_seconds()
+                    )
+                )
+
             if copy:
                 return State(
                     blocks,
@@ -592,19 +630,7 @@ class State:
                     log_filename=self.__logger.filename
                 )
             else:
-                for i in range(num_blocks):
-                    t1 = datetime.now()
-                    self.__logger.debug("Materializing State block {}...".format(i))
-
-                    blocks[i].materialize()
-
-                    self.__logger.debug(
-                        "State block {} was materialized in {}s".format(
-                            i, (datetime.now() - t1).total_seconds()
-                        )
-                    )
-
-                self.unpersist()
+                self.destroy()
                 self.data = blocks
                 self.__format = 'block'
                 self.__memory_usage = self.__get_bytes()
