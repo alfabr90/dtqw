@@ -1,6 +1,5 @@
 import io
 import os
-import logging
 import tempfile as tf
 import operator as op
 import math
@@ -19,7 +18,7 @@ SAVE_MODE_DISK = 2 ** 1
 # SAVE_MODE_RDD = 2 ** 2
 
 MUL_BROADCAST = 0
-# MUL_RDD = 1
+MUL_RDD = 1
 MUL_BLOCK = 2
 
 ROUND_PRECISION = 10

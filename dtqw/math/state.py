@@ -212,7 +212,7 @@ class State:
 
         if self.is_rdd():
             if not self.data.is_cached:
-                self.data = self.data.filter(lambda m: m is not None)
+                # self.data = self.data.filter(lambda m: m is not None)
                 self.persist(storage_level)
                 self.data.count()
                 self.__logger.info("State was materialized")
@@ -249,6 +249,24 @@ class State:
                 self.data[i].clear_rdd_path(storage_level)
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format State")
+
+        return self
+
+    def checkpoint(self):
+        if self.is_rdd():
+            if not self.data.is_cached:
+                self.__logger.warning("It is recommended to cache the RDD before checkpointing")
+
+            self.data.checkpoint()
+            self.__logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
+        elif self.is_block():
+            for i in range(len(self.data)):
+                self.__logger.info("Checkpointing block {}...".format(i))
+                self.data[i].checkpoint()
+
+            # self.__logger.info("State was checkpointed")
+        else:
+            self.__logger.warning("It is not possible to checkpoint a non RDD format State")
 
         return self
 
@@ -590,6 +608,8 @@ class State:
             blocks = []
             block_shape = (int(self.shape[0] / num_blocks), 1)
 
+            num_partitions = oper.data.getNumPartitions()
+
             for i in range(num_blocks):
                 blocks.append(
                     State(
@@ -597,7 +617,7 @@ class State:
                             lambda m, i=i: i * block_shape[0] <= m[0] < (i + 1) * block_shape[0]
                         ).map(
                             lambda m, i=i: (m[0] - i * block_shape[0], m[1])
-                        ),
+                        ).partitionBy(numPartitions=num_partitions),
                         self.__spark_context,
                         self.__mesh,
                         block_shape,

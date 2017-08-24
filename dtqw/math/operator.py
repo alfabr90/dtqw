@@ -210,7 +210,7 @@ class Operator:
 
         if self.is_rdd():
             if not self.data.is_cached:
-                self.data = self.data.filter(lambda m: m is not None)
+                # self.data = self.data.filter(lambda m: m is not None)
                 self.persist(storage_level)
                 self.data.count()
                 self.__logger.info("Operator was materialized")
@@ -249,6 +249,25 @@ class Operator:
                     self.data[i][j].clear_rdd_path(storage_level)
         else:
             self.__logger.warning("It is not possible to clear the path of a non RDD format Operator")
+
+        return self
+
+    def checkpoint(self):
+        if self.is_rdd():
+            if not self.data.is_cached:
+                self.__logger.warning("It is recommended to cache the RDD before checkpointing")
+
+            self.data.checkpoint()
+            self.__logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
+        elif self.is_block():
+            for i in range(len(self.data)):
+                for j in range(len(self.data)):
+                    self.__logger.info("Checkpointing block {},{}...".format(i, j))
+                    self.data[i][j].checkpoint()
+
+            # self.__logger.info("Operator was checkpointed")
+        else:
+            self.__logger.warning("It is not possible to checkpoint a non RDD format Operator")
 
         return self
 
@@ -582,8 +601,9 @@ class Operator:
                     log_filename=self.__logger.filename
                 )
             else:
-                self.destroy()
+                self.unpersist()
                 self.data = blocks
+                self.__rdd_path = oper.rdd_path
                 self.__format = 'block'
                 self.__memory_usage = self.__get_bytes()
                 return self
@@ -606,7 +626,7 @@ class Operator:
                 c = other.shape[1]
 
                 data = self.__spark_context.range(
-                    c, numSlices=min_partitions
+                    c  # , numSlices=min_partitions
                 ).map(
                     lambda m: oper1.value[:, m] * oper2.value[m, :]
                 ).reduce(
@@ -621,26 +641,32 @@ class Operator:
                 self.__logger.error("Operation not implemented for this Operator format")
                 raise NotImplementedError("operation not implemented for this Operator format")
         elif self.is_rdd():
+            num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
+
             oper1 = self.data.map(
                 lambda m: (m[1], (m[0], m[2]))
-            )
+            ).partitionBy(numPartitions=num_partitions)
+
+            # self.__logger.debug("# of items in operand 1: {}".format(oper1.count()))
 
             if other.is_rdd():
                 oper2 = other.data.map(
                     lambda m: (m[0], (m[1], m[2]))
-                )
+                ).partitionBy(numPartitions=num_partitions)
+
+                # self.__logger.debug("# of items in operand 2: {}".format(oper2.count()))
 
                 r = oper1.join(
-                    oper2
+                    oper2, numPartitions=num_partitions
                 ).map(
                     lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
                 ).reduceByKey(
-                    lambda a, b: a + b, numPartitions=min_partitions
+                    lambda a, b: a + b, numPartitions=num_partitions
                 ).filter(
                     lambda m: m[1] != value_type()
                 ).map(
-                    lambda m: (m[0][0], m[0][1], m[1])
-                )
+                    lambda m: (m[0][1], (m[0][0], m[1]))
+                ).partitionBy(numPartitions=num_partitions)
 
                 return Operator(r, spark_context, shape, log_filename=log_filename)
             else:
@@ -782,9 +808,9 @@ class Operator:
                 self.__logger.error("Operation not implemented for this State format")
                 raise NotImplementedError("operation not implemented for this State format")
         elif self.is_rdd():
-            oper1 = self.data.map(
-                lambda m: (m[1], (m[0], m[2]))
-            )
+            num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
+
+            oper1 = self.data  # .map(lambda m: (m[0], (m[1], m[2])))  # .sortByKey(numPartitions=num_partitions)
 
             if other.is_sparse() or other.is_dense():
                 if other.is_sparse():
@@ -811,16 +837,16 @@ class Operator:
 
                 return state
             elif other.is_rdd():
-                oper2 = other.data
+                oper2 = other.data  # .partitionBy(numPartitions=num_partitions)
 
                 r = oper1.join(
-                    oper2
+                    oper2, numPartitions=num_partitions
                 ).map(
                     lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
                 ).filter(
                     lambda m: m[1] != value_type()
                 ).reduceByKey(
-                    lambda a, b: a + b  # , numPartitions=min_partitions
+                    lambda a, b: a + b, numPartitions=num_partitions
                 )
 
                 return State(
@@ -903,20 +929,25 @@ class Operator:
 
                 for i in blocks:
                     for j in i:
+                        # self.__logger.debug("\n" + j.data.toDebugString().decode())
                         rdd = rdd.union(j.data)
 
                 self.__logger.debug("Union of all blocks was done in {}s".format((datetime.now() - t1).total_seconds()))
 
                 t1 = datetime.now()
 
-                rdd = rdd.reduceByKey(
-                    lambda a, b: a + b  # , numPartitions=min_partitions
+                num_partitions = other.data[0].data.getNumPartitions()
+
+                rdd = rdd.partitionBy(
+                    numPartitions=num_partitions
+                ).reduceByKey(
+                    lambda a, b: a + b, numPartitions=num_partitions
                 )
                 # print(rdd.collect())
                 state = State(
                     rdd, spark_context, other.mesh, shape, other.num_particles, log_filename=self.__logger.filename
                 ).materialize(storage_level)  # to_path(min_partitions)
-
+                # self.__logger.debug("\n" + state.data.toDebugString().decode())
                 self.__logger.debug(
                     "ReduceByKey of all blocks was done in {}s".format((datetime.now() - t1).total_seconds())
                 )
