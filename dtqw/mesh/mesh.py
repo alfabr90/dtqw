@@ -52,7 +52,7 @@ class Mesh:
     def check_steps(self, steps):
         return True
 
-    def create_operator(self, storage_level):
+    def create_operator(self):
         return None
 
 

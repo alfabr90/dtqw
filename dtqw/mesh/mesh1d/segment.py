@@ -9,7 +9,7 @@ class Segment(Mesh1D):
         super().__init__(spark_context, size, log_filename)
         self.__size = self._define_size(size)
 
-    def create_operator(self, storage_level):
+    def create_operator(self):
         coin_size = 2
         size = self.__size
         shape = (coin_size * size, coin_size * size)
@@ -31,4 +31,4 @@ class Segment(Mesh1D):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape, self._logger.filename).materialize(storage_level)
+        return Operator(self._spark_context, rdd, shape, self._logger.filename)

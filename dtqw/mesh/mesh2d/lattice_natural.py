@@ -29,7 +29,7 @@ class LatticeNatural(Mesh2D):
     def check_steps(self, steps):
         return steps <= int((self.__size[0] - 1) / 2) and steps <= int((self.__size[1] - 1) / 2)
 
-    def create_operator(self, storage_level):
+    def create_operator(self):
         coin_size = 2
         size = self.__size
         size_xy = size[0] * size[1]
@@ -55,4 +55,4 @@ class LatticeNatural(Mesh2D):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape, self._logger.filename).materialize(storage_level)
+        return Operator(self._spark_context, rdd, shape, self._logger.filename)

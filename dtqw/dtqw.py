@@ -149,7 +149,7 @@ class DiscreteTimeQuantumWalk:
         self._logger.info("Building coin operator...")
         t1 = datetime.now()
 
-        self._coin_operator = self._coin.create_operator(self._mesh, storage_level).materialize(storage_level)
+        self._coin_operator = self._coin.create_operator(self._mesh).materialize(storage_level)
 
         self._execution_times['coin_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -162,7 +162,7 @@ class DiscreteTimeQuantumWalk:
         self._logger.info("Building shift operator...")
         t1 = datetime.now()
 
-        self._shift_operator = self._mesh.create_operator(storage_level).materialize(storage_level)
+        self._shift_operator = self._mesh.create_operator().materialize(storage_level)
 
         self._execution_times['shift_operator'] = (datetime.now() - t1).total_seconds()
 

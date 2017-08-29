@@ -22,7 +22,7 @@ class Line(Mesh1D):
     def check_steps(self, steps):
         return steps <= int((self._size - 1) / 2)
 
-    def create_operator(self, storage_level):
+    def create_operator(self):
         coin_size = 2
         size = self._size
         shape = (coin_size * size, coin_size * size)
@@ -38,4 +38,4 @@ class Line(Mesh1D):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape, self._logger.filename).materialize(storage_level)
+        return Operator(self._spark_context, rdd, shape, self._logger.filename)

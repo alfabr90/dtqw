@@ -12,7 +12,7 @@ class BoxNatural(Mesh2D):
     def title(self):
         return 'Natural Box'
 
-    def create_operator(self, storage_level):
+    def create_operator(self):
         coin_size = 2
         size = self.__size
         size_xy = size[0] * size[1]
@@ -46,4 +46,4 @@ class BoxNatural(Mesh2D):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape, self._logger.filename).materialize(storage_level)
+        return Operator(self._spark_context, rdd, shape, self._logger.filename)
