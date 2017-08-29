@@ -1,44 +1,34 @@
 import cmath
-import csv
-import numpy as np
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-
 from datetime import datetime
-from mpl_toolkits.mplot3d import Axes3D
 from pyspark import StorageLevel
-
-from .mesh import *
-from .utils.utils import MUL_BROADCAST, MUL_RDD, MUL_BLOCK, create_dir
+from dtqw.utils.utils import broadcast
 from dtqw.utils.logger import Logger
 from dtqw.utils.metrics import Metrics
-from dtqw.math.state import is_state
 from dtqw.math.operator import Operator, is_operator
+from dtqw.math.state import State
 
 
 class DiscreteTimeQuantumWalk:
-    def __init__(self, spark_context, coin, mesh,
-                 num_particles=1, min_partitions=8, log_filename='log.txt'):
-        self.__spark_context = spark_context
-        self.__coin = coin
-        self.__mesh = mesh
-        self.__num_particles = num_particles
-        self.__min_partitions = min_partitions
+    def __init__(self, spark_context, coin, mesh, num_particles, log_filename='./log.txt'):
+        self._spark_context = spark_context
+        self._coin = coin
+        self._mesh = mesh
+        self._num_particles = num_particles
+        self._min_partitions = 8
 
-        self.__coin_operator = None
-        self.__shift_operator = None
-        self.__unitary_operator = None
-        self.__interaction_operator = None
-        self.__multiparticle_unitary_operator = None
-        self.__walk_operator = None
+        self._coin_operator = None
+        self._shift_operator = None
+        self._unitary_operator = None
+        self._interaction_operator = None
+        self._multiparticle_unitary_operator = None
+        self._walk_operator = None
 
-        self.__steps = 0
+        self._steps = 0
 
-        self.__logger = Logger(__name__, log_filename)
-        self.__metrics = Metrics(log_filename=log_filename)
+        self._logger = Logger(__name__, log_filename)
+        self._metrics = Metrics(log_filename=log_filename)
 
-        self.__execution_times = {
+        self._execution_times = {
             'coin_operator': 0.0,
             'shift_operator': 0.0,
             'unitary_operator': 0.0,
@@ -49,7 +39,7 @@ class DiscreteTimeQuantumWalk:
             'export_plot': 0.0
         }
 
-        self.__memory_usage = {
+        self._memory_usage = {
             'coin_operator': 0,
             'shift_operator': 0,
             'unitary_operator': 0,
@@ -60,957 +50,487 @@ class DiscreteTimeQuantumWalk:
         }
 
         if num_particles < 1:
-            self.__logger.error("Invalid number of particles")
+            self._logger.error("Invalid number of particles")
             raise ValueError("invalid number of particles")
 
     @property
     def spark_context(self):
-        return self.__spark_context
+        return self._spark_context
 
     @property
     def coin(self):
-        return self.__coin
+        return self._coin
 
     @property
     def mesh(self):
-        return self.__mesh
+        return self._mesh
 
     @property
     def memory_usage(self):
-        return self.__memory_usage
+        return self._memory_usage
 
     @property
     def execution_times(self):
-        return self.__execution_times
+        return self._execution_times
 
     @property
     def coin_operator(self):
-        return self.__coin_operator
+        return self._coin_operator
 
     @property
     def shift_operator(self):
-        return self.__shift_operator
+        return self._shift_operator
 
     @property
     def unitary_operator(self):
-        return self.__unitary_operator
+        return self._unitary_operator
 
     @property
     def interaction_operator(self):
-        return self.__interaction_operator
+        return self._interaction_operator
 
     @property
     def multiparticle_unitary_operator(self):
-        return self.__multiparticle_unitary_operator
+        return self._multiparticle_unitary_operator
 
     @property
     def walk_operator(self):
-        return self.__walk_operator
-
-    @property
-    def memory_usage(self):
-        return self.__memory_usage
-    
-    @property
-    def execution_times(self):
-        return self.__execution_times
+        return self._walk_operator
 
     @coin_operator.setter
     def coin_operator(self, co):
         if is_operator(co):
-            self.__coin_operator = co
+            self._coin_operator = co
         else:
-            self.__logger.error('Operator instance expected, not "{}"'.format(type(co)))
+            self._logger.error('Operator instance expected, not "{}"'.format(type(co)))
             raise TypeError('operator instance expected, not "{}"'.format(type(co)))
 
     @shift_operator.setter
     def shift_operator(self, so):
         if is_operator(so):
-            self.__shift_operator = so
+            self._shift_operator = so
         else:
-            self.__logger.error('Operator instance expected, not "{}"'.format(type(so)))
+            self._logger.error('Operator instance expected, not "{}"'.format(type(so)))
             raise TypeError('operator instance expected, not "{}"'.format(type(so)))
 
     @unitary_operator.setter
     def unitary_operator(self, uo):
         if is_operator(uo):
-            self.__unitary_operator = uo
+            self._unitary_operator = uo
         else:
-            self.__logger.error('Operator instance expected, not "{}"'.format(type(uo)))
+            self._logger.error('Operator instance expected, not "{}"'.format(type(uo)))
             raise TypeError('operator instance expected, not "{}"'.format(type(uo)))
 
     @interaction_operator.setter
     def interaction_operator(self, io):
         if is_operator(io):
-            self.__interaction_operator = io
+            self._interaction_operator = io
         else:
-            self.__logger.error('Operator instance expected, not "{}"'.format(type(io)))
+            self._logger.error('Operator instance expected, not "{}"'.format(type(io)))
             raise TypeError('operator instance expected, not "{}"'.format(type(io)))
 
     @multiparticle_unitary_operator.setter
     def multiparticle_unitary_operator(self, mu):
         if is_operator(mu):
-            self.__multiparticle_unitary_operator = mu
+            self._multiparticle_unitary_operator = mu
         else:
-            self.__logger.error('Operator instance expected, not "{}"'.format(type(mu)))
+            self._logger.error('Operator instance expected, not "{}"'.format(type(mu)))
             raise TypeError('operator instance expected, not "{}"'.format(type(mu)))
 
     @walk_operator.setter
     def walk_operator(self, wo):
         if is_operator(wo):
-            self.__walk_operator = wo
+            self._walk_operator = wo
         else:
-            self.__logger.error('Operator instance expected, not "{}"'.format(type(wo)))
+            self._logger.error('Operator instance expected, not "{}"'.format(type(wo)))
             raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
 
-    def create_coin_operator(self, storage_level=None):
-        self.__logger.info("Building coin operator...")
+    def create_coin_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        self._logger.info("Building coin operator...")
         t1 = datetime.now()
 
-        result = self.__coin.create_operator(
-            self.__mesh, self.__spark_context, log_filename=self.__logger.filename
-        ).materialize()
+        self._coin_operator = self._coin.create_operator(self._mesh, storage_level).materialize(storage_level)
 
-        self.__execution_times['coin_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['coin_operator'] = result.memory_usage
+        self._execution_times['coin_operator'] = (datetime.now() - t1).total_seconds()
 
-        self.__logger.info("Coin operator was built in {}s".format(self.__execution_times['coin_operator']))
-        self.__logger.info("Coin operator is consuming {} bytes".format(self.__memory_usage['coin_operator']))
-        self.__logger.debug("Coin operator format: {}".format(result.format))
-        if result.is_path():
-            self.__logger.debug("Coin operator path: {}".format(result.data))
-        self.__logger.debug("Shape of coin operator: {}".format(result.shape))
+        self._logger.info("Coin operator was built in {}s".format(self._execution_times['coin_operator']))
 
-        app_id = self.__spark_context.applicationId
-        self.__metrics.log_rdds(app_id=app_id)
+        app_id = self._spark_context.applicationId
+        self._metrics.log_rdds(app_id=app_id)
 
-        return result
-
-    def create_shift_operator(self, storage_level=None):
-        self.__logger.info("Building shift operator...")
+    def create_shift_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        self._logger.info("Building shift operator...")
         t1 = datetime.now()
 
-        result = self.__mesh.create_operator(
-            self.__spark_context, self.__min_partitions, log_filename=self.__logger.filename
-        ).materialize()
+        self._shift_operator = self._mesh.create_operator(storage_level).materialize(storage_level)
 
-        self.__execution_times['shift_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['shift_operator'] = result.memory_usage
+        self._execution_times['shift_operator'] = (datetime.now() - t1).total_seconds()
 
-        self.__logger.info("Shift operator was built in {}s".format(self.__execution_times['shift_operator']))
-        self.__logger.info("Shift operator is consuming {} bytes".format(self.__memory_usage['shift_operator']))
-        self.__logger.debug("Shift operator format: {}".format(result.format))
-        if result.is_path():
-            self.__logger.debug("Shift operator path: {}".format(result))
-        self.__logger.debug("Shape of shift operator: {}".format(result.shape))
+        self._logger.info("Shift operator was built in {}s".format(self._execution_times['shift_operator']))
 
-        app_id = self.__spark_context.applicationId
-        self.__metrics.log_rdds(app_id=app_id)
+        app_id = self._spark_context.applicationId
+        self._metrics.log_rdds(app_id=app_id)
 
-        return result
+    def create_unitary_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        self._logger.info("Building unitary operator...")
 
-    def create_unitary_operator(self, storage_level=None):
-        self.__logger.info("Building unitary operator...")
+        if self._coin_operator is None:
+            self._logger.info("No coin operator has been set. A new one will be built")
+            self.create_coin_operator(storage_level)
 
-        if self.__coin_operator is None:
-            self.__logger.info("No coin operator has been set. A new one will be built")
-            self.__coin_operator = self.create_coin_operator()
-
-        if self.__shift_operator is None:
-            self.__logger.info("No shift operator has been set. A new one will be built")
-            self.__shift_operator = self.create_shift_operator()
+        if self._shift_operator is None:
+            self._logger.info("No shift operator has been set. A new one will be built")
+            self.create_shift_operator(storage_level)
 
         t1 = datetime.now()
 
-        result = self.__shift_operator.multiply(
-            self.__coin_operator, self.__min_partitions
-        ).to_rdd(self.__min_partitions).materialize(storage_level)
+        num_partitions = max(self._shift_operator.data.getNumPartitions(), self._coin_operator.data.getNumPartitions())
 
-        self.__coin_operator.destroy()
-        self.__shift_operator.destroy()
+        rdd = self._shift_operator.data.map(
+            lambda m: (m[1], (m[0], m[2]))
+        ).partitionBy(
+            numPartitions=num_partitions
+        )
 
-        self.__execution_times['unitary_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['unitary_operator'] = result.memory_usage
+        so = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
 
-        self.__logger.info("Unitary operator was built in {}s".format(self.__execution_times['unitary_operator']))
-        self.__logger.info("Unitary operator is consuming {} bytes".format(self.__memory_usage['unitary_operator']))
-        self.__logger.debug("Unitary operator format: {}".format(result.format))
-        if result.is_path():
-            self.__logger.info("Unitary operator path: {}".format(result))
-        self.__logger.debug("Shape of unitary operator: {}".format(result.shape))
+        rdd = self._coin_operator.data.map(
+            lambda m: (m[0], (m[1], m[2]))
+        ).partitionBy(
+            numPartitions=num_partitions
+        )
 
-        app_id = self.__spark_context.applicationId
-        self.__metrics.log_rdds(app_id=app_id)
+        co = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
 
-        return result
+        self._unitary_operator = so.multiply(co).materialize(storage_level)
 
-    def create_interaction_operator(self, phase, storage_level=None):
-        self.__logger.info("Building interaction operator...")
+        self._coin_operator.unpersist()
+        self._shift_operator.unpersist()
+
+        self._execution_times['unitary_operator'] = (datetime.now() - t1).total_seconds()
+
+        self._logger.info("Unitary operator was built in {}s".format(self._execution_times['unitary_operator']))
+
+        app_id = self._spark_context.applicationId
+        self._metrics.log_rdds(app_id=app_id)
+
+    def create_interaction_operator(self, phase, storage_level=StorageLevel.MEMORY_AND_DISK):
+        self._logger.info("Building interaction operator...")
         t1 = datetime.now()
 
-        num_p = self.__num_particles
-        cp = cmath.exp(phase * (0.0+1.0j))
-        cs = 2
+        phase = cmath.exp(phase * (0.0 + 1.0j))
+        num_particles = self._num_particles
 
-        if self.__mesh.is_1d():
-            ndim = 1
-            size = self.__mesh.size
-            cs_size = cs * self.__mesh.size
-            shape = (cs_size ** num_p, cs_size ** num_p)
+        coin_size = 2
+
+        if self._mesh.is_1d():
+            size = self._mesh.size
+            cs_size = coin_size * self._mesh.size
+
+            shape = (cs_size, cs_size)
+            rdd_range = cs_size ** num_particles
 
             def __map(m):
                 a = []
-                for p in range(num_p):
-                    a.append(int(m / (cs_size ** (num_p - 1 - p))) % size)
-                for i in range(num_p):
+
+                for p in range(num_particles):
+                    a.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
+
+                for i in range(num_particles):
                     if a[0] != a[i]:
                         return m, m, 1
-                return m, m, cp
-        elif self.__mesh.is_2d():
+
+                return m, m, phase
+        elif self._mesh.is_2d():
             ndim = 2
-            ind = ndim * num_p
-            size_x = self.__mesh.size[0]
-            size_y = self.__mesh.size[1]
-            cs_size_x = cs * self.__mesh.size[0]
-            cs_size_y = cs * self.__mesh.size[1]
-            shape = ((cs_size_x * cs_size_y) ** num_p, (cs_size_x * cs_size_y) ** num_p)
+            ind = ndim * num_particles
+
+            size_x = self._mesh.size[0]
+            size_y = self._mesh.size[1]
+            cs_size_x = coin_size * size_x
+            cs_size_y = coin_size * size_y
+            cs_size_xy = cs_size_x * cs_size_y
+
+            shape = (cs_size_xy, cs_size_xy)
+            rdd_range = cs_size_xy ** num_particles
 
             def __map(m):
                 a = []
-                for p in range(num_p):
-                    a.append(int(m / ((cs_size_x * cs_size_y) ** (num_p - 1 - p) * size_y)) % size_x)
-                    a.append(int(m / ((cs_size_x * cs_size_y) ** (num_p - 1 - p))) % size_y)
+
+                for p in range(num_particles):
+                    a.append(int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x)
+                    a.append(int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y)
+
                 for i in range(0, ind, ndim):
                     if a[0] != a[i] or a[1] != a[i + 1]:
                         return m, m, 1
-                return m, m, cp
+
+                return m, m, phase
         else:
-            self.__logger.error("Mesh dimension not implemented")
+            self._logger.error("Mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        rdd = self.__spark_context.range(
-            shape[0]  # , numSlices=self.__min_partitions
+        rdd = self._spark_context.range(
+            rdd_range
         ).map(
             __map
         )
 
-        result = Operator(rdd, self.__spark_context, shape)
-        self.__logger.info("Materializing interaction operator...")
-        result.materialize(storage_level)
+        self._interaction_operator = Operator(
+            self._spark_context, rdd, shape, self._logger.filename
+        ).materialize(storage_level)
 
-        self.__execution_times['interaction_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['interaction_operator'] = result.memory_usage
+        self._execution_times['interaction_operator'] = (datetime.now() - t1).total_seconds()
 
-        self.__logger.info(
-            "Interaction operator was built in {}s".format(self.__execution_times['interaction_operator'])
+        self._logger.info(
+            "Interaction operator was built in {}s".format(self._execution_times['interaction_operator'])
         )
-        self.__logger.info(
-            "Interaction operator is consuming {} bytes".format(self.__memory_usage['interaction_operator'])
-        )
-        self.__logger.debug("Interaction operator format: {}".format(result.format))
-        if result.is_path():
-            self.__logger.info("Interaction operator path: {}".format(result.data))
-        self.__logger.debug("Shape of interaction operator: {}".format(result.shape))
 
-        app_id = self.__spark_context.applicationId
-        self.__metrics.log_rdds(app_id=app_id)
+        app_id = self._spark_context.applicationId
+        self._metrics.log_rdds(app_id=app_id)
 
-        return result
+    def create_multiparticle_unitary_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        self._logger.info("Building multiparticle unitary operator...")
 
-    def create_multiparticle_unitary_operator(self, storage_level=None):
-        self.__logger.info("Building multiparticle unitary operator...")
-
-        if self.__unitary_operator is None:
-            self.__logger.info("No unitary operator has been set. A new one will be built")
-            self.__unitary_operator = self.create_unitary_operator()
+        if self._unitary_operator is None:
+            self._logger.info("No unitary operator has been set. A new one will be built")
+            self.create_unitary_operator(storage_level)
 
         t1 = datetime.now()
 
-        other = self.__unitary_operator.to_rdd(self.__min_partitions, True)
-        other.clear_rdd_path()
+        op_tmp = self._unitary_operator
+        uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
 
-        result = self.__unitary_operator
+        for i in range(self._num_particles - 1):
+            op_tmp = op_tmp.kron(uo, self._unitary_operator.shape)
 
-        for p in range(self.__num_particles - 1):
-            result_tmp = result.\
-                kron(other, self.__min_partitions).\
-                to_rdd(self.__min_partitions).\
-                materialize(storage_level)
-            result.destroy()
-            result = result_tmp
+        self._multiparticle_unitary_operator = op_tmp.materialize(storage_level)
 
-        other.destroy()
+        self._execution_times['multiparticle_unitary_operator'] = (datetime.now() - t1).total_seconds()
 
-        self.__execution_times['multiparticle_unitary_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['multiparticle_unitary_operator'] = result.memory_usage
-
-        self.__logger.info(
+        self._logger.info(
             "Multiparticle unitary operator was built in {}s".format(
-                self.__execution_times['multiparticle_unitary_operator']
+                self._execution_times['multiparticle_unitary_operator']
             )
         )
-        self.__logger.info(
-            "Multiparticle unitary operator is consuming {} bytes".format(
-                self.__memory_usage['multiparticle_unitary_operator']
+
+        app_id = self._spark_context.applicationId
+        self._metrics.log_rdds(app_id=app_id)
+
+    def create_walk_operator(self, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
+        t1 = datetime.now()
+
+        app_id = self._spark_context.applicationId
+
+        if self._num_particles == 1:
+            self._logger.info("With just one particle, the walk operator is the unitary operator")
+
+            if self._unitary_operator is None:
+                self._logger.info("No unitary operator has been set. A new one will be built")
+                self.create_unitary_operator(storage_level)
+
+            num_partitions = self._unitary_operator.data.getNumPartitions()
+
+            rdd = self._unitary_operator.data.map(
+                lambda m: (m[1], (m[0], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
-        )
-        self.__logger.debug("Multiparticle unitary operator format: {}".format(result.format))
-        if result.is_path():
-            self.__logger.info("Multiparticle unitary operator path: {}".format(result.data))
-        self.__logger.debug("Shape of multiparticle unitary operator: {}".format(result.shape))
 
-        app_id = self.__spark_context.applicationId
-        self.__metrics.log_rdds(app_id=app_id)
+            self._walk_operator = Operator(
+                self._spark_context, rdd, self._unitary_operator.shape, self._logger.filename
+            ).materialize(storage_level)
 
-        return result
-
-    def create_walk_operator(self, collision_phase=None, mul_mode=MUL_BROADCAST, num_blocks=None, storage_level=None):
-        if mul_mode == MUL_BLOCK:
-            if num_blocks is None:
-                self.__logger.error("Invalid number of blocks")
-                raise ValueError("invalid number of blocks")
-            elif num_blocks <= 0:
-                self.__logger.error("Invalid number of blocks")
-                raise ValueError("invalid number of blocks")
-
-        app_id = self.__spark_context.applicationId
-
-        if self.__num_particles == 1:
-            self.__logger.info("With just one particle, the walk operator is the unitary operator")
-
-            if self.__unitary_operator is None:
-                self.__logger.info("No unitary operator has been set. A new one will be built")
-                self.__unitary_operator = self.create_unitary_operator()
-
-            t1 = datetime.now()
-
-            result = self.__unitary_operator
-
-            if mul_mode == MUL_BLOCK:
-                self.__logger.info("Transforming walk operator to block format...")
-                result.to_block(num_blocks, self.__min_partitions, storage_level)
-
-            result.materialize(storage_level)
+            self._unitary_operator.unpersist()
         else:
-            if collision_phase is None:
-                self.__logger.info("No collision phase has been defined. "
-                                   "The walk operator will be the multiparticle unitary operator")
+            if phase is None:
+                self._logger.info("No collision phase has been defined. "
+                                  "The walk operator will be the multiparticle unitary operator")
 
-                if self.__multiparticle_unitary_operator is None:
-                    self.__logger.info("No multiparticle unitary operator has been set. A new one will be built")
-                    self.__multiparticle_unitary_operator = self.create_multiparticle_unitary_operator()
+                if self._multiparticle_unitary_operator is None:
+                    self._logger.info("No multiparticle unitary operator has been set. A new one will be built")
+                    self.create_multiparticle_unitary_operator(storage_level)
 
-                t1 = datetime.now()
+                num_partitions = self._multiparticle_unitary_operator.data.getNumPartitions()
 
-                # self.__multiparticle_unitary_operator.clear_rdd_path()
-                result = self.__multiparticle_unitary_operator
-
-                self.__metrics.log_executors(app_id=app_id)
-                self.__metrics.log_rdds(app_id=app_id)
-
-                if mul_mode == MUL_BLOCK:
-                    self.__logger.info("Transforming walk operator to block format...")
-                    result.to_block(num_blocks, self.__min_partitions, storage_level)
-
-                result.materialize(storage_level)
-            else:
-                self.__logger.info("Building walk operator...")
-
-                if self.__multiparticle_unitary_operator is None:
-                    self.__logger.info("No multiparticle unitary operator has been set. A new one will be built")
-                    self.__multiparticle_unitary_operator = self.create_multiparticle_unitary_operator()
-
-                if self.__interaction_operator is None:
-                    self.__logger.info("No interaction operator has been set. A new one will be built")
-                    self.__interaction_operator = self.create_interaction_operator(collision_phase)
-
-                t1 = datetime.now()
-                '''
-                if mul_mode == MUL_BLOCK:
-                    self.__logger.info("Transforming multiparticle unitary operator to block format...")
-                    self.__multiparticle_unitary_operator.to_block(num_blocks,self.__min_partitions, storage_level).materialize(storage_level)
-                    self.__logger.info("Transforming interaction operator to block format...")
-                    self.__interaction_operator.to_block(num_blocks,self.__min_partitions, storage_level).materialize(storage_level)
-                '''
-                self.__metrics.log_executors(app_id=app_id)
-                self.__metrics.log_rdds(app_id=app_id)
-
-                self.__logger.info("Multiplying multiparticle unitary operator with interaction operation...")
-                result = self.__multiparticle_unitary_operator.multiply(
-                    self.__interaction_operator,
-                    self.__min_partitions
+                rdd = self._multiparticle_unitary_operator.data.map(
+                    lambda m: (m[1], (m[0], m[2]))
+                ).partitionBy(
+                    numPartitions=num_partitions
                 )
 
-                # result.to_path(self.__min_partitions).to_rdd(self.__min_partitions).materialize(storage_level)
-                result.materialize(storage_level)
+                self._walk_operator = Operator(
+                    self._spark_context, rdd, self._unitary_operator.shape, self._logger.filename
+                ).materialize(storage_level)
 
-                self.__metrics.log_executors(app_id=app_id)
-                self.__metrics.log_rdds(app_id=app_id)
+                self._unitary_operator.unpersist()
+            else:
+                self._logger.info("Building walk operator...")
 
-                self.__logger.debug(
+                if self._multiparticle_unitary_operator is None:
+                    self._logger.info("No multiparticle unitary operator has been set. A new one will be built")
+                    self.create_multiparticle_unitary_operator(storage_level)
+
+                if self._interaction_operator is None:
+                    self._logger.info("No interaction operator has been set. A new one will be built")
+                    self.create_interaction_operator(phase, storage_level)
+
+                t1 = datetime.now()
+
+                shape = self._multiparticle_unitary_operator.shape
+
+                num_partitions = max(
+                    self._multiparticle_unitary_operator.data.getNumPartitions(),
+                    self._interaction_operator.data.getNumPartitions()
+                )
+
+                self._logger.info("Multiplying multiparticle unitary operator with interaction operation...")
+
+                rdd = self._multiparticle_unitary_operator.data.map(
+                    lambda m: (m[1], (m[0], m[2]))
+                ).partitionBy(
+                    numPartitions=num_partitions
+                )
+
+                muo = Operator(self._spark_context, rdd, shape, self._logger.filename)
+
+                rdd = self._interaction_operator.data.map(
+                    lambda m: (m[0], (m[1], m[2]))
+                ).partitionBy(
+                    numPartitions=num_partitions
+                )
+
+                io = Operator(self._spark_context, rdd, shape, self._logger.filename)
+
+                op_tmp = muo.multiply(io)
+
+                rdd = op_tmp.data.map(
+                    lambda m: (m[1], (m[0], m[2]))
+                ).partitionBy(
+                    numPartitions=num_partitions
+                )
+
+                self._walk_operator = Operator(
+                    self._spark_context, rdd, shape, self._logger.filename
+                ).materialize(storage_level)
+
+                self._multiparticle_unitary_operator.unpersist()
+                self._interaction_operator.unpersist()
+
+                self._logger.debug(
                     "Multiplication between multiparticle unitary operator and "
                     "interaction operator was done in {}s".format((datetime.now() - t1).total_seconds())
                 )
 
-                # result.clear_rdd_path()
+        self._execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
 
-                if mul_mode == MUL_BLOCK:
-                    self.__logger.info("Transforming walk operator to block format...")
-                    result.to_block(num_blocks, self.__min_partitions, storage_level)  # .materialize(storage_level)
-
-                self.__logger.info("Destroying multiparticle unitary operator...")
-                self.__multiparticle_unitary_operator.destroy()
-                self.__logger.info("Destroying interaction operator...")
-                self.__interaction_operator.destroy()
-
-        self.__execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
-        self.__memory_usage['walk_operator'] = result.memory_usage
-
-        self.__logger.info(
-            "Walk operator was built in {}s".format(self.__execution_times['walk_operator'])
+        self._logger.info(
+            "Walk operator was built in {}s".format(self._execution_times['walk_operator'])
         )
-        self.__logger.info(
-            "Walk operator is consuming {} bytes".format(self.__memory_usage['walk_operator'])
+
+        self._metrics.log_executors(app_id=app_id)
+        self._metrics.log_rdds(app_id=app_id)
+
+    def title(self):
+        return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
+
+    def filename(self):
+        return "{}_{}_{}".format(
+            self._mesh.filename(), self._steps, self._num_particles
         )
-        self.__logger.debug("Walk operator format: {}".format(result.format))
-        if result.is_path():
-            self.__logger.info("Walk operator path: {}".format(result.data))
-        self.__logger.debug("Shape of walk operator: {}".format(result.shape))
 
-        self.__metrics.log_executors(app_id=app_id)
-        self.__metrics.log_rdds(app_id=app_id)
+    def destroy_operators(self):
+        if self._coin_operator is not None:
+            self._coin_operator.destroy()
 
-        return result
+        if self._shift_operator is not None:
+            self._shift_operator.destroy()
 
-    def plot_title(self):
-        if self.__mesh.is_1d():
-            if self.__mesh.type == MESH_1D_LINE:
-                mesh = "Line"
-            elif self.__mesh.type == MESH_1D_SEGMENT:
-                mesh = "Segment"
-            elif self.__mesh.type == MESH_1D_CYCLE:
-                mesh = "Cycle"
-            else:
-                self.__logger.error("Mesh type not implemented")
-                raise NotImplementedError("mesh type not implemented")
+        if self._unitary_operator is not None:
+            self._unitary_operator.destroy()
 
-            if self.__num_particles == 1:
-                particles = str(self.__num_particles) + " Particle on a "
-            else:
-                particles = str(self.__num_particles) + " Particles on a "
+        if self._interaction_operator is not None:
+            self._interaction_operator.destroy()
 
-            return "Quantum Walk with " + particles + mesh
-        elif self.__mesh.is_2d():
-            if self.__mesh.type == MESH_2D_LATTICE_DIAGONAL:
-                mesh = "Diagonal Lattice"
-            elif self.__mesh.type == MESH_2D_LATTICE_NATURAL:
-                mesh = "Natural Lattice"
-            elif self.__mesh.type == MESH_2D_BOX_DIAGONAL:
-                mesh = "Diagonal Box"
-            elif self.__mesh.type == MESH_2D_BOX_NATURAL:
-                mesh = "Natural Box"
-            elif self.__mesh.type == MESH_2D_TORUS_DIAGONAL:
-                mesh = "Diagonal Torus"
-            elif self.__mesh.type == MESH_2D_TORUS_NATURAL:
-                mesh = "Natural Torus"
-            else:
-                self.__logger.error("Mesh type not implemented")
-                raise NotImplementedError("mesh type not implemented")
+        if self._multiparticle_unitary_operator is not None:
+            self._multiparticle_unitary_operator.destroy()
 
-            if self.__num_particles == 1:
-                particles = str(self.__num_particles) + " Particle on a "
-            else:
-                particles = str(self.__num_particles) + " Particles on a "
+        if self._walk_operator is not None:
+            self._walk_operator.destroy()
 
-            return "Quantum Walk with " + particles + mesh
-
-    def output_filename(self):
-        if self.__mesh.is_1d():
-            if self.__mesh.type == MESH_1D_LINE:
-                mesh = "LINE"
-            elif self.__mesh.type == MESH_1D_SEGMENT:
-                mesh = "SEGMENT"
-            elif self.__mesh.type == MESH_1D_CYCLE:
-                mesh = "CYCLE"
-            else:
-                self.__logger.error("Mesh type not implemented")
-                raise NotImplementedError("mesh type not implemented")
-
-            size = str(self.__mesh.size)
-
-            return "DTQW1D_{}_{}_{}_{}_{}".format(
-                mesh, size, self.__steps, self.__num_particles, self.__min_partitions
-            )
-        elif self.__mesh.is_2d():
-            if self.__mesh.type == MESH_2D_LATTICE_DIAGONAL:
-                mesh = "LATTICE_DIAGONAL"
-            elif self.__mesh.type == MESH_2D_LATTICE_NATURAL:
-                mesh = "LATTICE_NATURAL"
-            elif self.__mesh.type == MESH_2D_BOX_DIAGONAL:
-                mesh = "BOX_DIAGONAL"
-            elif self.__mesh.type == MESH_2D_BOX_NATURAL:
-                mesh = "BOX_NATURAL"
-            elif self.__mesh.type == MESH_2D_TORUS_DIAGONAL:
-                mesh = "TORUS_DIAGONAL"
-            elif self.__mesh.type == MESH_2D_TORUS_NATURAL:
-                mesh = "TORUS_NATURAL"
-            else:
-                self.__logger.error("Mesh type not implemented")
-                raise NotImplementedError("mesh type not implemented")
-
-            size = str(self.__mesh.size[0]) + "-" + str(self.__mesh.size[1])
-
-            return "DTQW2D_{}_{}_{}_{}_{}".format(
-                mesh, size, self.__steps, self.__num_particles, self.__min_partitions
-            )
-
-    def clear_operators(self):
-        if self.__coin_operator is not None:
-            self.__coin_operator.destroy()
-
-        if self.__shift_operator is not None:
-            self.__shift_operator.destroy()
-
-        if self.__unitary_operator is not None:
-            self.__unitary_operator.destroy()
-
-        if self.__interaction_operator is not None:
-            self.__interaction_operator.destroy()
-
-        if self.__multiparticle_unitary_operator is not None:
-            self.__multiparticle_unitary_operator.destroy()
-
-        if self.__walk_operator is not None:
-            self.__walk_operator.destroy()
-
-    def walk(self, steps, initial_state, collision_phase=None,
-             mul_mode=MUL_BROADCAST, num_blocks=None, storage_level=None):
-        if not is_state(initial_state):
-            self.__logger.error('State instance expected, not "{}"'.format(type(initial_state)))
-            raise TypeError('State instance expected, not "{}"'.format(type(initial_state)))
-
-        if not self.__mesh.check_steps(steps):
-            self.__logger.error("Invalid number of steps")
+    def walk(self, steps, initial_state, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
+        if not self._mesh.check_steps(steps):
+            self._logger.error("Invalid number of steps")
             raise ValueError("invalid number of steps")
 
-        if storage_level is None:
-            storage_level = StorageLevel.MEMORY_AND_DISK
+        self._steps = steps
 
-        if mul_mode == MUL_BLOCK:
-            if num_blocks is None:
-                self.__logger.error("Invalid number of blocks")
-                raise ValueError("invalid number of blocks")
-            elif num_blocks <= 0:
-                self.__logger.error("Invalid number of blocks")
-                raise ValueError("invalid number of blocks")
+        self._logger.info("Steps: {}".format(self._steps))
+        self._logger.info("Space size: {}".format(self._mesh.size))
+        self._logger.info("Nº of partitions: {}".format(self._min_partitions))
+        self._logger.info("Nº of particles: {}".format(self._num_particles))
+        if self._num_particles > 1:
+            self._logger.info("Collision phase: {}".format(phase))
 
-        self.__steps = steps
-
-        self.__logger.info("Steps: {}".format(self.__steps))
-        self.__logger.info("Space size: {}".format(self.__mesh.size))
-        self.__logger.info("Nº of partitions: {}".format(self.__min_partitions))
-        self.__logger.info("Nº of particles: {}".format(self.__num_particles))
-        if self.__num_particles > 1:
-            self.__logger.info("Collision phase: {}".format(collision_phase))
+        app_id = self._spark_context.applicationId
 
         result = initial_state
 
-        if self.__steps > 0:
-            if not result.is_unitary():
-                self.__logger.error("The initial state is not unitary")
-                raise ValueError("the initial state is not unitary")
+        if not result.is_unitary():
+            self._logger.error("The initial state is not unitary")
+            raise ValueError("the initial state is not unitary")
 
-            self.__logger.info("Initial state is consuming {} bytes".format(result.memory_usage))
-            self.__logger.debug("Initial state format: {}".format(result.format))
-            if result.is_path():
-                self.__logger.info("Initial state path: {}".format(result.data))
-            self.__logger.debug("Shape of initial state: {}".format(result.shape))
+        if self._steps > 0:
+            self.create_walk_operator(phase, storage_level)
 
-            self.__walk_operator = self.create_walk_operator(collision_phase, mul_mode, num_blocks, storage_level)
-            # self.__logger.info("Cleaning walk operator path...")
-            # self.__walk_operator.clear_rdd_path()
-
-            wo = self.__walk_operator
-            # self.__logger.debug("\n" + wo.data.toDebugString().decode())
+            wo = self._walk_operator
+            self._logger.debug("\n" + wo.data.toDebugString().decode())
 
             t1 = datetime.now()
 
-            if mul_mode == MUL_BROADCAST:
-                result.to_dense()
+            num_partitions = wo.data.getNumPartitions()
 
-                self.__logger.info("Starting the walk...")
+            rdd = result.data.partitionBy(
+                numPartitions=num_partitions
+            )
 
-                for i in range(self.__steps):
-                    t_tmp = datetime.now()
+            result = State(
+                self._spark_context, rdd, result.shape, self._mesh, self._num_particles, self._logger.filename
+            ).materialize(storage_level)
 
-                    result = wo.multiply(result, self.__min_partitions)
+            self._logger.info("Starting the walk...")
 
-                    self.__logger.debug(
-                        "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+            for i in range(self._steps):
+                self._metrics.log_executors(app_id=app_id)
+                self._metrics.log_rdds(app_id=app_id)
 
-                    t_tmp = datetime.now()
+                t_tmp = datetime.now()
 
-                    self.__logger.debug("Checking if the state is unitary...")
-                    if not result.is_unitary():
-                        self.__logger.error("The state is not unitary")
-                        raise ValueError("the state is not unitary")
+                result_tmp = wo.multiply(result).materialize(storage_level)
 
-                    # print(result.to_sparse(copy=True).data)
+                result.unpersist()
 
-                    self.__logger.debug(
-                        "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
-            elif mul_mode == MUL_RDD:
-                result = result.to_rdd(self.__min_partitions, copy=True)
-                result.data = result.data.partitionBy(numPartitions=wo.data.getNumPartitions())
-                result.materialize()
+                result = result_tmp
 
-                self.__logger.info("Starting the walk...")
+                self._logger.debug(
+                    "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
 
-                for i in range(self.__steps):
-                    t_tmp = datetime.now()
+                t_tmp = datetime.now()
 
-                    result_tmp = wo.multiply(result, self.__min_partitions, storage_level)
-                    result_tmp.materialize()
+                self._logger.debug("Checking if the state is unitary...")
 
-                    app_id = self.__spark_context.applicationId
-                    self.__metrics.log_rdds(app_id=app_id)
+                if not result.is_unitary():
+                    self._logger.error("The state is not unitary")
+                    raise ValueError("the state is not unitary")
 
-                    # self.__logger.debug("\n" + result_tmp.data.toDebugString().decode())
+                self._logger.debug(
+                    "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
 
-                    result.destroy()
-                    result = result_tmp
+            self._execution_times['walk'] = (datetime.now() - t1).total_seconds()
 
-                    self.__logger.debug(
-                        "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+            self._logger.info("Walk was done in {}s".format(self._execution_times['walk']))
 
-                    t_tmp = datetime.now()
-
-                    self.__logger.debug("Checking if the state is unitary...")
-                    if not result.is_unitary():
-                        self.__logger.error("The state is not unitary")
-                        raise ValueError("the state is not unitary")
-
-                    # self.__logger.debug("\n" + result.data.toDebugString().decode())
-
-                    self.__logger.debug(
-                        "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
-
-                wo.unpersist()
-            elif mul_mode == MUL_BLOCK:
-                # print(result.to_dense(copy=True).data)
-                self.__logger.info("Transforming initial state to block format...")
-                result = result.to_block(num_blocks,self.__min_partitions, storage_level, True)
-
-                app_id = self.__spark_context.applicationId
-                self.__metrics.log_rdds(app_id=app_id)
-
-                # self.__walk_operator.to_path(self.__min_partitions)
-                # print(self.__walk_operator.to_dense(copy=True).data)
-                # self.__walk_operator.unpersist()
-
-                # app_id = self.__spark_context.applicationId
-                # self.__metrics.log_rdds(app_id=app_id)
-
-                # wo = self.__walk_operator.to_block(num_blocks,self.__min_partitions, storage_level)
-                # wo.materialize(storage_level)
-
-                self.__logger.info("Starting the walk...")
-
-                for i in range(self.__steps):
-                    t_tmp = datetime.now()
-
-                    result_tmp = wo.multiply(result, self.__min_partitions, storage_level)
-
-                    app_id = self.__spark_context.applicationId
-                    self.__metrics.log_rdds(app_id=app_id)
-
-                    result.destroy()
-                    result = result_tmp
-                    # for r1 in result.data:
-                    #     self.__logger.debug("\n" + r1.data.toDebugString().decode())
-                    self.__logger.debug(
-                        "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
-
-                    t_tmp = datetime.now()
-
-                    self.__logger.debug("Checking if the state is unitary...")
-                    if not result.is_unitary():
-                        self.__logger.error("The state is not unitary")
-                        raise ValueError("the state is not unitary")
-
-                    self.__logger.debug(
-                        "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
-
-                    # result.to_rdd(self.__min_partitions)
-                    # print(result.to_sparse(copy=True).data)
-                    # result.to_block(num_blocks,self.__min_partitions, storage_level)
-
-                wo.unpersist()
-            else:
-                self.__logger.error("Invalid multiplication mode")
-                raise ValueError("invalid multiplication mode")
-
-            result.to_rdd(self.__min_partitions)
-            result.materialize(storage_level)
-
-            self.__execution_times['walk'] = (datetime.now() - t1).total_seconds()
-            self.__memory_usage['state'] = result.memory_usage
-
-            self.__logger.info("Walk was done in {}s".format(self.__execution_times['walk']))
-            self.__logger.info("Final state is consuming {} bytes".format(self.__memory_usage['state']))
-            self.__logger.debug("Final state format: {}".format(result.format))
-            if result.is_path():
-                self.__logger.info("Final state path: {}".format(result))
-            self.__logger.debug("Shape of final state: {}".format(result.shape))
-
-            app_id = self.__spark_context.applicationId
-            self.__metrics.log_rdds(app_id=app_id)
+        self._metrics.log_executors(app_id=app_id)
+        self._metrics.log_rdds(app_id=app_id)
 
         return result
-
-    def export_times(self, extension='csv', path=None):
-        if extension == 'csv':
-            if path is None:
-                path = './'
-            else:
-                create_dir(path)
-
-            f = path + self.output_filename() + "_TIMES." + extension
-
-            fieldnames = self.__execution_times.keys()
-
-            with open(f, 'w') as f:
-                w = csv.DictWriter(f, fieldnames=fieldnames)
-                f.write(','.join(fieldnames) + "\n")
-                w.writerow(self.__execution_times)
-        elif extension == 'txt':
-            str_times = [
-                "Coin operator in {}s".format(self.__execution_times['coin_operator']),
-                "Shift operator in {}s".format(self.__execution_times['shift_operator']),
-                "Unitary operator in {}s".format(self.__execution_times['unitary_operator']),
-                "Interaction operator in {}s".format(self.__execution_times['interaction_operator']),
-                "Multiparticle unitary operator in {}s".format(
-                    self.__execution_times['multiparticle_unitary_operator']
-                ),
-                "Walk operator in {}s".format(self.__execution_times['walk_operator']),
-                "Walk in {}s".format(self.__execution_times['walk']),
-                "Plots in {}s".format(self.__execution_times['export_plot'])
-            ]
-
-            str_times = '\n'.join(str_times)
-
-            if path is None:
-                print(str_times)
-            else:
-                create_dir(path)
-
-                f = path + self.output_filename() + "_TIMES." + extension
-
-                with open(f, 'w') as f:
-                    f.write(str_times)
-        else:
-            self.__logger.error("Invalid file extension")
-            raise ValueError("invalid file extension")
-
-    def export_memory(self, extension='csv', path=None):
-        if extension == 'csv':
-            if path is None:
-                path = './'
-            else:
-                create_dir(path)
-
-            f = path + self.output_filename() + "_MEMORY." + extension
-
-            fieldnames = self.__memory_usage.keys()
-
-            with open(f, 'w') as f:
-                w = csv.DictWriter(f, fieldnames=fieldnames)
-                f.write(','.join(fieldnames) + "\n")
-                w.writerow(self.__memory_usage)
-        elif extension == 'txt':
-            str_memory = [
-                "Coin operator is consuming {} bytes".format(self.__memory_usage['coin_operator']),
-                "Shift operator is consuming {} bytes".format(self.__memory_usage['shift_operator']),
-                "Unitary operator is consuming {} bytes".format(self.__memory_usage['unitary_operator']),
-                "Interaction operator is consuming {} bytes".format(self.__memory_usage['interaction_operator']),
-                "Multiparticle unitary operator is consuming {} bytes".format(
-                    self.__memory_usage['unitary_operator']
-                ),
-                "Walk operator is consuming {} bytes".format(self.__memory_usage['walk_operator']),
-                "State is consuming {} bytes".format(self.__memory_usage['state'])
-            ]
-
-            str_memory = '\n'.join(str_memory)
-
-            if path is None:
-                print(str_memory)
-            else:
-                create_dir(path)
-
-                f = path + self.output_filename() + "_MEMORY." + extension
-
-                with open(f, 'w') as f:
-                    f.write(str_memory)
-        else:
-            self.__logger.error("Invalid file extension")
-            raise ValueError("invalid file extension")
-
-    @staticmethod
-    def __build_onedim_plot(pdf, axis, labels, title):
-        plt.cla()
-        plt.clf()
-
-        plt.plot(
-            axis,
-            pdf,
-            color='b',
-            linestyle='-',
-            linewidth=1.0
-        )
-        plt.xlabel(labels[0])
-        plt.ylabel(labels[1])
-        plt.title(title)
-
-    @staticmethod
-    def __build_twodim_plot(pdf, axis, labels, title):
-        plt.cla()
-        plt.clf()
-
-        figure = plt.figure()
-        axes = figure.add_subplot(111, projection='3d')
-
-        surface = axes.plot_surface(
-            axis[0],
-            axis[1],
-            pdf,
-            rstride=1,
-            cstride=1,
-            cmap=plt.cm.YlGnBu_r,
-            linewidth=0.1,
-            antialiased=True
-        )
-
-        axes.set_xlabel(labels[0])
-        axes.set_ylabel(labels[1])
-        axes.set_zlabel(labels[2])
-        axes.set_title(title)
-        axes.view_init(elev=50)
-
-        # figure.set_size_inches(12.8, 12.8)
-
-    def export_plots(self, pdfs, path=None, **kwargs):
-        self.__logger.info("Start ploting probabilities...")
-        t1 = datetime.now()
-
-        for k, v in pdfs.items():
-            title = self.plot_title()
-            onedim = False
-            twodim = False
-
-            if self.__mesh.is_1d():
-                if self.__mesh.type == MESH_1D_LINE:
-                    axis = range(- int((self.__mesh.size - 1) / 2), int((self.__mesh.size - 1) / 2) + 1)
-                else:
-                    axis = range(self.__mesh.size)
-
-                labels = "Position", "Probability"
-                shape = (self.__mesh.size, 1)
-            elif self.__mesh.is_2d():
-                if self.__mesh.type == MESH_2D_LATTICE_DIAGONAL or self.__mesh.type == MESH_2D_LATTICE_NATURAL:
-                    axis = np.meshgrid(
-                        range(- int((self.__mesh.size[0] - 1) / 2), int((self.__mesh.size[0] - 1) / 2) + 1),
-                        range(- int((self.__mesh.size[1] - 1) / 2), int((self.__mesh.size[1] - 1) / 2) + 1)
-                    )
-                else:
-                    axis = np.meshgrid(range(self.__mesh.size[0]), range(self.__mesh.size[1]))
-
-                labels = "Position X", "Position Y", "Probability"
-                shape = (self.__mesh.size[0], self.__mesh.size[1])
-
-            if k == 'full_measurement':
-                if self.__mesh.is_1d():
-                    if self.__num_particles > 2:
-                        continue
-
-                    pdf = v
-                    plot_title = title
-
-                    if self.__num_particles == 2:
-                        if self.__mesh.type == MESH_1D_LINE:
-                            axis = np.meshgrid(
-                                range(- int((self.__mesh.size - 1) / 2), int((self.__mesh.size - 1) / 2) + 1),
-                                range(- int((self.__mesh.size - 1) / 2), int((self.__mesh.size - 1) / 2) + 1)
-                            )
-                        else:
-                            axis = np.meshgrid(range(self.__mesh.size), range(self.__mesh.size))
-
-                        labels = "Position X1", "Position X2", "Probability"
-                        shape = (self.__mesh.size, self.__mesh.size)
-
-                        twodim = True
-                    else:
-                        onedim = True
-                elif self.__mesh.is_2d:
-                    if self.__num_particles > 1:
-                        continue
-
-                    pdf = v
-                    plot_title = title
-                    twodim = True
-
-                if path is not None:
-                    filename = path + self.output_filename() + "_" + k.upper() + ".png"
-            elif k == 'filtered_measurement':
-                pdf = v
-                plot_title = title
-
-                if self.__mesh.is_1d():
-                    onedim = True
-                elif self.__mesh.is_2d():
-                    twodim = True
-
-                if path is not None:
-                    filename = path + self.output_filename() + "_" + k.upper() + ".png"
-            elif k == 'partial_measurement':
-                for i in range(len(v)):
-                    pdf = v[i]
-                    plot_title = title + " (Particle " + str(i + 1) + ")"
-
-                    if self.__mesh.is_1d():
-                        onedim = True
-                    elif self.__mesh.is_2d():
-                        twodim = True
-
-                    if path is not None:
-                        filename = path + self.output_filename() + "_" + k.upper() + "_" + str(i + 1) + ".png"
-
-                    pdf = pdf.to_dense(True)
-
-                    if onedim:
-                        self.__build_onedim_plot(pdf.data, axis, labels, plot_title)
-                    elif twodim:
-                        self.__build_twodim_plot(pdf.data, axis, labels, plot_title)
-
-                    if path is None:
-                        plt.show()
-                    else:
-                        plt.savefig(filename, kwargs=kwargs)
-
-                continue
-
-            pdf = pdf.to_dense(True)
-
-            if onedim:
-                self.__build_onedim_plot(pdf.data, axis, labels, plot_title)
-            elif twodim:
-                self.__build_twodim_plot(pdf.data, axis, labels, plot_title)
-
-            if path is None:
-                plt.show()
-            else:
-                plt.savefig(filename, kwargs=kwargs)
-
-        t2 = datetime.now()
-        self.__execution_times['export_plot'] = (t2 - t1).total_seconds()
-
-        self.__logger.info("Plots in {}s".format(self.__execution_times['export_plot']))

@@ -7,7 +7,7 @@ __all__ = ['Metrics']
 
 
 class Metrics:
-    def __init__(self, base_url='http://localhost:4040/api/v1/', log_filename='log.txt'):
+    def __init__(self, base_url='http://localhost:4040/api/v1/', log_filename='./log.txt'):
         self.__base_url = base_url
         self.__logger = Logger(__name__, log_filename)
 

@@ -157,7 +157,7 @@ def export_times(execution_times, filename, extension='csv', path=None):
         else:
             create_dir(path)
 
-        f = path + filename + "_TIMES." + extension
+        f = path + filename + "_times." + extension
 
         fieldnames = execution_times.keys()
 
