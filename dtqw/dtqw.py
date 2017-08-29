@@ -149,7 +149,7 @@ class DiscreteTimeQuantumWalk:
         self._logger.info("Building coin operator...")
         t1 = datetime.now()
 
-        self._coin_operator = self._coin.create_operator(self._mesh).materialize(storage_level)
+        self._coin_operator = self._coin.create_operator(self._mesh).dump()
 
         self._execution_times['coin_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -162,7 +162,7 @@ class DiscreteTimeQuantumWalk:
         self._logger.info("Building shift operator...")
         t1 = datetime.now()
 
-        self._shift_operator = self._mesh.create_operator().materialize(storage_level)
+        self._shift_operator = self._mesh.create_operator().dump()
 
         self._execution_times['shift_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -202,7 +202,7 @@ class DiscreteTimeQuantumWalk:
 
         co = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
 
-        self._unitary_operator = so.multiply(co).materialize(storage_level)
+        self._unitary_operator = so.multiply(co).dump()
 
         self._coin_operator.unpersist()
         self._shift_operator.unpersist()
@@ -278,7 +278,7 @@ class DiscreteTimeQuantumWalk:
 
         self._interaction_operator = Operator(
             self._spark_context, rdd, shape, self._logger.filename
-        ).materialize(storage_level)
+        ).dump()
 
         self._execution_times['interaction_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -304,7 +304,7 @@ class DiscreteTimeQuantumWalk:
         for i in range(self._num_particles - 1):
             op_tmp = op_tmp.kron(uo, self._unitary_operator.shape)
 
-        self._multiparticle_unitary_operator = op_tmp.materialize(storage_level)
+        self._multiparticle_unitary_operator = op_tmp.dump()
 
         self._execution_times['multiparticle_unitary_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -341,7 +341,7 @@ class DiscreteTimeQuantumWalk:
                 self._spark_context, rdd, self._unitary_operator.shape, self._logger.filename
             ).materialize(storage_level)
 
-            self._unitary_operator.unpersist()
+            # self._unitary_operator.unpersist()
         else:
             if phase is None:
                 self._logger.info("No collision phase has been defined. "
@@ -363,7 +363,7 @@ class DiscreteTimeQuantumWalk:
                     self._spark_context, rdd, self._unitary_operator.shape, self._logger.filename
                 ).materialize(storage_level)
 
-                self._unitary_operator.unpersist()
+                # self._unitary_operator.unpersist()
             else:
                 self._logger.info("Building walk operator...")
 
@@ -414,8 +414,8 @@ class DiscreteTimeQuantumWalk:
                     self._spark_context, rdd, shape, self._logger.filename
                 ).materialize(storage_level)
 
-                self._multiparticle_unitary_operator.unpersist()
-                self._interaction_operator.unpersist()
+                # self._multiparticle_unitary_operator.unpersist()
+                # self._interaction_operator.unpersist()
 
                 self._logger.debug(
                     "Multiplication between multiparticle unitary operator and "

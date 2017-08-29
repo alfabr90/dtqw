@@ -1,3 +1,4 @@
+from dtqw.utils.utils import get_tmp_path
 from dtqw.math.state import State, is_state
 from dtqw.math.matrix import Matrix
 
@@ -7,6 +8,29 @@ __all__ = ['Operator', 'is_operator']
 class Operator(Matrix):
     def __init__(self, spark_context, rdd, shape, log_filename='./log.txt'):
         super().__init__(spark_context, rdd, shape, log_filename)
+
+    def dump(self):
+        path = get_tmp_path()
+
+        self.data.map(
+            lambda m: "{} {} {}".format(m[0], m[1], m[2])
+        ).saveAsTextFile(path)
+
+        self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
+
+        self.data.unpersist()
+
+        def __map(m):
+            m = m.split()
+            return int(m[0]), int(m[1]), complex(m[2])
+
+        self.data = self._spark_context.textFile(
+            path
+        ).map(
+            __map
+        )
+
+        return self
 
     def _multiply_operator(self, other):
         if self._shape[1] != other.shape[0]:
