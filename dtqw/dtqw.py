@@ -187,6 +187,7 @@ class DiscreteTimeQuantumWalk:
 
     def create_interaction_operator(self, phase, storage_level=StorageLevel.MEMORY_AND_DISK):
         self._logger.info("Building interaction operator...")
+
         t1 = datetime.now()
 
         phase = cmath.exp(phase * (0.0 + 1.0j))
@@ -251,7 +252,7 @@ class DiscreteTimeQuantumWalk:
             self._spark_context, rdd, shape, self._logger.filename
         ).dump()
 
-        num_partitions = rdd.getNumPartitions()
+        num_partitions = self._unitary_operator.data.getNumPartitions()
 
         rdd = io.data.map(
             lambda m: (m[0], (m[1], m[2]))
@@ -272,7 +273,7 @@ class DiscreteTimeQuantumWalk:
         app_id = self._spark_context.applicationId
         self._metrics.log_rdds(app_id=app_id)
 
-    def create_walk_operator(self, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_walk_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         t1 = datetime.now()
 
         app_id = self._spark_context.applicationId
@@ -295,16 +296,7 @@ class DiscreteTimeQuantumWalk:
             self._walk_operator = Operator(
                 self._spark_context, rdd, self._unitary_operator.shape, self._logger.filename
             ).materialize(storage_level)
-
-            # self._unitary_operator.unpersist()
         else:
-            if phase is None:
-                self._logger.info("No collision phase has been defined")
-            else:
-                if self._interaction_operator is None:
-                    self._logger.info("No interaction operator has been set. A new one will be built")
-                    self.create_interaction_operator(phase, storage_level)
-
             self._logger.info("Building walk operator...")
 
             t1 = datetime.now()
@@ -323,7 +315,7 @@ class DiscreteTimeQuantumWalk:
 
             self._walk_operator = []
 
-            num_partitions = self._interaction_operator.data.getNumPartitions()
+            num_partitions = self._unitary_operator.data.getNumPartitions()
 
             for p in range(self._num_particles):
                 self._logger.debug("Building walk operator for particle {}...".format(p + 1))
@@ -346,6 +338,8 @@ class DiscreteTimeQuantumWalk:
                     for i in range(self._num_particles - 1 - p):
                         op_tmp = op_tmp.kron(io, identity.shape)
 
+                op_tmp = op_tmp.dump()
+
                 rdd = op_tmp.data.map(
                     lambda m: (m[0], (m[1], m[2]))
                 ).partitionBy(
@@ -354,13 +348,13 @@ class DiscreteTimeQuantumWalk:
 
                 self._walk_operator.append(
                     Operator(
-                        self._spark_context, rdd, self._interaction_operator.shape, self._logger.filename
+                        self._spark_context, rdd, op_tmp.shape, self._logger.filename
                     ).materialize(storage_level)
                 )
 
                 self._logger.debug(
                     "Walk operator for particle {} was built in {}s".format(
-                        p + 1, (datetime.now() - t1).total_seconds()
+                        p + 1, (datetime.now() - t_tmp).total_seconds()
                     )
                 )
 
@@ -524,7 +518,17 @@ class DiscreteTimeQuantumWalk:
             raise ValueError("the initial state is not unitary")
 
         if self._steps > 0:
-            self.create_walk_operator(phase, storage_level)
+            if self._walk_operator is None:
+                self._logger.info("No walk operator has been set. A new one will be built")
+                self.create_walk_operator(storage_level)
+
+            if self._num_particles > 1:
+                if phase is None:
+                    self._logger.info("No collision phase has been defined")
+                else:
+                    if self._interaction_operator is None:
+                        self._logger.info("No interaction operator has been set. A new one will be built")
+                        self.create_interaction_operator(phase, storage_level)
 
             t1 = datetime.now()
 
