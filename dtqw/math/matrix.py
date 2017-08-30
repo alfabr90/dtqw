@@ -60,7 +60,7 @@ class Matrix:
                 self.data.unpersist()
                 self._logger.info("RDD {} was unpersisted".format(self.data.id()))
             else:
-                self._logger.info("The RDD has already been unpersisted")
+                self._logger.info("RDD has already been unpersisted".format(self.data.id()))
         else:
             self._logger.warning("There is no data to be unpersisted")
 
@@ -69,30 +69,10 @@ class Matrix:
     def destroy(self):
         return self.unpersist()
 
-    def repartition(self, num_partitions):
-        if self.data.getNumPartitions() > num_partitions:
-            self._logger.info(
-                "As this RDD has more partitions than the desired, "
-                "it will be coalesced into {} partitions".format(num_partitions)
-            )
-            self.data = self.data.coalesce(num_partitions)
-        elif self.data.getNumPartitions() < num_partitions:
-            self._logger.info(
-                "As this RDD has less partitions than the desired, "
-                "it will be repartitioned into {} partitions".format(num_partitions)
-            )
-            self.data = self.data.repartition(num_partitions)
-        else:
-            self._logger.info(
-                "As this RDD has many partitions than the desired, there is nothing to do".format(num_partitions)
-            )
-
-        return self
-
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         self.persist(storage_level)
         self.data.count()
-        self._logger.info("Operator was materialized")
+        self._logger.info("RDD {} was materialized".format(self.data.id()))
 
         return self
 
@@ -117,7 +97,4 @@ class Matrix:
         return round(math.sqrt(n), round_precision) == 1.0
 
     def multiply(self, other):
-        return None
-
-    def kron(self, other):
         return None

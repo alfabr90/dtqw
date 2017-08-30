@@ -40,21 +40,6 @@ class State(Matrix):
         return round(math.sqrt(n), round_precision) == 1.0
 
     def kron(self, other_broadcast, other_shape):
-        '''
-        if not is_state(other):
-            self._logger.error('Operator instance expected, not "{}"'.format(type(other)))
-            raise TypeError('Operator instance expected, not "{}"'.format(type(other)))
-
-        o_shape = other.shape
-        shape = (self._shape[0] * o_shape[0], 1)
-
-        rdd = self.data.cartesian(
-            other.data
-        ).map(
-            lambda m: (m[0][0] * o_shape[0] + m[1][0], m[0][1] * m[1][1])
-        )
-        '''
-
         shape = (self._shape[0] * other_shape[0], 1)
 
         def __map(m):

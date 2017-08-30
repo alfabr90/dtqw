@@ -52,8 +52,6 @@ class PDF(Matrix):
         axis = self._mesh.axis()
 
         if self._mesh.is_1d():
-            # self._build_onedim_plot(pdf.data, axis, labels, title)
-
             pdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
@@ -70,8 +68,6 @@ class PDF(Matrix):
             plt.ylabel(labels[1])
             plt.title(title)
         elif self._mesh.is_2d():
-            # self._build_twodim_plot(pdf.data, axis, labels, title)
-
             pdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
