@@ -113,6 +113,15 @@ class DiscreteTimeQuantumWalk:
     def walk_operator(self, wo):
         if is_operator(wo):
             self._walk_operator = wo
+        elif isinstance(wo, (list, tuple)):
+            if len(wo) != self._num_particles:
+                self._logger.error('{} walk operators expected, not {}'.format(self._num_particles, len(wo)))
+                raise ValueError('{} walk operators expected, not {}'.format(self._num_particles, len(wo)))
+
+            for o in wo:
+                if not is_operator(o):
+                    self._logger.error('Operator instance expected, not "{}"'.format(type(wo)))
+                    raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
         else:
             self._logger.error('Operator instance expected, not "{}"'.format(type(wo)))
             raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
@@ -126,6 +135,7 @@ class DiscreteTimeQuantumWalk:
         self._execution_times['coin_operator'] = (datetime.now() - t1).total_seconds()
 
         self._logger.info("Coin operator was built in {}s".format(self._execution_times['coin_operator']))
+        self._logger.debug("Shape of coin operator: {}".format(self._coin_operator.shape))
 
         app_id = self._spark_context.applicationId
         self._metrics.log_rdds(app_id=app_id)
@@ -139,6 +149,7 @@ class DiscreteTimeQuantumWalk:
         self._execution_times['shift_operator'] = (datetime.now() - t1).total_seconds()
 
         self._logger.info("Shift operator was built in {}s".format(self._execution_times['shift_operator']))
+        self._logger.debug("Shape of shift operator: {}".format(self._shift_operator.shape))
 
         app_id = self._spark_context.applicationId
         self._metrics.log_rdds(app_id=app_id)
@@ -180,6 +191,7 @@ class DiscreteTimeQuantumWalk:
         self._execution_times['unitary_operator'] = (datetime.now() - t1).total_seconds()
 
         self._logger.info("Unitary operator was built in {}s".format(self._execution_times['unitary_operator']))
+        self._logger.debug("Shape of unitary operator: {}".format(self._unitary_operator.shape))
 
         app_id = self._spark_context.applicationId
         self._metrics.log_rdds(app_id=app_id)
@@ -266,6 +278,7 @@ class DiscreteTimeQuantumWalk:
         self._logger.info(
             "Interaction operator was built in {}s".format(self._execution_times['interaction_operator'])
         )
+        self._logger.debug("Shape of interaction operator: {}".format(self._interaction_operator.shape))
 
         app_id = self._spark_context.applicationId
         self._metrics.log_rdds(app_id=app_id)
@@ -360,6 +373,14 @@ class DiscreteTimeQuantumWalk:
             "Walk operator was built in {}s".format(self._execution_times['walk_operator'])
         )
 
+        if self._num_particles == 1:
+            self._logger.debug("Shape of walk operator: {}".format(self._walk_operator.shape))
+        else:
+            for o in range(len(self._walk_operator)):
+                self._logger.debug(
+                    "Shape of walk operator for particle {}: {}".format(o + 1, self._walk_operator[o].shape)
+                )
+
         self._metrics.log_executors(app_id=app_id)
         self._metrics.log_rdds(app_id=app_id)
 
@@ -367,9 +388,7 @@ class DiscreteTimeQuantumWalk:
         return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
 
     def filename(self):
-        return "{}_{}_{}".format(
-            self._mesh.filename(), self._steps, self._num_particles
-        )
+        return "{}_{}_{}".format(self._mesh.filename(), self._steps, self._num_particles)
 
     def destroy_operators(self):
         if self._coin_operator is not None:
@@ -498,10 +517,13 @@ class DiscreteTimeQuantumWalk:
         self._logger.info("Nº of particles: {}".format(self._num_particles))
         if self._num_particles > 1:
             self._logger.info("Collision phase: {}".format(phase))
+        self._logger.info("Nº of partitions: {}".format(self._num_partitions))
 
         app_id = self._spark_context.applicationId
 
         result = initial_state
+
+        self._logger.debug("Shape of initial state: {}".format(result.shape))
 
         if not result.is_unitary():
             self._logger.error("The initial state is not unitary")
