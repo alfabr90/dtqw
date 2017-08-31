@@ -9,11 +9,12 @@ from dtqw.math.state import State
 
 
 class DiscreteTimeQuantumWalk:
-    def __init__(self, spark_context, coin, mesh, num_particles, log_filename='./log.txt'):
+    def __init__(self, spark_context, coin, mesh, num_particles, num_partitions, log_filename='./log.txt'):
         self._spark_context = spark_context
         self._coin = coin
         self._mesh = mesh
         self._num_particles = num_particles
+        self._num_partitions = num_partitions
 
         self._coin_operator = None
         self._shift_operator = None
@@ -155,12 +156,10 @@ class DiscreteTimeQuantumWalk:
 
         t1 = datetime.now()
 
-        num_partitions = max(self._shift_operator.data.getNumPartitions(), self._coin_operator.data.getNumPartitions())
-
         rdd = self._shift_operator.data.map(
             lambda m: (m[1], (m[0], m[2]))
         ).partitionBy(
-            numPartitions=num_partitions
+            numPartitions=self._num_partitions
         )
 
         so = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
@@ -168,7 +167,7 @@ class DiscreteTimeQuantumWalk:
         rdd = self._coin_operator.data.map(
             lambda m: (m[0], (m[1], m[2]))
         ).partitionBy(
-            numPartitions=num_partitions
+            numPartitions=self._num_partitions
         )
 
         co = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
@@ -252,12 +251,10 @@ class DiscreteTimeQuantumWalk:
             self._spark_context, rdd, shape, self._logger.filename
         ).dump()
 
-        num_partitions = self._unitary_operator.data.getNumPartitions()
-
         rdd = io.data.map(
             lambda m: (m[0], (m[1], m[2]))
         ).partitionBy(
-            numPartitions=num_partitions
+            numPartitions=self._num_partitions
         )
 
         self._interaction_operator = Operator(
@@ -285,12 +282,10 @@ class DiscreteTimeQuantumWalk:
         if self._num_particles == 1:
             self._logger.info("With just one particle, the walk operator is the unitary operator")
 
-            num_partitions = self._unitary_operator.data.getNumPartitions()
-
             rdd = self._unitary_operator.data.map(
                 lambda m: (m[0], (m[1], m[2]))
             ).partitionBy(
-                numPartitions=num_partitions
+                numPartitions=self._num_partitions
             )
 
             self._walk_operator = Operator(
@@ -314,8 +309,6 @@ class DiscreteTimeQuantumWalk:
             uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
 
             self._walk_operator = []
-
-            num_partitions = self._unitary_operator.data.getNumPartitions()
 
             for p in range(self._num_particles):
                 self._logger.debug("Building walk operator for particle {}...".format(p + 1))
@@ -343,7 +336,7 @@ class DiscreteTimeQuantumWalk:
                 rdd = op_tmp.data.map(
                     lambda m: (m[0], (m[1], m[2]))
                 ).partitionBy(
-                    numPartitions=num_partitions
+                    numPartitions=self._num_partitions
                 )
 
                 self._walk_operator.append(
@@ -404,11 +397,10 @@ class DiscreteTimeQuantumWalk:
 
         wo = self._walk_operator
 
-        num_partitions = wo.data.getNumPartitions()
         self._logger.debug("Walk operator lineage:\n" + wo.data.toDebugString().decode())
 
         rdd = initial_state.data.partitionBy(
-            numPartitions=num_partitions
+            numPartitions=self._num_partitions
         )
 
         result = State(
@@ -446,15 +438,13 @@ class DiscreteTimeQuantumWalk:
         wo = self._walk_operator
         io = self._interaction_operator
 
-        num_partitions = wo[0].data.getNumPartitions()
-
         for o in range(len(wo)):
             self._logger.debug(
                 "Walk operator lineage for particle {}:\n".format(o + 1) + wo[o].data.toDebugString().decode()
             )
 
         rdd = initial_state.data.partitionBy(
-            numPartitions=num_partitions
+            numPartitions=self._num_partitions
         )
 
         result = State(
