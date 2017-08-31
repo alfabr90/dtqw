@@ -33,8 +33,7 @@ class DiscreteTimeQuantumWalk:
             'unitary_operator': 0.0,
             'interaction_operator': 0.0,
             'walk_operator': 0.0,
-            'walk': 0.0,
-            'export_plot': 0.0
+            'walk': 0.0
         }
 
         if num_particles < 1:
@@ -286,8 +285,6 @@ class DiscreteTimeQuantumWalk:
     def create_walk_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         t1 = datetime.now()
 
-        app_id = self._spark_context.applicationId
-
         if self._unitary_operator is None:
             self._logger.info("No unitary operator has been set. A new one will be built")
             self.create_unitary_operator()
@@ -366,6 +363,7 @@ class DiscreteTimeQuantumWalk:
 
             uo.unpersist()
             io.unpersist()
+            identity.destroy()
 
         self._execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -381,7 +379,7 @@ class DiscreteTimeQuantumWalk:
                     "Shape of walk operator for particle {}: {}".format(o + 1, self._walk_operator[o].shape)
                 )
 
-        self._metrics.log_executors(app_id=app_id)
+        app_id = self._spark_context.applicationId
         self._metrics.log_rdds(app_id=app_id)
 
     def title(self):
@@ -418,13 +416,7 @@ class DiscreteTimeQuantumWalk:
 
         self._logger.debug("Walk operator lineage:\n" + wo.data.toDebugString().decode())
 
-        rdd = initial_state.data.partitionBy(
-            numPartitions=self._num_partitions
-        )
-
-        result = State(
-            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles, self._logger.filename
-        ).materialize(storage_level)
+        result = initial_state
 
         for i in range(steps):
             t_tmp = datetime.now()
@@ -462,13 +454,7 @@ class DiscreteTimeQuantumWalk:
                 "Walk operator lineage for particle {}:\n".format(o + 1) + wo[o].data.toDebugString().decode()
             )
 
-        rdd = initial_state.data.partitionBy(
-            numPartitions=self._num_partitions
-        )
-
-        result = State(
-            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles, self._logger.filename
-        ).materialize(storage_level)
+        result = initial_state
 
         for i in range(steps):
             t_tmp = datetime.now()
@@ -521,13 +507,24 @@ class DiscreteTimeQuantumWalk:
 
         app_id = self._spark_context.applicationId
 
-        result = initial_state
+        rdd = initial_state.data.partitionBy(
+            numPartitions=self._num_partitions
+        )
+
+        result = State(
+            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles, self._logger.filename
+        ).materialize(storage_level)
+
+        initial_state.unpersist()
 
         self._logger.debug("Shape of initial state: {}".format(result.shape))
 
         if not result.is_unitary():
             self._logger.error("The initial state is not unitary")
             raise ValueError("the initial state is not unitary")
+
+        self._metrics.log_executors(app_id=app_id)
+        self._metrics.log_rdds(app_id=app_id)
 
         if self._steps > 0:
             if self._walk_operator is None:
