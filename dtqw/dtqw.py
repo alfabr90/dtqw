@@ -364,6 +364,7 @@ class DiscreteTimeQuantumWalk:
             uo.unpersist()
             io.unpersist()
             identity.destroy()
+            self._unitary_operator.unpersist()
 
         self._execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
 
@@ -410,13 +411,13 @@ class DiscreteTimeQuantumWalk:
                     wo.destroy()
 
     def _monoparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
-        self._logger.info("Starting the walk...")
-
         wo = self._walk_operator
 
-        self._logger.debug("Walk operator lineage:\n" + wo.data.toDebugString().decode())
+        self._logger.debug("Walk operator lineage:\n{}".format(wo.data.toDebugString().decode()))
 
         result = initial_state
+
+        self._logger.info("Starting the walk...")
 
         for i in range(steps):
             t_tmp = datetime.now()
@@ -438,23 +439,24 @@ class DiscreteTimeQuantumWalk:
                 self._logger.error("The state is not unitary")
                 raise ValueError("the state is not unitary")
 
-            self._logger.debug(
-                "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+            self._logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
 
         return result
 
     def _multiparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
-        self._logger.info("Starting the walk...")
-
         wo = self._walk_operator
         io = self._interaction_operator
 
         for o in range(len(wo)):
             self._logger.debug(
-                "Walk operator lineage for particle {}:\n".format(o + 1) + wo[o].data.toDebugString().decode()
+                "Walk operator lineage for particle {}:\n{}".format(o + 1, wo[o].data.toDebugString().decode())
             )
 
+        self._logger.debug("Interaction operator lineage:\n{}".format(io.data.toDebugString().decode()))
+
         result = initial_state
+
+        self._logger.info("Starting the walk...")
 
         for i in range(steps):
             t_tmp = datetime.now()
@@ -475,8 +477,7 @@ class DiscreteTimeQuantumWalk:
 
             result = result_tmp
 
-            self._logger.debug(
-                "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+            self._logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
 
             t_tmp = datetime.now()
 
