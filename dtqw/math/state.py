@@ -9,12 +9,12 @@ __all__ = ['State', 'is_state']
 
 
 class State(Matrix):
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles, log_filename='./log.txt'):
-        super().__init__(spark_context, rdd, shape, log_filename)
+    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+        super().__init__(spark_context, rdd, shape)
 
         if not is_mesh(mesh):
-            self._logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
-            raise TypeError('Mesh instance expected, not "{}"'.format(type(mesh)))
+            # self.logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
+            raise TypeError('mesh instance expected, not "{}"'.format(type(mesh)))
 
         self._mesh = mesh
 
@@ -50,10 +50,11 @@ class State(Matrix):
             __map
         )
 
-        return State(self._spark_context, rdd, shape, self._mesh, self._num_particles, self._logger.filename)
+        return State(self._spark_context, rdd, shape, self._mesh, self._num_particles)
 
     def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        self._logger.info("Measuring the state of the system...")
+        if self.logger:
+            self.logger.info("measuring the state of the system...")
 
         t1 = datetime.now()
 
@@ -124,7 +125,8 @@ class State(Matrix):
 
                 return tuple(a)
         else:
-            self._logger.error("Mesh dimension not implemented")
+            if self.logger:
+                self.logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.data.filter(
@@ -137,30 +139,39 @@ class State(Matrix):
             __unmap
         )
 
-        pdf = PDF(
-            self._spark_context, rdd, shape, self._mesh, self._num_particles, self._logger.filename
-        ).materialize(storage_level)
+        pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
-        self._logger.info("Checking if the probabilities sum one...")
+        if self.logger:
+            self.logger.info("checking if the probabilities sum one...")
 
         if pdf.sum(ind) != 1.0:
-            self._logger.error("PDFs must sum one")
+            if self.logger:
+                self.logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
-        self._logger.info("Full measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
-
         app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
+
+        if self.profiler:
+            self.profiler.profile_times('full_measurement', (datetime.now() - t1).total_seconds())
+
+            if self.logger:
+                self.logger.info(
+                    "full measurement was done in {}s".format(self.profiler.get_last_time('full_measurement'))
+                )
+
+            self.profiler.log_rdds(app_id=app_id)
 
         return pdf
 
     def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
-        self._logger.info("Measuring the state of the system which the particles are at the same positions...")
+        if self.logger:
+            self.logger.info("measuring the state of the system which the particles are at the same positions...")
 
         t1 = datetime.now()
 
         if not is_pdf(full_measurement):
-            self._logger.error('PDF instance expected, not "{}"'.format(type(full_measurement)))
+            if self.logger:
+                self.logger.error('PDF instance expected, not "{}"'.format(type(full_measurement)))
             raise TypeError('PDF instance expected, not "{}"'.format(type(full_measurement)))
 
         if self._mesh.is_1d():
@@ -195,7 +206,8 @@ class State(Matrix):
             def __map(m):
                 return m[0], m[1], m[ind]
         else:
-            self._logger.error("Mesh dimension not implemented")
+            if self.logger:
+                self.logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = full_measurement.data.filter(
@@ -204,16 +216,25 @@ class State(Matrix):
             __map
         )
 
-        pdf = PDF(
-            self._spark_context, rdd, shape, self._mesh, self._num_particles, self._logger.filename
-        ).materialize(storage_level)
+        pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
-        self._logger.info("Filtered measurement was done in {}s".format((datetime.now() - t1).total_seconds()))
+        app_id = self._spark_context.applicationId
+
+        if self.profiler:
+            self.profiler.profile_times('filtered_measurement', (datetime.now() - t1).total_seconds())
+
+            if self.logger:
+                self.logger.info(
+                    "filtered measurement was done in {}s".format(self.profiler.get_last_time('filtered_measurement'))
+                )
+
+            self.profiler.log_rdds(app_id=app_id)
 
         return pdf
 
     def _partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
-        self._logger.info("Measuring the state of the system for particle {}...".format(particle + 1))
+        if self.logger:
+            self.logger.info("measuring the state of the system for particle {}...".format(particle + 1))
 
         t1 = datetime.now()
 
@@ -257,7 +278,8 @@ class State(Matrix):
             def __unmap(m):
                 return m[0][0], m[0][1], m[1]
         else:
-            self._logger.error("Mesh dimension not implemented")
+            if self.logger:
+                self.logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.data.filter(
@@ -270,29 +292,42 @@ class State(Matrix):
             __unmap
         )
 
-        pdf = PDF(
-            self._spark_context, rdd, shape, self._mesh, self._num_particles, self._logger.filename
-        ).materialize(storage_level)
+        pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
-        self._logger.info("Checking if the probabilities sum one...")
+        if self.logger:
+            self.logger.info("checking if the probabilities sum one...")
 
         if pdf.sum(ind) != 1.0:
-            self._logger.error("PDFs must sum one")
+            if self.logger:
+                self.logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
-        self._logger.info(
-            "Partial measurement for particle {} was done in {}s".format(
+        self.logger.info(
+            "partial measurement for particle {} was done in {}s".format(
                 particle + 1, (datetime.now() - t1).total_seconds()
             )
         )
 
-        app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
-
         return pdf
 
     def partial_measurements(self, particles, storage_level=StorageLevel.MEMORY_AND_DISK):
-        return [self._partial_measurement(p, storage_level) for p in particles]
+        t1 = datetime.now()
+
+        partial_measurements = [self._partial_measurement(p, storage_level) for p in particles]
+
+        app_id = self._spark_context.applicationId
+
+        if self.profiler:
+            self.profiler.profile_times('partial_measurement', (datetime.now() - t1).total_seconds())
+
+            if self.logger:
+                self.logger.info(
+                    "partial measurement was done in {}s".format(self.profiler.get_last_time('partial_measurement'))
+                )
+
+            self.profiler.log_rdds(app_id=app_id)
+
+        return partial_measurements
 
 
 def is_state(obj):

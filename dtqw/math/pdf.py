@@ -11,12 +11,12 @@ __all__ = ['PDF', 'is_pdf']
 
 
 class PDF(Matrix):
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles, log_filename='./log.txt'):
-        super().__init__(spark_context, rdd, shape, log_filename)
+    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+        super().__init__(spark_context, rdd, shape)
 
         if not is_mesh(mesh):
-            self._logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
-            raise TypeError('Mesh instance expected, not "{}"'.format(type(mesh)))
+            # self.logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
+            raise TypeError('mesh instance expected, not "{}"'.format(type(mesh)))
 
         self._mesh = mesh
 
@@ -38,10 +38,12 @@ class PDF(Matrix):
         return round(n, round_precision)
 
     def plot(self, title, labels, filename, path=None, **kwargs):
-        self._logger.info("Start ploting probabilities...")
+        if self.logger:
+            self.logger.info("starting ploting probabilities...")
 
         if len(self._shape) > 2:
-            self._logger.warning('It is only possible to plot one and two dimensional meshes')
+            if self.logger:
+                self.logger.warning('it is only possible to plot one and two dimensional meshes')
             return None
 
         t1 = datetime.now()
@@ -95,7 +97,8 @@ class PDF(Matrix):
 
             # figure.set_size_inches(12.8, 12.8)
         else:
-            self._logger.error("Mesh dimension not implemented")
+            if self.logger:
+                self.logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         if path is None:
@@ -103,7 +106,8 @@ class PDF(Matrix):
         else:
             plt.savefig(path + filename, kwargs=kwargs)
 
-        self._logger.info("Plots in {}s".format((datetime.now() - t1).total_seconds()))
+        if self.logger:
+            self.logger.info("plots in {}s".format((datetime.now() - t1).total_seconds()))
 
 
 def is_pdf(obj):

@@ -2,14 +2,14 @@ import cmath
 from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.utils.utils import broadcast
-from dtqw.utils.logger import Logger
-from dtqw.utils.metrics import Metrics
-from dtqw.math.operator import Operator, is_operator
-from dtqw.math.state import State
+from dtqw.math.operator import *
+from dtqw.math.state import *
+
+__all__ = ['DiscreteTimeQuantumWalk']
 
 
 class DiscreteTimeQuantumWalk:
-    def __init__(self, spark_context, coin, mesh, num_particles, num_partitions, log_filename='./log.txt'):
+    def __init__(self, spark_context, coin, mesh, num_particles, num_partitions):
         self._spark_context = spark_context
         self._coin = coin
         self._mesh = mesh
@@ -22,23 +22,12 @@ class DiscreteTimeQuantumWalk:
         self._interaction_operator = None
         self._walk_operator = None
 
-        self._steps = 0
-
-        self._logger = Logger(__name__, log_filename)
-        self._metrics = Metrics(log_filename=log_filename)
-
-        self._execution_times = {
-            'coin_operator': 0.0,
-            'shift_operator': 0.0,
-            'unitary_operator': 0.0,
-            'interaction_operator': 0.0,
-            'walk_operator': 0.0,
-            'walk': 0.0
-        }
-
         if num_particles < 1:
-            self._logger.error("Invalid number of particles")
+            # self.logger.error("Invalid number of particles")
             raise ValueError("invalid number of particles")
+
+        self.logger = None
+        self.profiler = None
 
     @property
     def spark_context(self):
@@ -51,10 +40,6 @@ class DiscreteTimeQuantumWalk:
     @property
     def mesh(self):
         return self._mesh
-
-    @property
-    def execution_times(self):
-        return self._execution_times
 
     @property
     def coin_operator(self):
@@ -81,32 +66,36 @@ class DiscreteTimeQuantumWalk:
         if is_operator(co):
             self._coin_operator = co
         else:
-            self._logger.error('Operator instance expected, not "{}"'.format(type(co)))
-            raise TypeError('operator instance expected, not "{}"'.format(type(co)))
+            if self.logger:
+                self.logger.error('Operator instance expected, not "{}"'.format(type(co)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(co)))
 
     @shift_operator.setter
     def shift_operator(self, so):
         if is_operator(so):
             self._shift_operator = so
         else:
-            self._logger.error('Operator instance expected, not "{}"'.format(type(so)))
-            raise TypeError('operator instance expected, not "{}"'.format(type(so)))
+            if self.logger:
+                self.logger.error('Operator instance expected, not "{}"'.format(type(so)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(so)))
 
     @unitary_operator.setter
     def unitary_operator(self, uo):
         if is_operator(uo):
             self._unitary_operator = uo
         else:
-            self._logger.error('Operator instance expected, not "{}"'.format(type(uo)))
-            raise TypeError('operator instance expected, not "{}"'.format(type(uo)))
+            if self.logger:
+                self.logger.error('Operator instance expected, not "{}"'.format(type(uo)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(uo)))
 
     @interaction_operator.setter
     def interaction_operator(self, io):
         if is_operator(io):
             self._interaction_operator = io
         else:
-            self._logger.error('Operator instance expected, not "{}"'.format(type(io)))
-            raise TypeError('operator instance expected, not "{}"'.format(type(io)))
+            if self.logger:
+                self.logger.error('Operator instance expected, not "{}"'.format(type(io)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(io)))
 
     @walk_operator.setter
     def walk_operator(self, wo):
@@ -114,54 +103,94 @@ class DiscreteTimeQuantumWalk:
             self._walk_operator = wo
         elif isinstance(wo, (list, tuple)):
             if len(wo) != self._num_particles:
-                self._logger.error('{} walk operators expected, not {}'.format(self._num_particles, len(wo)))
+                if self.logger:
+                    self.logger.error('{} walk operators expected, not {}'.format(self._num_particles, len(wo)))
                 raise ValueError('{} walk operators expected, not {}'.format(self._num_particles, len(wo)))
 
             for o in wo:
                 if not is_operator(o):
-                    self._logger.error('Operator instance expected, not "{}"'.format(type(wo)))
-                    raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
+                    if self.logger:
+                        self.logger.error('Operator instance expected, not "{}"'.format(type(wo)))
+                    raise TypeError('Operator instance expected, not "{}"'.format(type(wo)))
         else:
-            self._logger.error('Operator instance expected, not "{}"'.format(type(wo)))
-            raise TypeError('operator instance expected, not "{}"'.format(type(wo)))
+            if self.logger:
+                self.logger.error('Operator instance expected, not "{}"'.format(type(wo)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(wo)))
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    def to_string(self):
+        return self.__str__()
 
     def create_coin_operator(self):
-        self._logger.info("Building coin operator...")
+        if self.logger:
+            self.logger.info("building coin operator...")
         t1 = datetime.now()
 
         self._coin_operator = self._coin.create_operator(self._mesh).dump()
 
-        self._execution_times['coin_operator'] = (datetime.now() - t1).total_seconds()
-
-        self._logger.info("Coin operator was built in {}s".format(self._execution_times['coin_operator']))
-        self._logger.debug("Shape of coin operator: {}".format(self._coin_operator.shape))
-
         app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
+        rdd_id = self._coin_operator.data.id()
+
+        if self.profiler:
+            self.profiler.profile_times('coin_operator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('coin_operator', app_id, rdd_id)
+            self.profiler.profile_resources(app_id)
+
+            if self.logger:
+                self.logger.info("coin operator was built in {}s".format(self.profiler.get_last_time('coin_operator')))
+                self.logger.info(
+                    "coin operator is consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_last_operator('coin_operator', 'memoryUsed'),
+                        self.profiler.get_last_operator('coin_operator', 'diskUsed')
+                    )
+                )
+                self.logger.debug("shape of coin operator: {}".format(self._coin_operator.shape))
+
+            self.profiler.log_rdds(app_id=app_id)
 
     def create_shift_operator(self):
-        self._logger.info("Building shift operator...")
+        if self.logger:
+            self.logger.info("building shift operator...")
         t1 = datetime.now()
 
         self._shift_operator = self._mesh.create_operator().dump()
 
-        self._execution_times['shift_operator'] = (datetime.now() - t1).total_seconds()
-
-        self._logger.info("Shift operator was built in {}s".format(self._execution_times['shift_operator']))
-        self._logger.debug("Shape of shift operator: {}".format(self._shift_operator.shape))
-
         app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
+        rdd_id = self._shift_operator.data.id()
+
+        if self.profiler:
+            self.profiler.profile_times('shift_operator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('shift_operator', app_id, rdd_id)
+            self.profiler.profile_resources(app_id)
+
+            if self.logger:
+                self.logger.info(
+                    "shift operator was built in {}s".format(self.profiler.get_last_time('shift_operator'))
+                )
+                self.logger.info(
+                    "shift operator is consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_last_operator('shift_operator', 'memoryUsed'),
+                        self.profiler.get_last_operator('shift_operator', 'diskUsed')
+                    )
+                )
+                self.logger.debug("shape of shift operator: {}".format(self._shift_operator.shape))
+
+            self.profiler.log_rdds(app_id=app_id)
 
     def create_unitary_operator(self):
-        self._logger.info("Building unitary operator...")
+        if self.logger:
+            self.logger.info("building unitary operator...")
 
         if self._coin_operator is None:
-            self._logger.info("No coin operator has been set. A new one will be built")
+            if self.logger:
+                self.logger.info("no coin operator has been set. A new one will be built")
             self.create_coin_operator()
 
         if self._shift_operator is None:
-            self._logger.info("No shift operator has been set. A new one will be built")
+            if self.logger:
+                self.logger.info("no shift operator has been set. A new one will be built")
             self.create_shift_operator()
 
         t1 = datetime.now()
@@ -172,7 +201,7 @@ class DiscreteTimeQuantumWalk:
             numPartitions=self._num_partitions
         )
 
-        so = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
+        so = Operator(self._spark_context, rdd, self._shift_operator.shape)
 
         rdd = self._coin_operator.data.map(
             lambda m: (m[0], (m[1], m[2]))
@@ -180,23 +209,38 @@ class DiscreteTimeQuantumWalk:
             numPartitions=self._num_partitions
         )
 
-        co = Operator(self._spark_context, rdd, self._shift_operator.shape, self._logger.filename)
+        co = Operator(self._spark_context, rdd, self._shift_operator.shape)
 
         self._unitary_operator = so.multiply(co).dump()
 
         self._coin_operator.unpersist()
         self._shift_operator.unpersist()
 
-        self._execution_times['unitary_operator'] = (datetime.now() - t1).total_seconds()
-
-        self._logger.info("Unitary operator was built in {}s".format(self._execution_times['unitary_operator']))
-        self._logger.debug("Shape of unitary operator: {}".format(self._unitary_operator.shape))
-
         app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
+        rdd_id = self._unitary_operator.data.id()
+
+        if self.profiler:
+            self.profiler.profile_times('unitary_operator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('unitary_operator', app_id, rdd_id)
+            self.profiler.profile_resources(app_id)
+
+            if self.logger:
+                self.logger.info(
+                    "unitary operator was built in {}s".format(self.profiler.get_last_time('unitary_operator'))
+                )
+                self.logger.info(
+                    "unitary operator is consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_last_operator('unitary_operator', 'memoryUsed'),
+                        self.profiler.get_last_operator('unitary_operator', 'diskUsed')
+                    )
+                )
+                self.logger.debug("shape of unitary operator: {}".format(self._unitary_operator.shape))
+
+            self.profiler.log_rdds(app_id=app_id)
 
     def create_interaction_operator(self, phase, storage_level=StorageLevel.MEMORY_AND_DISK):
-        self._logger.info("Building interaction operator...")
+        if self.logger:
+            self.logger.info("building interaction operator...")
 
         t1 = datetime.now()
 
@@ -249,7 +293,8 @@ class DiscreteTimeQuantumWalk:
 
                 return m, m, phase
         else:
-            self._logger.error("Mesh dimension not implemented")
+            if self.logger:
+                self.logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self._spark_context.range(
@@ -258,9 +303,7 @@ class DiscreteTimeQuantumWalk:
             __map
         )
 
-        io = Operator(
-            self._spark_context, rdd, shape, self._logger.filename
-        ).dump()
+        io = Operator(self._spark_context, rdd, shape).dump()
 
         rdd = io.data.map(
             lambda m: (m[0], (m[1], m[2]))
@@ -268,29 +311,41 @@ class DiscreteTimeQuantumWalk:
             numPartitions=self._num_partitions
         )
 
-        self._interaction_operator = Operator(
-            self._spark_context, rdd, io.shape, self._logger.filename
-        ).materialize(storage_level)
-
-        self._execution_times['interaction_operator'] = (datetime.now() - t1).total_seconds()
-
-        self._logger.info(
-            "Interaction operator was built in {}s".format(self._execution_times['interaction_operator'])
-        )
-        self._logger.debug("Shape of interaction operator: {}".format(self._interaction_operator.shape))
+        self._interaction_operator = Operator(self._spark_context, rdd, io.shape).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
+        rdd_id = self._interaction_operator.data.id()
+
+        if self.profiler:
+            self.profiler.profile_times('interaction_operator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('interaction_operator', app_id, rdd_id)
+            self.profiler.profile_resources(app_id)
+
+            if self.logger:
+                self.logger.info(
+                    "interaction operator was built in {}s".format(self.profiler.get_last_time('interaction_operator'))
+                )
+                self.logger.info(
+                    "interaction operator is consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_last_operator('interaction_operator', 'memoryUsed'),
+                        self.profiler.get_last_operator('interaction_operator', 'diskUsed')
+                    )
+                )
+                self.logger.debug("shape of interaction operator: {}".format(self._interaction_operator.shape))
+
+            self.profiler.log_rdds(app_id=app_id)
 
     def create_walk_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        t1 = datetime.now()
-
         if self._unitary_operator is None:
-            self._logger.info("No unitary operator has been set. A new one will be built")
+            if self.logger:
+                self.logger.info("no unitary operator has been set. A new one will be built")
             self.create_unitary_operator()
 
+        t1 = datetime.now()
+
         if self._num_particles == 1:
-            self._logger.info("With just one particle, the walk operator is the unitary operator")
+            if self.logger:
+                self.logger.info("with just one particle, the walk operator is the unitary operator")
 
             rdd = self._unitary_operator.data.map(
                 lambda m: (m[0], (m[1], m[2]))
@@ -299,12 +354,33 @@ class DiscreteTimeQuantumWalk:
             )
 
             self._walk_operator = Operator(
-                self._spark_context, rdd, self._unitary_operator.shape, self._logger.filename
+                self._spark_context, rdd, self._unitary_operator.shape
             ).materialize(storage_level)
-        else:
-            self._logger.info("Building walk operator...")
 
-            t1 = datetime.now()
+            app_id = self._spark_context.applicationId
+            rdd_id = self._walk_operator.data.id()
+
+            if self.profiler:
+                self.profiler.profile_times('walk_operator', (datetime.now() - t1).total_seconds())
+                self.profiler.profile_operator('walk_operator', app_id, rdd_id)
+                self.profiler.profile_resources(app_id)
+
+                if self.logger:
+                    self.logger.info(
+                        "walk operator was built in {}s".format(self.profiler.get_last_time('walk_operator'))
+                    )
+                    self.logger.info(
+                        "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
+                            self.profiler.get_last_operator('walk_operator', 'memoryUsed'),
+                            self.profiler.get_last_operator('walk_operator', 'diskUsed')
+                        )
+                    )
+                    self.logger.debug("shape of walk operator: {}".format(self._walk_operator.shape))
+
+                self.profiler.log_rdds(app_id=app_id)
+        else:
+            if self.logger:
+                self.logger.info("building walk operator...")
 
             shape = self._unitary_operator.shape
 
@@ -314,14 +390,15 @@ class DiscreteTimeQuantumWalk:
                 lambda m: (m, m, 1)
             )
 
-            identity = Operator(self._spark_context, rdd, shape, self._logger.filename).materialize(storage_level)
+            identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
             io = broadcast(self._spark_context, identity.data.collect())
             uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
 
             self._walk_operator = []
 
             for p in range(self._num_particles):
-                self._logger.debug("Building walk operator for particle {}...".format(p + 1))
+                if self.logger:
+                    self.logger.debug("building walk operator for particle {}...".format(p + 1))
 
                 t_tmp = datetime.now()
 
@@ -350,46 +427,50 @@ class DiscreteTimeQuantumWalk:
                 )
 
                 self._walk_operator.append(
-                    Operator(
-                        self._spark_context, rdd, op_tmp.shape, self._logger.filename
-                    ).materialize(storage_level)
+                    Operator(self._spark_context, rdd, op_tmp.shape).materialize(storage_level)
                 )
 
-                self._logger.debug(
-                    "Walk operator for particle {} was built in {}s".format(
-                        p + 1, (datetime.now() - t_tmp).total_seconds()
+                if self.logger:
+                    self.logger.debug(
+                        "walk operator for particle {} was built in {}s".format(
+                            p + 1, (datetime.now() - t_tmp).total_seconds()
+                        )
                     )
-                )
 
             uo.unpersist()
             io.unpersist()
             identity.destroy()
             self._unitary_operator.unpersist()
 
-        self._execution_times['walk_operator'] = (datetime.now() - t1).total_seconds()
+            app_id = self._spark_context.applicationId
+            rdd_id = [wo.data.id() for wo in self._walk_operator]
 
-        self._logger.info(
-            "Walk operator was built in {}s".format(self._execution_times['walk_operator'])
-        )
+            if self.profiler:
+                self.profiler.profile_times('walk_operator', (datetime.now() - t1).total_seconds())
+                self.profiler.profile_operator('walk_operator', app_id, rdd_id)
+                self.profiler.profile_resources(app_id)
 
-        if self._num_particles == 1:
-            self._logger.debug("Shape of walk operator: {}".format(self._walk_operator.shape))
-        else:
-            for o in range(len(self._walk_operator)):
-                self._logger.debug(
-                    "Shape of walk operator for particle {}: {}".format(o + 1, self._walk_operator[o].shape)
-                )
+                if self.logger:
+                    self.logger.info(
+                        "walk operator was built in {}s".format(self.profiler.get_last_time('walk_operator'))
+                    )
+                    self.logger.info(
+                        "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
+                            self.profiler.get_last_operator('walk_operator', 'memoryUsed'),
+                            self.profiler.get_last_operator('walk_operator', 'diskUsed')
+                        )
+                    )
+                    self.logger.debug("shape of walk operator: {}".format(self._walk_operator[0].shape))
 
-        app_id = self._spark_context.applicationId
-        self._metrics.log_rdds(app_id=app_id)
+                self.profiler.log_rdds(app_id=app_id)
 
     def title(self):
         return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
 
-    def filename(self):
-        return "{}_{}_{}".format(self._mesh.filename(), self._steps, self._num_particles)
-
     def destroy_operators(self):
+        if self.logger:
+            self.logger.info('destroying operators...')
+
         if self._coin_operator is not None:
             self._coin_operator.destroy()
 
@@ -413,11 +494,13 @@ class DiscreteTimeQuantumWalk:
     def _monoparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
         wo = self._walk_operator
 
-        self._logger.debug("Walk operator lineage:\n{}".format(wo.data.toDebugString().decode()))
+        if self.logger:
+            self.logger.debug("walk operator lineage:\n{}".format(wo.data.toDebugString().decode()))
 
         result = initial_state
 
-        self._logger.info("Starting the walk...")
+        if self.logger:
+            self.logger.info("starting the walk...")
 
         for i in range(steps):
             t_tmp = datetime.now()
@@ -428,18 +511,21 @@ class DiscreteTimeQuantumWalk:
 
             result = result_tmp
 
-            self._logger.debug(
-                "Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+            if self.logger:
+                self.logger.debug("step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
 
             t_tmp = datetime.now()
 
-            self._logger.debug("Checking if the state is unitary...")
+            if self.logger:
+                self.logger.debug("checking if the state is unitary...")
 
             if not result.is_unitary():
-                self._logger.error("The state is not unitary")
+                if self.logger:
+                    self.logger.error("the state is not unitary")
                 raise ValueError("the state is not unitary")
 
-            self._logger.debug("Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+            if self.logger:
+                self.logger.debug("unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
 
         return result
 
@@ -448,15 +534,18 @@ class DiscreteTimeQuantumWalk:
         io = self._interaction_operator
 
         for o in range(len(wo)):
-            self._logger.debug(
-                "Walk operator lineage for particle {}:\n{}".format(o + 1, wo[o].data.toDebugString().decode())
-            )
+            if self.logger:
+                self.logger.debug(
+                    "walk operator lineage for particle {}:\n{}".format(o + 1, wo[o].data.toDebugString().decode())
+                )
 
-        self._logger.debug("Interaction operator lineage:\n{}".format(io.data.toDebugString().decode()))
+        if self.logger:
+            self.logger.debug("interaction operator lineage:\n{}".format(io.data.toDebugString().decode()))
 
         result = initial_state
 
-        self._logger.info("Starting the walk...")
+        if self.logger:
+            self.logger.info("starting the walk...")
 
         for i in range(steps):
             t_tmp = datetime.now()
@@ -477,68 +566,81 @@ class DiscreteTimeQuantumWalk:
 
             result = result_tmp
 
-            self._logger.debug("Step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
+            if self.logger:
+                self.logger.debug("step {} was done in {}s".format(i + 1, (datetime.now() - t_tmp).total_seconds()))
 
             t_tmp = datetime.now()
 
-            self._logger.debug("Checking if the state is unitary...")
+            if self.logger:
+                self.logger.debug("checking if the state is unitary...")
 
             if not result.is_unitary():
-                self._logger.error("The state is not unitary")
+                if self.logger:
+                    self.logger.error("the state is not unitary")
                 raise ValueError("the state is not unitary")
 
-            self._logger.debug(
-                "Unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
+            if self.logger:
+                self.logger.debug("unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
 
         return result
 
     def walk(self, steps, initial_state, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
+        app_id = self._spark_context.applicationId
+
         if not self._mesh.check_steps(steps):
-            self._logger.error("Invalid number of steps")
+            if self.logger:
+                self.logger.error("invalid number of steps")
             raise ValueError("invalid number of steps")
 
-        self._steps = steps
+        if self.logger:
+            self.logger.info("steps: {}".format(steps))
+            self.logger.info("space size: {}".format(self._mesh.size))
+            self.logger.info("nº of particles: {}".format(self._num_particles))
+            self.logger.info("nº of partitions: {}".format(self._num_partitions))
 
-        self._logger.info("Steps: {}".format(self._steps))
-        self._logger.info("Space size: {}".format(self._mesh.size))
-        self._logger.info("Nº of particles: {}".format(self._num_particles))
-        if self._num_particles > 1:
-            self._logger.info("Collision phase: {}".format(phase))
-        self._logger.info("Nº of partitions: {}".format(self._num_partitions))
-
-        app_id = self._spark_context.applicationId
+            if self._num_particles > 1:
+                self.logger.info("collision phase: {}".format(phase))
 
         rdd = initial_state.data.partitionBy(
             numPartitions=self._num_partitions
         )
 
         result = State(
-            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles, self._logger.filename
+            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles
         ).materialize(storage_level)
 
         initial_state.unpersist()
 
-        self._logger.debug("Shape of initial state: {}".format(result.shape))
+        if self.logger:
+            self.logger.debug("shape of initial state: {}".format(result.shape))
 
         if not result.is_unitary():
-            self._logger.error("The initial state is not unitary")
+            if self.logger:
+                self.logger.error("the initial state is not unitary")
             raise ValueError("the initial state is not unitary")
 
-        self._metrics.log_executors(app_id=app_id)
-        self._metrics.log_rdds(app_id=app_id)
+        if self.profiler:
+            self.profiler.log_executors(app_id=app_id)
+            self.profiler.log_rdds(app_id=app_id)
 
-        if self._steps > 0:
+        if steps > 0:
             if self._walk_operator is None:
-                self._logger.info("No walk operator has been set. A new one will be built")
+                if self.logger:
+                    self.logger.info("no walk operator has been set. A new one will be built")
                 self.create_walk_operator(storage_level)
 
             if self._num_particles > 1:
                 if phase is None:
-                    self._logger.info("No collision phase has been defined")
+                    if self.logger:
+                        self.logger.info("no collision phase has been defined")
                 else:
                     if self._interaction_operator is None:
-                        self._logger.info("No interaction operator has been set. A new one will be built")
+                        if self.logger:
+                            self.logger.info("no interaction operator has been set. A new one will be built")
                         self.create_interaction_operator(phase, storage_level)
+
+            self.profiler.log_executors(app_id=app_id)
+            self.profiler.log_rdds(app_id=app_id)
 
             t1 = datetime.now()
 
@@ -547,11 +649,14 @@ class DiscreteTimeQuantumWalk:
             else:
                 result = self._multiparticle_walk(steps, result, storage_level)
 
-            self._execution_times['walk'] = (datetime.now() - t1).total_seconds()
+            if self.profiler:
+                self.profiler.profile_times('walk', (datetime.now() - t1).total_seconds())
 
-            self._logger.info("Walk was done in {}s".format(self._execution_times['walk']))
+                if self.logger:
+                    self.logger.info("walk was done in {}s".format(self.profiler.get_last_time('walk')))
 
-        self._metrics.log_executors(app_id=app_id)
-        self._metrics.log_rdds(app_id=app_id)
+        if self.profiler:
+            self.profiler.log_executors(app_id=app_id)
+            self.profiler.log_rdds(app_id=app_id)
 
         return result

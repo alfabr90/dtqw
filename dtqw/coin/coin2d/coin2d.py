@@ -6,19 +6,21 @@ __all__ = ['Coin2D']
 
 
 class Coin2D(Coin):
-    def __init__(self, spark_context, log_filename='./log.txt'):
-        super().__init__(spark_context, log_filename)
+    def __init__(self, spark_context):
+        super().__init__(spark_context)
 
     def is_2d(self):
         return True
 
     def create_operator(self, mesh):
         if not is_mesh(mesh):
-            self._logger.error("expected mesh, not {}".format(type(mesh)))
+            if self.logger:
+                self.logger.error("expected mesh, not {}".format(type(mesh)))
             raise TypeError("expected mesh, not {}".format(type(mesh)))
 
         if not mesh.is_2d():
-            self._logger.error("non correspondent coin and mesh dimensions")
+            if self.logger:
+                self.logger.error("non correspondent coin and mesh dimensions")
             raise ValueError("non correspondent coin and mesh dimensions")
 
         mesh_size = mesh.size[0] * mesh.size[1]
@@ -36,4 +38,4 @@ class Coin2D(Coin):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape, self._logger.filename)
+        return Operator(self._spark_context, rdd, shape)

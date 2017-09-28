@@ -4,8 +4,8 @@ __all__ = ['Mesh1D']
 
 
 class Mesh1D(Mesh):
-    def __init__(self, spark_context, size, log_filename='./log.txt'):
-        super().__init__(spark_context, size, log_filename)
+    def __init__(self, spark_context, size):
+        super().__init__(spark_context, size)
 
     def _validate(self, size):
         if type(size) != int:
@@ -17,7 +17,8 @@ class Mesh1D(Mesh):
 
     def _define_size(self, size):
         if not self._validate(size):
-            self._logger.error("invalid size")
+            if self.logger:
+                self.logger.error("invalid size")
             raise ValueError("invalid size")
 
         return size

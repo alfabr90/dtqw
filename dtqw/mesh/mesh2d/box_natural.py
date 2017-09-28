@@ -5,8 +5,8 @@ __all__ = ['BoxNatural']
 
 
 class BoxNatural(Mesh2D):
-    def __init__(self, spark_context, size, log_filename='./log.txt'):
-        super().__init__(spark_context, size, log_filename)
+    def __init__(self, spark_context, size):
+        super().__init__(spark_context, size)
         self.__size = self._define_size(size)
 
     def title(self):
@@ -46,4 +46,4 @@ class BoxNatural(Mesh2D):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape, self._logger.filename)
+        return Operator(self._spark_context, rdd, shape)

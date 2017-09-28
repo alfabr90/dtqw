@@ -1,22 +1,16 @@
-from dtqw.utils.logger import Logger
-
 __all__ = ['Mesh', 'is_mesh']
 
 
 class Mesh:
-    def __init__(self, spark_context, size, log_filename='./log.txt'):
+    def __init__(self, spark_context, size):
         self._spark_context = spark_context
-        self._logger = Logger(__name__, log_filename)
-
         self._size = self._define_size(size)
+
+        self.logger = None
 
     @property
     def spark_context(self):
         return self._spark_context
-
-    @property
-    def logger(self):
-        return self._logger
 
     @property
     def size(self):

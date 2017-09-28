@@ -6,8 +6,8 @@ __all__ = ['Hadamard1D']
 
 
 class Hadamard1D(Coin1D):
-    def __init__(self, spark_context, log_filename='./log.txt'):
-        super().__init__(spark_context, log_filename)
+    def __init__(self, spark_context):
+        super().__init__(spark_context)
 
         self._data = np.array(
             [[1, 1],

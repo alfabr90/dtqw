@@ -2,55 +2,51 @@ import math
 from pyspark import RDD, StorageLevel
 from dtqw.utils.logger import Logger
 from dtqw.utils.metrics import Metrics
-from dtqw.utils.utils import is_shape, get_size_of
+from dtqw.utils.utils import is_shape
 
 __all__ = ['Matrix']
 
 
 class Matrix:
-    def __init__(self, spark_context, rdd, shape, log_filename='./log.txt'):
+    def __init__(self, spark_context, rdd, shape):
         self._spark_context = spark_context
 
-        self._logger = Logger(__name__, log_filename)
-        self._metrics = Metrics(log_filename=log_filename)
-
         if not isinstance(rdd, RDD):
-            self._logger.error("Invalid argument to instantiate an Operator object")
+            # self.logger.error("Invalid argument to instantiate an Operator object")
             raise TypeError("invalid argument to instantiate an Operator object")
 
         self.data = rdd
 
         if shape is not None:
             if not is_shape(shape):
-                self._logger.error("Invalid shape")
+                # self.logger.error("Invalid shape")
                 raise ValueError("invalid shape")
 
         self._shape = shape
+
+        self.logger = None
+        self.profiler = None
 
     @property
     def spark_context(self):
         return self._spark_context
 
     @property
-    def logger(self):
-        return self._logger
-
-    @property
     def shape(self):
         return self._shape
-
-    def _get_bytes(self):
-        return get_size_of(self.data)
 
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.data is not None:
             if not self.data.is_cached:
                 self.data.persist(storage_level)
-                self._logger.info("RDD {} was persisted".format(self.data.id()))
+                if self.logger:
+                    self.logger.info("RDD {} was persisted".format(self.data.id()))
             else:
-                self._logger.info("RDD {} has already been persisted".format(self.data.id()))
+                if self.logger:
+                    self.logger.info("RDD {} has already been persisted".format(self.data.id()))
         else:
-            self._logger.warning("There is no data to be persisted")
+            if self.logger:
+                self.logger.warning("there is no data to be persisted")
 
         return self
 
@@ -58,11 +54,14 @@ class Matrix:
         if self.data is not None:
             if self.data.is_cached:
                 self.data.unpersist()
-                self._logger.info("RDD {} was unpersisted".format(self.data.id()))
+                if self.logger:
+                    self.logger.info("RDD {} was unpersisted".format(self.data.id()))
             else:
-                self._logger.info("RDD has already been unpersisted".format(self.data.id()))
+                if self.logger:
+                    self.logger.info("RDD has already been unpersisted".format(self.data.id()))
         else:
-            self._logger.warning("There is no data to be unpersisted")
+            if self.logger:
+                self.logger.warning("there is no data to be unpersisted")
 
         return self
 
@@ -72,16 +71,21 @@ class Matrix:
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         self.persist(storage_level)
         self.data.count()
-        self._logger.info("RDD {} was materialized".format(self.data.id()))
+
+        if self.logger:
+            self.logger.info("RDD {} was materialized".format(self.data.id()))
 
         return self
 
     def checkpoint(self):
         if not self.data.is_cached:
-            self._logger.warning("It is recommended to cache the RDD before checkpointing it")
+            if self.logger:
+                self.logger.warning("it is recommended to cache the RDD before checkpointing it")
 
         self.data.checkpoint()
-        self._logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
+
+        if self.logger:
+            self.logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
 
         return self
 
