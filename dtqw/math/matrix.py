@@ -1,7 +1,5 @@
 import math
 from pyspark import RDD, StorageLevel
-from dtqw.utils.logger import Logger
-from dtqw.utils.metrics import Metrics
 from dtqw.utils.utils import is_shape
 
 __all__ = ['Matrix']

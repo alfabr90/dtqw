@@ -152,11 +152,12 @@ class State(Matrix):
         app_id = self._spark_context.applicationId
 
         if self.profiler:
-            self.profiler.profile_times('full_measurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_times('fullMeasurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_resources(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "full measurement was done in {}s".format(self.profiler.get_last_time('full_measurement'))
+                    "full measurement was done in {}s".format(self.profiler.get_last_time('fullMeasurement'))
                 )
 
             self.profiler.log_rdds(app_id=app_id)
@@ -221,11 +222,12 @@ class State(Matrix):
         app_id = self._spark_context.applicationId
 
         if self.profiler:
-            self.profiler.profile_times('filtered_measurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_times('filteredMeasurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_resources(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "filtered measurement was done in {}s".format(self.profiler.get_last_time('filtered_measurement'))
+                    "filtered measurement was done in {}s".format(self.profiler.get_last_time('filteredMeasurement'))
                 )
 
             self.profiler.log_rdds(app_id=app_id)
@@ -302,11 +304,12 @@ class State(Matrix):
                 self.logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
-        self.logger.info(
-            "partial measurement for particle {} was done in {}s".format(
-                particle + 1, (datetime.now() - t1).total_seconds()
+        if self.logger:
+            self.logger.info(
+                "partial measurement for particle {} was done in {}s".format(
+                    particle + 1, (datetime.now() - t1).total_seconds()
+                )
             )
-        )
 
         return pdf
 
@@ -318,11 +321,12 @@ class State(Matrix):
         app_id = self._spark_context.applicationId
 
         if self.profiler:
-            self.profiler.profile_times('partial_measurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_times('partialMeasurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_resources(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "partial measurement was done in {}s".format(self.profiler.get_last_time('partial_measurement'))
+                    "partial measurement was done in {}s".format(self.profiler.get_last_time('partialMeasurement'))
                 )
 
             self.profiler.log_rdds(app_id=app_id)

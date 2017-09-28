@@ -58,7 +58,7 @@ class Profiler:
             result = response.read()
 
         if self.logger:
-            self.logger.debug('request performed in {}s'.format((datetime - t1).total_seconds()))
+            self.logger.debug('request performed in {}s'.format((datetime.now() - t1).total_seconds()))
 
         if result is not None:
             result = json.loads(result.decode('utf-8'))
@@ -274,48 +274,124 @@ class Profiler:
             return self._executors[exec_id][key][-1]
 
     @staticmethod
-    def _export_times(times, filename, extension='csv', path=None):
+    def _export_values(values, filename, extension='csv'):
         if extension == 'csv':
-            if path is None:
-                path = './'
-            else:
-                create_dir(path)
+            f = filename + extension
 
-            f = path + filename + "_times." + extension
-
-            fieldnames = times.keys()
+            fieldnames = values.keys()
 
             with open(f, 'w') as f:
                 w = csv.DictWriter(f, fieldnames=fieldnames)
                 w.writeheader()
-                w.writerow(times)
+                w.writerow(values)
         else:
             raise Exception("unsupported file extension!")
 
-    def export_mean_times(self, filename, extension='csv', path=None):
+    def export_mean_times(self, filename, extension='csv'):
         times = {}
 
         for k, v in self._times.items():
             times[k] = st.mean(v)
 
-        self._export_times(times, filename, extension, path)
+        self._export_values(times, filename, extension)
 
-    def export_pstdev_times(self, filename, extension='csv', path=None):
+    def export_pstdev_times(self, filename, extension='csv'):
         times = {}
 
         for k, v in self._times.items():
             times[k] = st.pstdev(v)
 
-        self._export_times(times, filename, extension, path)
+        self._export_values(times, filename, extension)
 
-    def plot_times(self):
-        pass
+    def export_mean_resources(self, filename, extension='csv'):
+        resources = {}
 
-    def plot_operators(self):
-        pass
+        for k, v in self._resources.items():
+            resources[k] = st.mean(v)
 
-    def plot_resources(self):
-        pass
+        self._export_values(resources, filename, extension)
 
-    def plot_executors(self):
-        pass
+    def export_pstdev_resources(self, filename, extension='csv'):
+        resources = {}
+
+        for k, v in self._resources.items():
+            resources[k] = st.pstdev(v)
+
+        self._export_values(resources, filename, extension)
+
+    def plot_times(self, title, filename, **kwargs):
+        mean_times = []
+        pstdev_times = []
+        keys = self._times.keys()
+
+        for k in keys:
+            mean_times.append(st.mean(self._times[k]))
+            pstdev_times.append(st.pstdev(self._times[k]))
+
+        fig, ax = plt.subplots()
+
+        index = np.arange(len(keys))
+
+        plt.bar(index, mean_times, 0.35, color='r', yerr=pstdev_times)
+
+        plt.xlabel('Operations')
+        plt.ylabel('Time (s)')
+        plt.xticks(index, keys, rotation='vertical')
+        plt.title(title)
+
+        plt.tight_layout()
+        plt.savefig(filename, kwargs=kwargs)
+
+    def plot_resources(self, title, filename, **kwargs):
+        mean_resources = []
+        pstdev_resources = []
+        keys = Profiler.resources_base2.keys()
+
+        for k in keys:
+            mean_resources.append(st.mean(self._resources[k]))
+            pstdev_resources.append(st.pstdev(self._resources[k]))
+
+        fig, ax = plt.subplots()
+
+        index = np.arange(len(keys))
+
+        plt.bar(index, mean_resources, 0.35, color='b', yerr=pstdev_resources)
+
+        plt.xlabel('Resources')
+        plt.ylabel('Bytes')
+        plt.xticks(index, keys, rotation='vertical')
+        plt.title(title)
+
+        plt.tight_layout()
+        plt.savefig(filename, kwargs=kwargs)
+
+    def plot_executor(self, title, filename, **kwargs):
+        mean_resources = {}
+        pstdev_resources = {}
+        e_keys = self._executors.keys()
+        r_keys = Profiler.resources_base2.keys()
+
+        for k1 in r_keys:
+            mean_resources[k1] = []
+            pstdev_resources[k1] = []
+
+            for k2 in e_keys:
+                mean_resources[k1].append(st.mean(self._executors[k2][k1]))
+                pstdev_resources[k1].append(st.pstdev(self._executors[k2][k1]))
+
+        fig, ax = plt.subplots()
+
+        index = np.arange(len(e_keys))
+
+        i = 0
+        for k in r_keys:
+            plt.bar(index + 0.35 * i, mean_resources[k], 0.35, yerr=pstdev_resources[k], label=k)
+            i += 1
+
+        plt.xlabel('Resources by executors')
+        plt.ylabel('Bytes')
+        plt.xticks(index + 0.35 * len(r_keys) / 2, e_keys)
+        plt.title(title)
+
+        plt.tight_layout()
+        plt.savefig(filename, kwargs=kwargs)

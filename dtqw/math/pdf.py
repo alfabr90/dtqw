@@ -37,7 +37,7 @@ class PDF(Matrix):
 
         return round(n, round_precision)
 
-    def plot(self, title, labels, filename, path=None, **kwargs):
+    def plot(self, title, labels, filename, **kwargs):
         if self.logger:
             self.logger.info("starting ploting probabilities...")
 
@@ -101,10 +101,7 @@ class PDF(Matrix):
                 self.logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        if path is None:
-            plt.show()
-        else:
-            plt.savefig(path + filename, kwargs=kwargs)
+        plt.savefig(filename, kwargs=kwargs)
 
         if self.logger:
             self.logger.info("plots in {}s".format((datetime.now() - t1).total_seconds()))

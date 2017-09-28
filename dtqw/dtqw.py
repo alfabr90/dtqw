@@ -134,16 +134,16 @@ class DiscreteTimeQuantumWalk:
         rdd_id = self._coin_operator.data.id()
 
         if self.profiler:
-            self.profiler.profile_times('coin_operator', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_operator('coin_operator', app_id, rdd_id)
+            self.profiler.profile_times('coinOperator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('coinOperator', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
 
             if self.logger:
-                self.logger.info("coin operator was built in {}s".format(self.profiler.get_last_time('coin_operator')))
+                self.logger.info("coin operator was built in {}s".format(self.profiler.get_last_time('coinOperator')))
                 self.logger.info(
                     "coin operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_last_operator('coin_operator', 'memoryUsed'),
-                        self.profiler.get_last_operator('coin_operator', 'diskUsed')
+                        self.profiler.get_last_operator('coinOperator', 'memoryUsed'),
+                        self.profiler.get_last_operator('coinOperator', 'diskUsed')
                     )
                 )
                 self.logger.debug("shape of coin operator: {}".format(self._coin_operator.shape))
@@ -161,18 +161,18 @@ class DiscreteTimeQuantumWalk:
         rdd_id = self._shift_operator.data.id()
 
         if self.profiler:
-            self.profiler.profile_times('shift_operator', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_operator('shift_operator', app_id, rdd_id)
+            self.profiler.profile_times('shiftOperator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('shiftOperator', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "shift operator was built in {}s".format(self.profiler.get_last_time('shift_operator'))
+                    "shift operator was built in {}s".format(self.profiler.get_last_time('shiftOperator'))
                 )
                 self.logger.info(
                     "shift operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_last_operator('shift_operator', 'memoryUsed'),
-                        self.profiler.get_last_operator('shift_operator', 'diskUsed')
+                        self.profiler.get_last_operator('shiftOperator', 'memoryUsed'),
+                        self.profiler.get_last_operator('shiftOperator', 'diskUsed')
                     )
                 )
                 self.logger.debug("shape of shift operator: {}".format(self._shift_operator.shape))
@@ -220,18 +220,18 @@ class DiscreteTimeQuantumWalk:
         rdd_id = self._unitary_operator.data.id()
 
         if self.profiler:
-            self.profiler.profile_times('unitary_operator', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_operator('unitary_operator', app_id, rdd_id)
+            self.profiler.profile_times('unitaryOperator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('unitaryOperator', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "unitary operator was built in {}s".format(self.profiler.get_last_time('unitary_operator'))
+                    "unitary operator was built in {}s".format(self.profiler.get_last_time('unitaryOperator'))
                 )
                 self.logger.info(
                     "unitary operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_last_operator('unitary_operator', 'memoryUsed'),
-                        self.profiler.get_last_operator('unitary_operator', 'diskUsed')
+                        self.profiler.get_last_operator('unitaryOperator', 'memoryUsed'),
+                        self.profiler.get_last_operator('unitaryOperator', 'diskUsed')
                     )
                 )
                 self.logger.debug("shape of unitary operator: {}".format(self._unitary_operator.shape))
@@ -317,18 +317,18 @@ class DiscreteTimeQuantumWalk:
         rdd_id = self._interaction_operator.data.id()
 
         if self.profiler:
-            self.profiler.profile_times('interaction_operator', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_operator('interaction_operator', app_id, rdd_id)
+            self.profiler.profile_times('interactionOperator', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_operator('interactionOperator', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "interaction operator was built in {}s".format(self.profiler.get_last_time('interaction_operator'))
+                    "interaction operator was built in {}s".format(self.profiler.get_last_time('interactionOperator'))
                 )
                 self.logger.info(
                     "interaction operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_last_operator('interaction_operator', 'memoryUsed'),
-                        self.profiler.get_last_operator('interaction_operator', 'diskUsed')
+                        self.profiler.get_last_operator('interactionOperator', 'memoryUsed'),
+                        self.profiler.get_last_operator('interactionOperator', 'diskUsed')
                     )
                 )
                 self.logger.debug("shape of interaction operator: {}".format(self._interaction_operator.shape))
@@ -361,18 +361,18 @@ class DiscreteTimeQuantumWalk:
             rdd_id = self._walk_operator.data.id()
 
             if self.profiler:
-                self.profiler.profile_times('walk_operator', (datetime.now() - t1).total_seconds())
-                self.profiler.profile_operator('walk_operator', app_id, rdd_id)
+                self.profiler.profile_times('walkOperator', (datetime.now() - t1).total_seconds())
+                self.profiler.profile_operator('walkOperator', app_id, rdd_id)
                 self.profiler.profile_resources(app_id)
 
                 if self.logger:
                     self.logger.info(
-                        "walk operator was built in {}s".format(self.profiler.get_last_time('walk_operator'))
+                        "walk operator was built in {}s".format(self.profiler.get_last_time('walkOperator'))
                     )
                     self.logger.info(
                         "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_last_operator('walk_operator', 'memoryUsed'),
-                            self.profiler.get_last_operator('walk_operator', 'diskUsed')
+                            self.profiler.get_last_operator('walkOperator', 'memoryUsed'),
+                            self.profiler.get_last_operator('walkOperator', 'diskUsed')
                         )
                     )
                     self.logger.debug("shape of walk operator: {}".format(self._walk_operator.shape))
@@ -446,18 +446,18 @@ class DiscreteTimeQuantumWalk:
             rdd_id = [wo.data.id() for wo in self._walk_operator]
 
             if self.profiler:
-                self.profiler.profile_times('walk_operator', (datetime.now() - t1).total_seconds())
-                self.profiler.profile_operator('walk_operator', app_id, rdd_id)
+                self.profiler.profile_times('walkOperator', (datetime.now() - t1).total_seconds())
+                self.profiler.profile_operator('walkOperator', app_id, rdd_id)
                 self.profiler.profile_resources(app_id)
 
                 if self.logger:
                     self.logger.info(
-                        "walk operator was built in {}s".format(self.profiler.get_last_time('walk_operator'))
+                        "walk operator was built in {}s".format(self.profiler.get_last_time('walkOperator'))
                     )
                     self.logger.info(
                         "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_last_operator('walk_operator', 'memoryUsed'),
-                            self.profiler.get_last_operator('walk_operator', 'diskUsed')
+                            self.profiler.get_last_operator('walkOperator', 'memoryUsed'),
+                            self.profiler.get_last_operator('walkOperator', 'diskUsed')
                         )
                     )
                     self.logger.debug("shape of walk operator: {}".format(self._walk_operator[0].shape))
@@ -639,8 +639,9 @@ class DiscreteTimeQuantumWalk:
                             self.logger.info("no interaction operator has been set. A new one will be built")
                         self.create_interaction_operator(phase, storage_level)
 
-            self.profiler.log_executors(app_id=app_id)
-            self.profiler.log_rdds(app_id=app_id)
+            if self.profiler:
+                self.profiler.log_executors(app_id=app_id)
+                self.profiler.log_rdds(app_id=app_id)
 
             t1 = datetime.now()
 
