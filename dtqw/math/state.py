@@ -150,17 +150,26 @@ class State(Matrix):
             raise ValueError("PDFs must sum one")
 
         app_id = self._spark_context.applicationId
+        rdd_id = pdf.data.id()
 
         if self.profiler:
             self.profiler.profile_times('fullMeasurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_rdd('fullMeasurement', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
+            self.profiler.profile_executors(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "full measurement was done in {}s".format(self.profiler.get_last_time('fullMeasurement'))
+                    "full measurement was done in {}s".format(self.profiler.get_time('fullMeasurement'))
+                )
+                self.logger.info(
+                    "PDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_rdd('fullMeasurement', 'memoryUsed'),
+                        self.profiler.get_rdd('fullMeasurement', 'diskUsed')
+                    )
                 )
 
-            self.profiler.log_rdds(app_id=app_id)
+            self.profiler.log_rdd(app_id=app_id)
 
         return pdf
 
@@ -220,17 +229,26 @@ class State(Matrix):
         pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
+        rdd_id = pdf.data.id()
 
         if self.profiler:
             self.profiler.profile_times('filteredMeasurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_rdd('filteredMeasurement', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
+            self.profiler.profile_executors(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "filtered measurement was done in {}s".format(self.profiler.get_last_time('filteredMeasurement'))
+                    "filtered measurement was done in {}s".format(self.profiler.get_time('filteredMeasurement'))
+                )
+                self.logger.info(
+                    "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_rdd('filteredMeasurement', 'memoryUsed'),
+                        self.profiler.get_rdd('filteredMeasurement', 'diskUsed')
+                    )
                 )
 
-            self.profiler.log_rdds(app_id=app_id)
+            self.profiler.log_rdd(app_id=app_id)
 
         return pdf
 
@@ -319,17 +337,26 @@ class State(Matrix):
         partial_measurements = [self._partial_measurement(p, storage_level) for p in particles]
 
         app_id = self._spark_context.applicationId
+        rdd_id = [pm.data.id() for pm in partial_measurements]
 
         if self.profiler:
             self.profiler.profile_times('partialMeasurement', (datetime.now() - t1).total_seconds())
+            self.profiler.profile_rdd('partialMeasurement', app_id, rdd_id)
             self.profiler.profile_resources(app_id)
+            self.profiler.profile_executors(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "partial measurement was done in {}s".format(self.profiler.get_last_time('partialMeasurement'))
+                    "partial measurement was done in {}s".format(self.profiler.get_time('partialMeasurement'))
+                )
+                self.logger.info(
+                    "PDF with partial measurements are consuming {} bytes in memory and {} bytes in disk".format(
+                        self.profiler.get_rdd('partialMeasurement', 'memoryUsed'),
+                        self.profiler.get_rdd('partialMeasurement', 'diskUsed')
+                    )
                 )
 
-            self.profiler.log_rdds(app_id=app_id)
+            self.profiler.log_rdd(app_id=app_id)
 
         return partial_measurements
 
