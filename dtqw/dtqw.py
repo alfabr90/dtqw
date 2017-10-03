@@ -448,25 +448,33 @@ class DiscreteTimeQuantumWalk:
             self._unitary_operator.unpersist()
 
             app_id = self._spark_context.applicationId
-            rdd_id = [wo.data.id() for wo in self._walk_operator]
+            # rdd_id = [wo.data.id() for wo in self._walk_operator]
 
             if self.profiler:
-                self.profiler.profile_times('walkOperator', (datetime.now() - t1).total_seconds())
-                self.profiler.profile_rdd('walkOperator', app_id, rdd_id)
+                for i in range(len(self._walk_operator)):
+                    self.profiler.profile_times('walkOperatorParticle{}'.format(i + 1), (datetime.now() - t1).total_seconds())
+                    self.profiler.profile_rdd('walkOperatorParticle{}'.format(i + 1), app_id, self._walk_operator[i].data.id())
                 self.profiler.profile_resources(app_id)
                 self.profiler.profile_executors(app_id)
 
                 if self.logger:
-                    self.logger.info(
-                        "walk operator was built in {}s".format(self.profiler.get_time('walkOperator'))
-                    )
-                    self.logger.info(
-                        "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_rdd('walkOperator', 'memoryUsed'),
-                            self.profiler.get_rdd('walkOperator', 'diskUsed')
+                    for i in range(len(self._walk_operator)):
+                        self.logger.info(
+                            "walk operator for particle {} was built in {}s".format(
+                                i + 1,
+                                self.profiler.get_time('walkOperator')
+                            )
                         )
-                    )
-                    self.logger.debug("shape of walk operator: {}".format(self._walk_operator[0].shape))
+                        self.logger.info(
+                            "walk operator for particle {} is consuming {} bytes in memory and {} bytes in disk".format(
+                                i + 1,
+                                self.profiler.get_rdd('walkOperatorParticle{}'.format(i + 1), 'memoryUsed'),
+                                self.profiler.get_rdd('walkOperatorParticle{}'.format(i + 1), 'diskUsed')
+                            )
+                        )
+                        self.logger.debug(
+                            "shape of walk operator for particle {}: {}".format(i + 1, self._walk_operator[0].shape)
+                        )
 
                 self.profiler.log_rdd(app_id=app_id)
 
@@ -538,15 +546,15 @@ class DiscreteTimeQuantumWalk:
             rdd_id = result.data.id()
 
             if self.profiler:
-                self.profiler.profile_rdd('systemState{}'.format(i + 1), app_id, rdd_id)
+                self.profiler.profile_rdd('systemStateStep{}'.format(i + 1), app_id, rdd_id)
                 self.profiler.profile_resources(app_id)
                 self.profiler.profile_executors(app_id)
 
                 if self.logger:
                     self.logger.info(
                         "system state is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_rdd('systemState{}'.format(i + 1), 'memoryUsed'),
-                            self.profiler.get_rdd('systemState{}'.format(i + 1), 'diskUsed')
+                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'memoryUsed'),
+                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'diskUsed')
                         )
                     )
                     self.logger.debug("shape of initial state: {}".format(result.shape))
@@ -611,15 +619,15 @@ class DiscreteTimeQuantumWalk:
             rdd_id = result.data.id()
 
             if self.profiler:
-                self.profiler.profile_rdd('systemState{}'.format(i + 1), app_id, rdd_id)
+                self.profiler.profile_rdd('systemStateStep{}'.format(i + 1), app_id, rdd_id)
                 self.profiler.profile_resources(app_id)
                 self.profiler.profile_executors(app_id)
 
                 if self.logger:
                     self.logger.info(
                         "system state is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_rdd('systemState{}'.format(i + 1), 'memoryUsed'),
-                            self.profiler.get_rdd('systemState{}'.format(i + 1), 'diskUsed')
+                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'memoryUsed'),
+                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'diskUsed')
                         )
                     )
                     self.logger.debug("shape of initial state: {}".format(result.shape))

@@ -329,28 +329,28 @@ class State(Matrix):
                 )
             )
 
-        return pdf
-
-    def partial_measurements(self, particles, storage_level=StorageLevel.MEMORY_AND_DISK):
-        t1 = datetime.now()
-
-        partial_measurements = [self._partial_measurement(p, storage_level) for p in particles]
-
         app_id = self._spark_context.applicationId
-        rdd_id = [pm.data.id() for pm in partial_measurements]
+        rdd_id = pdf.data.id()
 
         if self.profiler:
-            self.profiler.profile_times('partialMeasurement', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_rdd('partialMeasurement', app_id, rdd_id)
+            self.profiler.profile_times('partialMeasurementParticle{}'.format(
+                particle + 1), (datetime.now() - t1).total_seconds()
+            )
+            self.profiler.profile_rdd('partialMeasurementParticle{}'.format(particle + 1), app_id, rdd_id)
             self.profiler.profile_resources(app_id)
             self.profiler.profile_executors(app_id)
 
             if self.logger:
                 self.logger.info(
-                    "partial measurement was done in {}s".format(self.profiler.get_time('partialMeasurement'))
+                    "partial measurement for particle {} was done in {}s".format(
+                        particle + 1,
+                        self.profiler.get_time('partialMeasurement{}'.format(particle + 1))
+                    )
                 )
                 self.logger.info(
-                    "PDF with partial measurements are consuming {} bytes in memory and {} bytes in disk".format(
+                    "PDF with partial measurements for particle {} "
+                    "are consuming {} bytes in memory and {} bytes in disk".format(
+                        particle + 1,
                         self.profiler.get_rdd('partialMeasurement', 'memoryUsed'),
                         self.profiler.get_rdd('partialMeasurement', 'diskUsed')
                     )
@@ -358,7 +358,10 @@ class State(Matrix):
 
             self.profiler.log_rdd(app_id=app_id)
 
-        return partial_measurements
+        return pdf
+
+    def partial_measurements(self, particles, storage_level=StorageLevel.MEMORY_AND_DISK):
+        return [self._partial_measurement(p, storage_level) for p in particles]
 
 
 def is_state(obj):

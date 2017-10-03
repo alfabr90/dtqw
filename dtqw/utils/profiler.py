@@ -16,10 +16,10 @@ class Profiler:
     def __init__(self, base_url='http://localhost:4040/api/v1/'):
         self._base_url = base_url
 
-        self._times = {}
-        self._rdd = {}
-        self._resources = self._default_resources()
-        self._executors = {}
+        self._times = []
+        self._rdd = []
+        self._resources = []
+        self._executors = []
 
         self.logger = None
 
@@ -174,31 +174,28 @@ class Profiler:
         else:
             print('No logger has been defined')
 
+    def new_round(self):
+        self._times.append({})
+        self._rdd.append({})
+        self._resources.append(self._default_resources())
+        self._executors.append({})
+
     def profile_times(self, name, value):
-        self._times[name] = value
+        self._times[-1][name] = value
 
     def profile_rdd(self, name, app_id, rdd_id):
         if self.logger:
             self.logger.info('profiling RDD for "{}"...'.format(name))
 
-        if not (name in self._rdd):
-            self._rdd[name] = self._default_rdd()
+        if not (name in self._rdd[-1]):
+            self._rdd[-1][name] = self._default_rdd()
 
-        if isinstance(rdd_id, (list, tuple)):
-            for rdd in rdd_id:
-                data = self.request_rdd(app_id, rdd)
+        data = self.request_rdd(app_id, rdd_id)
 
-                if data is not None:
-                    for k, v in data.items():
-                        if k in self._rdd[name].keys():
-                            self._rdd[name][k] += v
-        else:
-            data = self.request_rdd(app_id, rdd_id)
-
-            if data is not None:
-                for k, v in data.items():
-                    if k in self._rdd[name].keys():
-                        self._rdd[name][k] = v
+        if data is not None:
+            for k, v in data.items():
+                if k in self._rdd[-1][name].keys():
+                    self._rdd[-1][name][k] = v
 
     def profile_resources(self, app_id):
         if self.logger:
@@ -206,14 +203,14 @@ class Profiler:
 
         data = self.request_executors(app_id)
 
-        for k in self._resources.keys():
-            self._resources[k].append(0)
+        for k in self._resources[-1].keys():
+            self._resources[-1][k].append(0)
 
         if data is not None:
             for d in data:
                 for k, v in d.items():
-                    if k in self._resources.keys():
-                        self._resources[k][-1] += v
+                    if k in self._resources[-1].keys():
+                        self._resources[-1][k][-1] += v
 
     def profile_executors(self, app_id, exec_id=None):
         if self.logger:
@@ -227,29 +224,29 @@ class Profiler:
         if data is not None:
             if exec_id is None:
                 for d in data:
-                    if not (d['id'] in self._executors):
-                        self._executors[d['id']] = self._default_executor()
+                    if not (d['id'] in self._executors[-1]):
+                        self._executors[-1][d['id']] = self._default_executor()
 
                     for k, v in d.items():
-                        if k in self._executors[d['id']]:
-                            self._executors[d['id']][k].append(v)
+                        if k in self._executors[-1][d['id']]:
+                            self._executors[-1][d['id']][k].append(v)
             else:
                 for d in data:
                     if d['id'] == exec_id:
                         if not (d['id'] in self._executors):
-                            self._executors[d['id']] = self._default_executor()
+                            self._executors[-1][d['id']] = self._default_executor()
 
                         for k, v in d.items():
-                            if k in self._executors[d['id']]:
-                                self._executors[d['id']][k].append(v)
+                            if k in self._executors[-1][d['id']]:
+                                self._executors[-1][d['id']][k].append(v)
                         break
 
     def get_time(self, key):
-        if not (key in self._times):
+        if not (key in self._times[-1]):
             if self.logger:
                 self.logger.warning('key "{}" not present'.format(key))
             return None
-        return self._times[key]
+        return self._times[-1][key]
 
     def get_rdd(self, name=None, key=None):
         if name is None:
@@ -258,14 +255,14 @@ class Profiler:
             else:
                 rdd = {}
 
-                for k1, v1 in self._rdd.items():
+                for k1, v1 in self._rdd[-1].items():
                     rdd[k1] = {}
                     for k2, v2 in v1.items():
                         if key == k2:
                             rdd[k1][k2] = v2
                 return rdd
         else:
-            if not (name in self._rdd):
+            if not (name in self._rdd[-1]):
                 if self.logger:
                     self.logger.warning('key "{}" not present'.format(key))
                 return None
@@ -273,26 +270,26 @@ class Profiler:
             if key is None:
                 return self._rdd[name]
             else:
-                if not (key in self._rdd[name]):
+                if not (key in self._rdd[-1][name]):
                     if self.logger:
                         self.logger.warning('key "{}" not present'.format(key))
                     return None
-                return self._rdd[name][key]
+                return self._rdd[-1][name][key]
 
     def get_resources(self, key=None):
         if key is None:
             resources = self._default_resources()
 
             for k in resources.keys():
-                resources[k] = self._resources[k][-1]
+                resources[k] = self._resources[-1][k][-1]
 
             return resources
         else:
-            if not (key in self._resources[key]):
+            if not (key in self._resources[-1][key]):
                 if self.logger:
                     self.logger.warning('key "{}" not present'.format(key))
                 return None
-            return self._resources[key][-1]
+            return self._resources[-1][key][-1]
 
     def get_executors(self, exec_id=None, key=None):
         if exec_id is None:
@@ -301,14 +298,14 @@ class Profiler:
             else:
                 executors = {}
 
-                for k1, v1 in self._executors.items():
+                for k1, v1 in self._executors[-1].items():
                     executors[k1] = {}
                     for k2, v2 in v1.items():
                         if key == k2:
                             executors[k1][k2] = v2
                 return executors
         else:
-            if not (exec_id in self._executors):
+            if not (exec_id in self._executors[-1]):
                 if self.logger:
                     self.logger.warning('key "{}" not present'.format(key))
                 return None
@@ -317,11 +314,11 @@ class Profiler:
                 resources = self._default_executor()
 
                 for k in resources.keys():
-                    resources[k] = self._executors[exec_id][k][-1]
+                    resources[k] = self._executors[-1][exec_id][k][-1]
 
                 return resources
             else:
-                if not (key in self._executors[exec_id]):
+                if not (key in self._executors[-1][exec_id]):
                     if self.logger:
                         self.logger.warning('key "{}" not present'.format(key))
                     return None
