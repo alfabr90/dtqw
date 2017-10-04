@@ -52,16 +52,16 @@ class Profiler:
         return {'totalShuffleWrite': [], 'totalShuffleRead': [], 'diskUsed': [], 'memoryUsed': []}
 
     @staticmethod
-    def _export_values(values, filename, extension='csv'):
+    def _export_values(values, fieldnames, filename, extension='csv'):
         if extension == 'csv':
-            f = filename + extension
-
-            fieldnames = values.keys()
+            f = filename + '.' + extension
 
             with open(f, 'w') as f:
                 w = csv.DictWriter(f, fieldnames=fieldnames)
                 w.writeheader()
-                w.writerow(values)
+
+                for v in values:
+                    w.writerow(v)
         else:
             raise Exception("unsupported file extension!")
 
@@ -174,7 +174,7 @@ class Profiler:
         else:
             print('No logger has been defined')
 
-    def new_round(self):
+    def start_round(self):
         self._times.append({})
         self._rdd.append({})
         self._resources.append(self._default_resources())
@@ -241,123 +241,221 @@ class Profiler:
                                 self._executors[-1][d['id']][k].append(v)
                         break
 
-    def get_time(self, key):
-        if not (key in self._times[-1]):
-            if self.logger:
-                self.logger.warning('key "{}" not present'.format(key))
-            return None
-        return self._times[-1][key]
-
-    def get_rdd(self, name=None, key=None):
-        if name is None:
+    def get_times(self, key=None):
+        if len(self._times):
             if key is None:
-                return self._rdd
+                return self._times[-1]
             else:
-                rdd = {}
-
-                for k1, v1 in self._rdd[-1].items():
-                    rdd[k1] = {}
-                    for k2, v2 in v1.items():
-                        if key == k2:
-                            rdd[k1][k2] = v2
-                return rdd
-        else:
-            if not (name in self._rdd[-1]):
-                if self.logger:
-                    self.logger.warning('key "{}" not present'.format(key))
-                return None
-
-            if key is None:
-                return self._rdd[name]
-            else:
-                if not (key in self._rdd[-1][name]):
+                if not (key in self._times[-1]):
                     if self.logger:
                         self.logger.warning('key "{}" not present'.format(key))
                     return None
-                return self._rdd[-1][name][key]
+                return self._times[-1][key]
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
+            return self._times
+
+    def get_rdd(self, name=None, key=None):
+        if len(self._rdd):
+            if name is None:
+                if key is None:
+                    return self._rdd[-1]
+                else:
+                    rdd = {}
+
+                    for k1, v1 in self._rdd[-1].items():
+                        rdd[k1] = {}
+                        for k2, v2 in v1.items():
+                            if key == k2:
+                                rdd[k1][k2] = v2
+                    return rdd
+            else:
+                if not (name in self._rdd[-1]):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(key))
+                    return None
+
+                if key is None:
+                    return self._rdd[-1][name]
+                else:
+                    if not (key in self._rdd[-1][name]):
+                        if self.logger:
+                            self.logger.warning('key "{}" not present'.format(key))
+                        return None
+                    return self._rdd[-1][name][key]
+        else:
+            if self.logger:
+                self.logger('No measurement of RDD has been done')
+            return self._rdd
 
     def get_resources(self, key=None):
-        if key is None:
-            resources = self._default_resources()
-
-            for k in resources.keys():
-                resources[k] = self._resources[-1][k][-1]
-
-            return resources
-        else:
-            if not (key in self._resources[-1][key]):
-                if self.logger:
-                    self.logger.warning('key "{}" not present'.format(key))
-                return None
-            return self._resources[-1][key][-1]
-
-    def get_executors(self, exec_id=None, key=None):
-        if exec_id is None:
+        if len(self._resources):
             if key is None:
-                return self._rdd
-            else:
-                executors = {}
-
-                for k1, v1 in self._executors[-1].items():
-                    executors[k1] = {}
-                    for k2, v2 in v1.items():
-                        if key == k2:
-                            executors[k1][k2] = v2
-                return executors
-        else:
-            if not (exec_id in self._executors[-1]):
-                if self.logger:
-                    self.logger.warning('key "{}" not present'.format(key))
-                return None
-
-            if key is None:
-                resources = self._default_executor()
+                resources = self._default_resources()
 
                 for k in resources.keys():
-                    resources[k] = self._executors[-1][exec_id][k][-1]
+                    resources[k] = self._resources[-1][k][-1]
 
                 return resources
             else:
-                if not (key in self._executors[-1][exec_id]):
+                if not (key in self._resources[-1][key]):
                     if self.logger:
                         self.logger.warning('key "{}" not present'.format(key))
                     return None
-                return self._executors[exec_id][key][-1]
+                return self._resources[-1][key][-1]
+        else:
+            if self.logger:
+                self.logger('No measurement of resources has been done')
+            return self._resources
+
+    def get_executors(self, exec_id=None, key=None):
+        if len(self._executors):
+            if exec_id is None:
+                if key is None:
+                    return self._rdd
+                else:
+                    executors = {}
+
+                    for k1, v1 in self._executors[-1].items():
+                        executors[k1] = {}
+                        for k2, v2 in v1.items():
+                            if key == k2:
+                                executors[k1][k2] = v2
+                    return executors
+            else:
+                if not (exec_id in self._executors[-1]):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(key))
+                    return None
+
+                if key is None:
+                    resources = self._default_executor()
+
+                    for k in resources.keys():
+                        resources[k] = self._executors[-1][exec_id][k][-1]
+
+                    return resources
+                else:
+                    if not (key in self._executors[-1][exec_id]):
+                        if self.logger:
+                            self.logger.warning('key "{}" not present'.format(key))
+                        return None
+                    return self._executors[exec_id][key][-1]
+        else:
+            if self.logger:
+                self.logger('No measurement of executors has been done')
+            return self._executors
+
+    def get_mean_times(self):
+        if len(self._times):
+            times = {}
+
+            for k in self._times[-1].keys():
+                tmp = []
+                for t in self._times:
+                    tmp.append(t[k])
+                times[k] = st.mean(tmp)
+
+            return times
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
+            return self._times
+
+    def get_pstdev_times(self):
+        if len(self._times):
+            times = {}
+
+            for k in self._times[-1].keys():
+                tmp = []
+                for t in self._times:
+                    tmp.append(t[k])
+                times[k] = st.pstdev(tmp)
+
+            return times
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
+            return self._times
+
+    def get_mean_resources(self):
+        if len(self._resources):
+            size = len([v for v in self._resources[-1].values()][0])
+            resources = [self._default_resources() for i in range(size)]
+
+            for k in resources[-1].keys():
+                for i in range(size):
+                    tmp = []
+                    for r in self._resources:
+                        tmp.append(r[k][i])
+                    resources[i][k] = st.mean(tmp)
+
+            return resources
+        else:
+            if self.logger:
+                self.logger('No measurement of resources has been done')
+            return self._resources
+
+    def get_pstdev_resources(self):
+        if len(self._resources):
+            size = len([v for v in self._resources[-1].values()][0])
+            resources = [self._default_resources() for i in range(size)]
+
+            for k in resources[-1].keys():
+                for i in range(size):
+                    tmp = []
+                    for r in self._resources:
+                        tmp.append(r[k][i])
+                    resources[i][k] = st.pstdev(tmp)
+
+            return resources
+        else:
+            if self.logger:
+                self.logger('No measurement of resources has been done')
+            return self._resources
 
     def export_times(self, filename, extension='csv'):
-        self._export_values(self._times, filename, extension)
+        if len(self._times):
+            self._export_values(self._times, self._times[-1].keys(), filename, extension)
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
 
     def export_mean_times(self, filename, extension='csv'):
-        times = {}
-
-        for k, v in self._times.items():
-            times[k] = st.mean(v)
-
-        self._export_values(times, filename, extension)
+        times = self.get_mean_times()
+        if len(times):
+            self._export_values((times, ), times.keys(), filename, extension)
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
 
     def export_pstdev_times(self, filename, extension='csv'):
-        times = {}
+        times = self.get_pstdev_times()
+        if len(times):
+            self._export_values((times, ), times.keys(), filename, extension)
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
 
-        for k, v in self._times.items():
-            times[k] = st.pstdev(v)
-
-        self._export_values(times, filename, extension)
+    def export_resources(self, filename, extension='csv'):
+        pass
 
     def export_mean_resources(self, filename, extension='csv'):
-        resources = {}
-
-        for k, v in self._resources.items():
-            resources[k] = st.mean(v)
-
-        self._export_values(resources, filename, extension)
+        resources = self.get_mean_resources()
+        if len(resources):
+            self._export_values(resources, resources[-1].keys(), filename, extension)
+        else:
+            if self.logger:
+                self.logger('No measurement of resources has been done')
 
     def export_pstdev_resources(self, filename, extension='csv'):
-        resources = {}
-
-        for k, v in self._resources.items():
-            resources[k] = st.pstdev(v)
-
-        self._export_values(resources, filename, extension)
+        resources = self.get_pstdev_resources()
+        if len(resources):
+            self._export_values(resources, resources[-1].keys(), filename, extension)
+        else:
+            if self.logger:
+                self.logger('No measurement of resources has been done')
 
     def plot_times(self, title, filename, **kwargs):
         mean_times = []

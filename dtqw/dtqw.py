@@ -140,7 +140,7 @@ class DiscreteTimeQuantumWalk:
             self.profiler.profile_executors(app_id)
 
             if self.logger:
-                self.logger.info("coin operator was built in {}s".format(self.profiler.get_time('coinOperator')))
+                self.logger.info("coin operator was built in {}s".format(self.profiler.get_times('coinOperator')))
                 self.logger.info(
                     "coin operator is consuming {} bytes in memory and {} bytes in disk".format(
                         self.profiler.get_rdd('coinOperator', 'memoryUsed'),
@@ -169,7 +169,7 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.info(
-                    "shift operator was built in {}s".format(self.profiler.get_time('shiftOperator'))
+                    "shift operator was built in {}s".format(self.profiler.get_times('shiftOperator'))
                 )
                 self.logger.info(
                     "shift operator is consuming {} bytes in memory and {} bytes in disk".format(
@@ -229,7 +229,7 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.info(
-                    "unitary operator was built in {}s".format(self.profiler.get_time('unitaryOperator'))
+                    "unitary operator was built in {}s".format(self.profiler.get_times('unitaryOperator'))
                 )
                 self.logger.info(
                     "unitary operator is consuming {} bytes in memory and {} bytes in disk".format(
@@ -327,7 +327,7 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.info(
-                    "interaction operator was built in {}s".format(self.profiler.get_time('interactionOperator'))
+                    "interaction operator was built in {}s".format(self.profiler.get_times('interactionOperator'))
                 )
                 self.logger.info(
                     "interaction operator is consuming {} bytes in memory and {} bytes in disk".format(
@@ -372,7 +372,7 @@ class DiscreteTimeQuantumWalk:
 
                 if self.logger:
                     self.logger.info(
-                        "walk operator was built in {}s".format(self.profiler.get_time('walkOperator'))
+                        "walk operator was built in {}s".format(self.profiler.get_times('walkOperator'))
                     )
                     self.logger.info(
                         "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
@@ -462,7 +462,7 @@ class DiscreteTimeQuantumWalk:
                         self.logger.info(
                             "walk operator for particle {} was built in {}s".format(
                                 i + 1,
-                                self.profiler.get_time('walkOperator')
+                                self.profiler.get_times('walkOperator')
                             )
                         )
                         self.logger.info(
@@ -718,7 +718,7 @@ class DiscreteTimeQuantumWalk:
                 self.profiler.profile_times('walk', (datetime.now() - t1).total_seconds())
 
                 if self.logger:
-                    self.logger.info("walk was done in {}s".format(self.profiler.get_time('walk')))
+                    self.logger.info("walk was done in {}s".format(self.profiler.get_times('walk')))
 
         if self.profiler:
             result.profiler = self.profiler

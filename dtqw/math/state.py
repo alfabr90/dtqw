@@ -160,7 +160,7 @@ class State(Matrix):
 
             if self.logger:
                 self.logger.info(
-                    "full measurement was done in {}s".format(self.profiler.get_time('fullMeasurement'))
+                    "full measurement was done in {}s".format(self.profiler.get_times('fullMeasurement'))
                 )
                 self.logger.info(
                     "PDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
@@ -239,7 +239,7 @@ class State(Matrix):
 
             if self.logger:
                 self.logger.info(
-                    "filtered measurement was done in {}s".format(self.profiler.get_time('filteredMeasurement'))
+                    "filtered measurement was done in {}s".format(self.profiler.get_times('filteredMeasurement'))
                 )
                 self.logger.info(
                     "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
@@ -344,7 +344,7 @@ class State(Matrix):
                 self.logger.info(
                     "partial measurement for particle {} was done in {}s".format(
                         particle + 1,
-                        self.profiler.get_time('partialMeasurement{}'.format(particle + 1))
+                        self.profiler.get_times('partialMeasurement{}'.format(particle + 1))
                     )
                 )
                 self.logger.info(
