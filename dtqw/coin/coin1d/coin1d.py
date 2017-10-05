@@ -1,6 +1,6 @@
 from dtqw.coin.coin import Coin
 from dtqw.mesh.mesh import is_mesh
-from dtqw.math.operator import Operator
+from dtqw.linalg.operator import Operator
 
 __all__ = ['Coin1D']
 

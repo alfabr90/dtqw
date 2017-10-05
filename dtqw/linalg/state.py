@@ -1,9 +1,9 @@
 import math
 from datetime import datetime
 from pyspark import StorageLevel
-from dtqw.math.pdf import PDF, is_pdf
+from dtqw.linalg.pdf import PDF, is_pdf
 from dtqw.mesh.mesh import is_mesh
-from dtqw.math.matrix import Matrix
+from dtqw.linalg.matrix import Matrix
 
 __all__ = ['State', 'is_state']
 

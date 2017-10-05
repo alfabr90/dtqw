@@ -2,8 +2,8 @@ import cmath
 from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.utils.utils import broadcast
-from dtqw.math.operator import *
-from dtqw.math.state import *
+from dtqw.linalg.operator import *
+from dtqw.linalg.state import *
 
 __all__ = ['DiscreteTimeQuantumWalk']
 
@@ -721,8 +721,6 @@ class DiscreteTimeQuantumWalk:
                     self.logger.info("walk was done in {}s".format(self.profiler.get_times('walk')))
 
         if self.profiler:
-            result.profiler = self.profiler
-
             self.profiler.log_executors(app_id=app_id)
             self.profiler.log_rdd(app_id=app_id)
 

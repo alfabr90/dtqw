@@ -44,14 +44,13 @@ def get_tmp_path(dir=None):
 
 
 def remove_tmp_path(path):
-    if path is not None:
-        if os.path.exists(path):
-            if os.path.isdir(path):
-                for i in os.listdir(path):
-                    os.remove(path + "/" + i)
-                os.rmdir(path)
-            else:
-                os.remove(path)
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            for i in os.listdir(path):
+                os.remove(path + "/" + i)
+            os.rmdir(path)
+        else:
+            os.remove(path)
 
 
 def size_of_tmp_path(path):

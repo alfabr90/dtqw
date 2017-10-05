@@ -1,6 +1,6 @@
 from dtqw.utils.utils import get_tmp_path
-from dtqw.math.state import State, is_state
-from dtqw.math.matrix import Matrix
+from dtqw.linalg.state import State, is_state
+from dtqw.linalg.matrix import Matrix
 
 __all__ = ['Operator', 'is_operator']
 

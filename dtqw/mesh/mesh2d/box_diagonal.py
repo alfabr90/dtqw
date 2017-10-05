@@ -1,5 +1,5 @@
 from dtqw.mesh.mesh2d.mesh2d import Mesh2D
-from dtqw.math.operator import Operator
+from dtqw.linalg.operator import Operator
 
 __all__ = ['BoxDiagonal']
 

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from mpl_toolkits.mplot3d import Axes3D
 from dtqw.mesh.mesh import is_mesh
-from dtqw.math.matrix import Matrix
+from dtqw.linalg.matrix import Matrix
 
 __all__ = ['PDF', 'is_pdf']
 

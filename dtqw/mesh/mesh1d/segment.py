@@ -1,5 +1,5 @@
 from dtqw.mesh.mesh1d.mesh1d import Mesh1D
-from dtqw.math.operator import Operator
+from dtqw.linalg.operator import Operator
 
 __all__ = ['Segment']
 
