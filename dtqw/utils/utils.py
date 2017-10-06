@@ -2,7 +2,7 @@ import os
 import tempfile as tf
 
 __all__ = ['ROUND_PRECISION', 'is_shape', 'broadcast',
-           'filename', 'create_dir', 'get_tmp_path', 'remove_tmp_path', 'size_of_tmp_path']
+           'filename', 'create_dir', 'get_tmp_path', 'remove_path', 'clear_path', 'size_of_path']
 
 
 ROUND_PRECISION = 10
@@ -23,7 +23,7 @@ def filename(mesh_filename, steps, num_particles, num_partitions):
 def create_dir(path):
     if os.path.exists(path):
         if not os.path.isdir(path):
-            raise Exception("Invalid path!")
+            raise ValueError('"{}" is an invalid path'.format(path))
     else:
         os.makedirs(path)
 
@@ -43,21 +43,32 @@ def get_tmp_path(dir=None):
     return tmp_file.name
 
 
-def remove_tmp_path(path):
+def remove_path(path):
     if os.path.exists(path):
         if os.path.isdir(path):
-            for i in os.listdir(path):
-                os.remove(path + "/" + i)
-            os.rmdir(path)
+            if path != '/':
+                for i in os.listdir(path):
+                    remove_path(path + "/" + i)
+                os.rmdir(path)
         else:
             os.remove(path)
 
 
-def size_of_tmp_path(path):
+def clear_path(path):
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            if path != '/':
+                for i in os.listdir(path):
+                    remove_path(path + "/" + i)
+        else:
+            raise ValueError('"{}" is an invalid path'.format(path))
+
+
+def size_of_path(path):
     if os.path.isdir(path):
         size = 0
         for i in os.listdir(path):
-            size += size_of_tmp_path(path + "/" + i)
+            size += size_of_path(path + "/" + i)
         return size
     else:
         return os.stat(path).st_size

@@ -123,12 +123,12 @@ class DiscreteTimeQuantumWalk:
     def to_string(self):
         return self.__str__()
 
-    def create_coin_operator(self):
+    def create_coin_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.logger:
             self.logger.info("building coin operator...")
         t1 = datetime.now()
 
-        self._coin_operator = self._coin.create_operator(self._mesh).dump()
+        self._coin_operator = self._coin.create_operator(self._mesh).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
         rdd_id = self._coin_operator.data.id()
@@ -151,12 +151,12 @@ class DiscreteTimeQuantumWalk:
 
             self.profiler.log_rdd(app_id=app_id)
 
-    def create_shift_operator(self):
+    def create_shift_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.logger:
             self.logger.info("building shift operator...")
         t1 = datetime.now()
 
-        self._shift_operator = self._mesh.create_operator().dump()
+        self._shift_operator = self._mesh.create_operator().materialize(storage_level)
 
         app_id = self._spark_context.applicationId
         rdd_id = self._shift_operator.data.id()
@@ -181,19 +181,19 @@ class DiscreteTimeQuantumWalk:
 
             self.profiler.log_rdd(app_id=app_id)
 
-    def create_unitary_operator(self):
+    def create_unitary_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.logger:
             self.logger.info("building unitary operator...")
 
         if self._coin_operator is None:
             if self.logger:
                 self.logger.info("no coin operator has been set. A new one will be built")
-            self.create_coin_operator()
+            self.create_coin_operator(storage_level)
 
         if self._shift_operator is None:
             if self.logger:
                 self.logger.info("no shift operator has been set. A new one will be built")
-            self.create_shift_operator()
+            self.create_shift_operator(storage_level)
 
         t1 = datetime.now()
 
@@ -213,7 +213,7 @@ class DiscreteTimeQuantumWalk:
 
         co = Operator(self._spark_context, rdd, self._shift_operator.shape)
 
-        self._unitary_operator = so.multiply(co).dump()
+        self._unitary_operator = so.multiply(co).materialize(storage_level)
 
         self._coin_operator.unpersist()
         self._shift_operator.unpersist()
@@ -314,7 +314,9 @@ class DiscreteTimeQuantumWalk:
             numPartitions=self._num_partitions
         )
 
-        self._interaction_operator = Operator(self._spark_context, rdd, io.shape).materialize(storage_level)
+        self._interaction_operator = Operator(
+            self._spark_context, rdd, io.shape
+        ).persist(storage_level).checkpoint().materialize(storage_level)
 
         app_id = self._spark_context.applicationId
         rdd_id = self._interaction_operator.data.id()
@@ -359,7 +361,9 @@ class DiscreteTimeQuantumWalk:
 
             self._walk_operator = Operator(
                 self._spark_context, rdd, self._unitary_operator.shape
-            ).materialize(storage_level)
+            ).persist(storage_level).checkpoint().materialize(storage_level)
+
+            self._unitary_operator.unpersist()
 
             app_id = self._spark_context.applicationId
             rdd_id = self._walk_operator.data.id()
@@ -432,7 +436,9 @@ class DiscreteTimeQuantumWalk:
                 )
 
                 self._walk_operator.append(
-                    Operator(self._spark_context, rdd, op_tmp.shape).materialize(storage_level)
+                    Operator(
+                        self._spark_context, rdd, op_tmp.shape
+                    ).persist(storage_level).checkpoint().materialize(storage_level)
                 )
 
                 if self.logger:
