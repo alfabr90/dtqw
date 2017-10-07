@@ -304,18 +304,14 @@ class DiscreteTimeQuantumWalk:
             rdd_range
         ).map(
             __map
-        )
-
-        io = Operator(self._spark_context, rdd, shape).dump()
-
-        rdd = io.data.map(
+        ).map(
             lambda m: (m[0], (m[1], m[2]))
         ).partitionBy(
             numPartitions=self._num_partitions
         )
 
         self._interaction_operator = Operator(
-            self._spark_context, rdd, io.shape
+            self._spark_context, rdd, shape
         ).persist(storage_level).checkpoint().materialize(storage_level)
 
         app_id = self._spark_context.applicationId
@@ -404,6 +400,7 @@ class DiscreteTimeQuantumWalk:
             uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
 
             self._walk_operator = []
+            wo_times = []
 
             for p in range(self._num_particles):
                 if self.logger:
@@ -441,12 +438,7 @@ class DiscreteTimeQuantumWalk:
                     ).persist(storage_level).checkpoint().materialize(storage_level)
                 )
 
-                if self.logger:
-                    self.logger.debug(
-                        "walk operator for particle {} was built in {}s".format(
-                            p + 1, (datetime.now() - t_tmp).total_seconds()
-                        )
-                    )
+                wo_times.append((datetime.now() - t_tmp).total_seconds())
 
             uo.unpersist()
             io.unpersist()
@@ -454,12 +446,12 @@ class DiscreteTimeQuantumWalk:
             self._unitary_operator.unpersist()
 
             app_id = self._spark_context.applicationId
-            # rdd_id = [wo.data.id() for wo in self._walk_operator]
+            rdd_id = [wo.data.id() for wo in self._walk_operator]
 
             if self.profiler:
                 for i in range(len(self._walk_operator)):
-                    self.profiler.profile_times('walkOperatorParticle{}'.format(i + 1), (datetime.now() - t1).total_seconds())
-                    self.profiler.profile_rdd('walkOperatorParticle{}'.format(i + 1), app_id, self._walk_operator[i].data.id())
+                    self.profiler.profile_times('walkOperatorParticle{}'.format(i + 1), wo_times[i])
+                    self.profiler.profile_rdd('walkOperatorParticle{}'.format(i + 1), app_id, rdd_id[i])
                 self.profiler.profile_resources(app_id)
                 self.profiler.profile_executors(app_id)
 
@@ -468,7 +460,7 @@ class DiscreteTimeQuantumWalk:
                         self.logger.info(
                             "walk operator for particle {} was built in {}s".format(
                                 i + 1,
-                                self.profiler.get_times('walkOperator')
+                                self.profiler.get_times('walkOperatorParticle{}'.format(i + 1))
                             )
                         )
                         self.logger.info(
