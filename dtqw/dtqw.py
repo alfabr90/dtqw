@@ -345,6 +345,8 @@ class DiscreteTimeQuantumWalk:
 
         t1 = datetime.now()
 
+        app_id = self._spark_context.applicationId
+
         if self._num_particles == 1:
             if self.logger:
                 self.logger.info("with just one particle, the walk operator is the unitary operator")
@@ -361,7 +363,6 @@ class DiscreteTimeQuantumWalk:
 
             self._unitary_operator.unpersist()
 
-            app_id = self._spark_context.applicationId
             rdd_id = self._walk_operator.data.id()
 
             if self.profiler:
@@ -398,9 +399,9 @@ class DiscreteTimeQuantumWalk:
             identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
             io = broadcast(self._spark_context, identity.data.collect())
             uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
+            identity.destroy()
 
             self._walk_operator = []
-            wo_times = []
 
             for p in range(self._num_particles):
                 if self.logger:
@@ -424,7 +425,7 @@ class DiscreteTimeQuantumWalk:
                     for i in range(self._num_particles - 1 - p):
                         op_tmp = op_tmp.kron(io, identity.shape)
 
-                op_tmp = op_tmp.dump()
+                # op_tmp = op_tmp.dump()
 
                 rdd = op_tmp.data.map(
                     lambda m: (m[0], (m[1], m[2]))
@@ -438,41 +439,38 @@ class DiscreteTimeQuantumWalk:
                     ).persist(storage_level).checkpoint().materialize(storage_level)
                 )
 
-                wo_times.append((datetime.now() - t_tmp).total_seconds())
+                if self.profiler:
+                    self.profiler.profile_times(
+                        'walkOperatorParticle{}'.format(p + 1), (datetime.now() - t_tmp).total_seconds()
+                    )
+                    self.profiler.profile_rdd(
+                        'walkOperatorParticle{}'.format(p + 1), app_id, self._walk_operator[p].data.id()
+                    )
 
-            uo.unpersist()
-            io.unpersist()
-            identity.destroy()
-            self._unitary_operator.unpersist()
-
-            app_id = self._spark_context.applicationId
-            rdd_id = [wo.data.id() for wo in self._walk_operator]
-
-            if self.profiler:
-                for i in range(len(self._walk_operator)):
-                    self.profiler.profile_times('walkOperatorParticle{}'.format(i + 1), wo_times[i])
-                    self.profiler.profile_rdd('walkOperatorParticle{}'.format(i + 1), app_id, rdd_id[i])
-                self.profiler.profile_resources(app_id)
-                self.profiler.profile_executors(app_id)
-
-                if self.logger:
-                    for i in range(len(self._walk_operator)):
+                    if self.logger:
                         self.logger.info(
                             "walk operator for particle {} was built in {}s".format(
-                                i + 1,
-                                self.profiler.get_times('walkOperatorParticle{}'.format(i + 1))
+                                p + 1, self.profiler.get_times('walkOperatorParticle{}'.format(p + 1))
                             )
                         )
                         self.logger.info(
                             "walk operator for particle {} is consuming {} bytes in memory and {} bytes in disk".format(
-                                i + 1,
-                                self.profiler.get_rdd('walkOperatorParticle{}'.format(i + 1), 'memoryUsed'),
-                                self.profiler.get_rdd('walkOperatorParticle{}'.format(i + 1), 'diskUsed')
+                                p + 1,
+                                self.profiler.get_rdd('walkOperatorParticle{}'.format(p + 1), 'memoryUsed'),
+                                self.profiler.get_rdd('walkOperatorParticle{}'.format(p + 1), 'diskUsed')
                             )
                         )
                         self.logger.debug(
-                            "shape of walk operator for particle {}: {}".format(i + 1, self._walk_operator[0].shape)
+                            "shape of walk operator for particle {}: {}".format(p + 1, self._walk_operator[0].shape)
                         )
+
+            uo.unpersist()
+            io.unpersist()
+            self._unitary_operator.unpersist()
+
+            if self.profiler:
+                self.profiler.profile_resources(app_id)
+                self.profiler.profile_executors(app_id)
 
                 self.profiler.log_rdd(app_id=app_id)
 
