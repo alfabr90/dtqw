@@ -52,7 +52,7 @@ class State(Matrix):
 
         return State(self._spark_context, rdd, shape, self._mesh, self._num_particles)
 
-    def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("measuring the state of the system...")
 
@@ -173,7 +173,7 @@ class State(Matrix):
 
         return pdf
 
-    def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("measuring the state of the system which the particles are at the same positions...")
 
@@ -252,7 +252,7 @@ class State(Matrix):
 
         return pdf
 
-    def _partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def _partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("measuring the state of the system for particle {}...".format(particle + 1))
 
@@ -360,7 +360,7 @@ class State(Matrix):
 
         return pdf
 
-    def partial_measurements(self, particles, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def partial_measurements(self, particles, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         return [self._partial_measurement(p, storage_level) for p in particles]
 
 

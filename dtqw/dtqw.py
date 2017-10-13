@@ -123,7 +123,7 @@ class DiscreteTimeQuantumWalk:
     def to_string(self):
         return self.__str__()
 
-    def create_coin_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_coin_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("building coin operator...")
         t1 = datetime.now()
@@ -149,9 +149,10 @@ class DiscreteTimeQuantumWalk:
                 )
                 self.logger.debug("shape of coin operator: {}".format(self._coin_operator.shape))
 
+            self.profiler.log_executors(app_id=app_id)
             self.profiler.log_rdd(app_id=app_id)
 
-    def create_shift_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_shift_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("building shift operator...")
         t1 = datetime.now()
@@ -179,9 +180,10 @@ class DiscreteTimeQuantumWalk:
                 )
                 self.logger.debug("shape of shift operator: {}".format(self._shift_operator.shape))
 
+            self.profiler.log_executors(app_id=app_id)
             self.profiler.log_rdd(app_id=app_id)
 
-    def create_unitary_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_unitary_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("building unitary operator...")
 
@@ -239,9 +241,10 @@ class DiscreteTimeQuantumWalk:
                 )
                 self.logger.debug("shape of unitary operator: {}".format(self._unitary_operator.shape))
 
+            self.profiler.log_executors(app_id=app_id)
             self.profiler.log_rdd(app_id=app_id)
 
-    def create_interaction_operator(self, phase, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_interaction_operator(self, phase, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.logger:
             self.logger.info("building interaction operator...")
 
@@ -335,9 +338,10 @@ class DiscreteTimeQuantumWalk:
                 )
                 self.logger.debug("shape of interaction operator: {}".format(self._interaction_operator.shape))
 
+            self.profiler.log_executors(app_id=app_id)
             self.profiler.log_rdd(app_id=app_id)
 
-    def create_walk_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_walk_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self._unitary_operator is None:
             if self.logger:
                 self.logger.info("no unitary operator has been set. A new one will be built")
@@ -383,6 +387,7 @@ class DiscreteTimeQuantumWalk:
                     )
                     self.logger.debug("shape of walk operator: {}".format(self._walk_operator.shape))
 
+                self.profiler.log_executors(app_id=app_id)
                 self.profiler.log_rdd(app_id=app_id)
         else:
             if self.logger:
@@ -472,6 +477,7 @@ class DiscreteTimeQuantumWalk:
                 self.profiler.profile_resources(app_id)
                 self.profiler.profile_executors(app_id)
 
+                self.profiler.log_executors(app_id=app_id)
                 self.profiler.log_rdd(app_id=app_id)
 
     def title(self):
@@ -501,7 +507,7 @@ class DiscreteTimeQuantumWalk:
                 if wo is not None:
                     wo.destroy()
 
-    def _monoparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def _monoparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         wo = self._walk_operator
 
         app_id = self._spark_context.applicationId
@@ -553,11 +559,11 @@ class DiscreteTimeQuantumWalk:
                             self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'diskUsed')
                         )
                     )
-                    self.logger.debug("shape of initial state: {}".format(result.shape))
+                    self.logger.debug("shape of system state: {}".format(result.shape))
 
         return result
 
-    def _multiparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def _multiparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         wo = self._walk_operator
         io = self._interaction_operator
 
@@ -626,11 +632,11 @@ class DiscreteTimeQuantumWalk:
                             self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'diskUsed')
                         )
                     )
-                    self.logger.debug("shape of initial state: {}".format(result.shape))
+                    self.logger.debug("shape of system state: {}".format(result.shape))
 
         return result
 
-    def walk(self, steps, initial_state, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def walk(self, steps, initial_state, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if not self._mesh.check_steps(steps):
             if self.logger:
                 self.logger.error("invalid number of steps")
@@ -698,10 +704,6 @@ class DiscreteTimeQuantumWalk:
                         if self.logger:
                             self.logger.info("no interaction operator has been set. A new one will be built")
                         self.create_interaction_operator(phase, storage_level)
-
-            if self.profiler:
-                self.profiler.log_executors(app_id=app_id)
-                self.profiler.log_rdd(app_id=app_id)
 
             t1 = datetime.now()
 

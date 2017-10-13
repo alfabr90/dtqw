@@ -33,7 +33,7 @@ class Matrix:
     def shape(self):
         return self._shape
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.data is not None:
             if not self.data.is_cached:
                 self.data.persist(storage_level)
@@ -66,7 +66,7 @@ class Matrix:
     def destroy(self):
         return self.unpersist()
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         self.persist(storage_level)
         self.data.count()
 
