@@ -160,12 +160,12 @@ class State(Matrix):
 
             if self.logger:
                 self.logger.info(
-                    "full measurement was done in {}s".format(self.profiler.get_times('fullMeasurement'))
+                    "full measurement was done in {}s".format(self.profiler.get_times(name='fullMeasurement'))
                 )
                 self.logger.info(
                     "PDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('fullMeasurement', 'memoryUsed'),
-                        self.profiler.get_rdd('fullMeasurement', 'diskUsed')
+                        self.profiler.get_rdd(name='fullMeasurement', key='memoryUsed'),
+                        self.profiler.get_rdd(name='fullMeasurement', key='diskUsed')
                     )
                 )
 
@@ -239,12 +239,12 @@ class State(Matrix):
 
             if self.logger:
                 self.logger.info(
-                    "filtered measurement was done in {}s".format(self.profiler.get_times('filteredMeasurement'))
+                    "filtered measurement was done in {}s".format(self.profiler.get_times(name='filteredMeasurement'))
                 )
                 self.logger.info(
                     "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('filteredMeasurement', 'memoryUsed'),
-                        self.profiler.get_rdd('filteredMeasurement', 'diskUsed')
+                        self.profiler.get_rdd(name='filteredMeasurement', key='memoryUsed'),
+                        self.profiler.get_rdd(name='filteredMeasurement', key='diskUsed')
                     )
                 )
 
@@ -344,15 +344,15 @@ class State(Matrix):
                 self.logger.info(
                     "partial measurement for particle {} was done in {}s".format(
                         particle + 1,
-                        self.profiler.get_times('partialMeasurement{}'.format(particle + 1))
+                        self.profiler.get_times(name='partialMeasurement{}'.format(particle + 1))
                     )
                 )
                 self.logger.info(
                     "PDF with partial measurements for particle {} "
                     "are consuming {} bytes in memory and {} bytes in disk".format(
                         particle + 1,
-                        self.profiler.get_rdd('partialMeasurement', 'memoryUsed'),
-                        self.profiler.get_rdd('partialMeasurement', 'diskUsed')
+                        self.profiler.get_rdd(name='partialMeasurement', key='memoryUsed'),
+                        self.profiler.get_rdd(name='partialMeasurement', key='diskUsed')
                     )
                 )
 

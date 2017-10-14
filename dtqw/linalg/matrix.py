@@ -33,6 +33,12 @@ class Matrix:
     def shape(self):
         return self._shape
 
+    def __str__(self):
+        return self.__class__.__name__
+
+    def to_string(self):
+        return self.__str__()
+
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
         if self.data is not None:
             if not self.data.is_cached:

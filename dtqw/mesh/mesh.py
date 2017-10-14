@@ -19,12 +19,6 @@ class Mesh:
     def __str__(self):
         return self.__class__.__name__
 
-    def _validate(self, size):
-        return False
-
-    def _define_size(self, size):
-        return None
-
     def to_string(self):
         return self.__str__()
 
@@ -33,6 +27,12 @@ class Mesh:
 
     def filename(self):
         return self.__str__()
+
+    def _validate(self, size):
+        return False
+
+    def _define_size(self, size):
+        return None
 
     def axis(self):
         return None

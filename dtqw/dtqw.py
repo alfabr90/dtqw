@@ -140,11 +140,11 @@ class DiscreteTimeQuantumWalk:
             self.profiler.profile_executors(app_id)
 
             if self.logger:
-                self.logger.info("coin operator was built in {}s".format(self.profiler.get_times('coinOperator')))
+                self.logger.info("coin operator was built in {}s".format(self.profiler.get_times(name='coinOperator')))
                 self.logger.info(
                     "coin operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('coinOperator', 'memoryUsed'),
-                        self.profiler.get_rdd('coinOperator', 'diskUsed')
+                        self.profiler.get_rdd(name='coinOperator', key='memoryUsed'),
+                        self.profiler.get_rdd(name='coinOperator', key='diskUsed')
                     )
                 )
                 self.logger.debug("shape of coin operator: {}".format(self._coin_operator.shape))
@@ -170,12 +170,12 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.info(
-                    "shift operator was built in {}s".format(self.profiler.get_times('shiftOperator'))
+                    "shift operator was built in {}s".format(self.profiler.get_times(name='shiftOperator'))
                 )
                 self.logger.info(
                     "shift operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('shiftOperator', 'memoryUsed'),
-                        self.profiler.get_rdd('shiftOperator', 'diskUsed')
+                        self.profiler.get_rdd(name='shiftOperator', key='memoryUsed'),
+                        self.profiler.get_rdd(name='shiftOperator', key='diskUsed')
                     )
                 )
                 self.logger.debug("shape of shift operator: {}".format(self._shift_operator.shape))
@@ -231,12 +231,12 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.info(
-                    "unitary operator was built in {}s".format(self.profiler.get_times('unitaryOperator'))
+                    "unitary operator was built in {}s".format(self.profiler.get_times(name='unitaryOperator'))
                 )
                 self.logger.info(
                     "unitary operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('unitaryOperator', 'memoryUsed'),
-                        self.profiler.get_rdd('unitaryOperator', 'diskUsed')
+                        self.profiler.get_rdd(name='unitaryOperator', key='memoryUsed'),
+                        self.profiler.get_rdd(name='unitaryOperator', key='diskUsed')
                     )
                 )
                 self.logger.debug("shape of unitary operator: {}".format(self._unitary_operator.shape))
@@ -328,12 +328,12 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.info(
-                    "interaction operator was built in {}s".format(self.profiler.get_times('interactionOperator'))
+                    "interaction operator was built in {}s".format(self.profiler.get_times(name='interactionOperator'))
                 )
                 self.logger.info(
                     "interaction operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('interactionOperator', 'memoryUsed'),
-                        self.profiler.get_rdd('interactionOperator', 'diskUsed')
+                        self.profiler.get_rdd(name='interactionOperator', key='memoryUsed'),
+                        self.profiler.get_rdd(name='interactionOperator', key='diskUsed')
                     )
                 )
                 self.logger.debug("shape of interaction operator: {}".format(self._interaction_operator.shape))
@@ -377,12 +377,12 @@ class DiscreteTimeQuantumWalk:
 
                 if self.logger:
                     self.logger.info(
-                        "walk operator was built in {}s".format(self.profiler.get_times('walkOperator'))
+                        "walk operator was built in {}s".format(self.profiler.get_times(name='walkOperator'))
                     )
                     self.logger.info(
                         "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_rdd('walkOperator', 'memoryUsed'),
-                            self.profiler.get_rdd('walkOperator', 'diskUsed')
+                            self.profiler.get_rdd(name='walkOperator', key='memoryUsed'),
+                            self.profiler.get_rdd(name='walkOperator', key='diskUsed')
                         )
                     )
                     self.logger.debug("shape of walk operator: {}".format(self._walk_operator.shape))
@@ -455,14 +455,14 @@ class DiscreteTimeQuantumWalk:
                     if self.logger:
                         self.logger.info(
                             "walk operator for particle {} was built in {}s".format(
-                                p + 1, self.profiler.get_times('walkOperatorParticle{}'.format(p + 1))
+                                p + 1, self.profiler.get_times(name='walkOperatorParticle{}'.format(p + 1))
                             )
                         )
                         self.logger.info(
                             "walk operator for particle {} is consuming {} bytes in memory and {} bytes in disk".format(
                                 p + 1,
-                                self.profiler.get_rdd('walkOperatorParticle{}'.format(p + 1), 'memoryUsed'),
-                                self.profiler.get_rdd('walkOperatorParticle{}'.format(p + 1), 'diskUsed')
+                                self.profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1), key='memoryUsed'),
+                                self.profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1), key='diskUsed')
                             )
                         )
                         self.logger.debug(
@@ -555,8 +555,8 @@ class DiscreteTimeQuantumWalk:
                 if self.logger:
                     self.logger.info(
                         "system state is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'memoryUsed'),
-                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'diskUsed')
+                            self.profiler.get_rdd(name='systemStateStep{}'.format(i + 1), key='memoryUsed'),
+                            self.profiler.get_rdd(name='systemStateStep{}'.format(i + 1), key='diskUsed')
                         )
                     )
                     self.logger.debug("shape of system state: {}".format(result.shape))
@@ -628,8 +628,8 @@ class DiscreteTimeQuantumWalk:
                 if self.logger:
                     self.logger.info(
                         "system state is consuming {} bytes in memory and {} bytes in disk".format(
-                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'memoryUsed'),
-                            self.profiler.get_rdd('systemStateStep{}'.format(i + 1), 'diskUsed')
+                            self.profiler.get_rdd(name='systemStateStep{}'.format(i + 1), key='memoryUsed'),
+                            self.profiler.get_rdd(name='systemStateStep{}'.format(i + 1), key='diskUsed')
                         )
                     )
                     self.logger.debug("shape of system state: {}".format(result.shape))
@@ -680,8 +680,8 @@ class DiscreteTimeQuantumWalk:
             if self.logger:
                 self.logger.info(
                     "initial state is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd('initialState', 'memoryUsed'),
-                        self.profiler.get_rdd('initialState', 'diskUsed')
+                        self.profiler.get_rdd(name='initialState', key='memoryUsed'),
+                        self.profiler.get_rdd(name='initialState', key='diskUsed')
                     )
                 )
                 self.logger.debug("shape of initial state: {}".format(result.shape))
@@ -716,7 +716,7 @@ class DiscreteTimeQuantumWalk:
                 self.profiler.profile_times('walk', (datetime.now() - t1).total_seconds())
 
                 if self.logger:
-                    self.logger.info("walk was done in {}s".format(self.profiler.get_times('walk')))
+                    self.logger.info("walk was done in {}s".format(self.profiler.get_times(name='walk')))
 
         if self.profiler:
             self.profiler.log_executors(app_id=app_id)

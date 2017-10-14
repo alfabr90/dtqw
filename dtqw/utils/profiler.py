@@ -194,7 +194,7 @@ class Profiler:
 
         if data is not None:
             for k, v in data.items():
-                if k in self._rdd[-1][name].keys():
+                if k in self._rdd[-1][name]:
                     self._rdd[-1][name][k] = v
 
     def profile_resources(self, app_id):
@@ -203,13 +203,13 @@ class Profiler:
 
         data = self.request_executors(app_id)
 
-        for k in self._resources[-1].keys():
+        for k in self._resources[-1]:
             self._resources[-1][k].append(0)
 
         if data is not None:
             for d in data:
                 for k, v in d.items():
-                    if k in self._resources[-1].keys():
+                    if k in self._resources[-1]:
                         self._resources[-1][k][-1] += v
 
     def profile_executors(self, app_id, exec_id=None):
@@ -241,179 +241,304 @@ class Profiler:
                                 self._executors[-1][d['id']][k].append(v)
                         break
 
-    def get_times(self, key=None):
+    def get_times(self, func=None, name=None):
         if len(self._times):
-            if key is None:
-                return self._times[-1]
-            else:
-                if not (key in self._times[-1]):
+            if name is not None:
+                if not (name in self._times[-1]):
                     if self.logger:
-                        self.logger.warning('key "{}" not present'.format(key))
+                        self.logger.warning('key "{}" not present'.format(name))
                     return None
-                return self._times[-1][key]
+
+            if func is None:
+                if name is None:
+                    return self._times[-1]
+                else:
+                    return self._times[-1][name]
+            else:
+                if name is None:
+                    times = {}
+
+                    for k in self._times[-1]:
+                        times[k] = func([t[k] for t in self._times])
+
+                    return times
+                else:
+                    return func([t[name] for t in self._times])
         else:
             if self.logger:
                 self.logger('No measurement of time has been done')
             return self._times
 
-    def get_rdd(self, name=None, key=None):
+    def get_rdd(self, func=None, name=None, key=None):
         if len(self._rdd):
-            if name is None:
-                if key is None:
-                    return self._rdd[-1]
-                else:
-                    rdd = {}
-
-                    for k1, v1 in self._rdd[-1].items():
-                        rdd[k1] = {}
-                        for k2, v2 in v1.items():
-                            if key == k2:
-                                rdd[k1][k2] = v2
-                    return rdd
-            else:
+            if name is not None:
                 if not (name in self._rdd[-1]):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(name))
+                    return None
+
+            if key is not None:
+                if not (key in self._default_rdd()):
                     if self.logger:
                         self.logger.warning('key "{}" not present'.format(key))
                     return None
 
-                if key is None:
-                    return self._rdd[-1][name]
+            if func is None:
+                if name is None:
+                    if key is None:
+                        return self._rdd[-1]
+                    else:
+                        rdd = {}
+
+                        for k, v in self._rdd[-1].items():
+                            rdd[k] = v[key]
+
+                        return rdd
                 else:
-                    if not (key in self._rdd[-1][name]):
-                        if self.logger:
-                            self.logger.warning('key "{}" not present'.format(key))
-                        return None
-                    return self._rdd[-1][name][key]
+                    if key is None:
+                        return self._rdd[-1][name]
+                    else:
+                        return self._rdd[-1][name][key]
+            else:
+                keys = []
+
+                for r in self._rdd:
+                    keys = keys + [k for k in r.keys()]
+
+                keys = set(keys)
+
+                if name is None:
+                    if key is None:
+                        rdd = {}
+
+                        for k1 in keys:
+                            rdd[k1] = {}
+                            for k2 in self._default_rdd():
+                                tmp = []
+                                for r in self._rdd:
+                                    if k1 in r:
+                                        if k2 in r[k1]:
+                                            tmp.append(r[k1][k2])
+                                rdd[k1][k2] = func(tmp)
+
+                        return rdd
+                    else:
+                        rdd = {}
+
+                        for k in keys:
+                            tmp = []
+                            for r in self._rdd:
+                                if k in r:
+                                    if key in r[k]:
+                                        tmp.append(r[k][key])
+                            rdd[k] = func(tmp)
+
+                        return rdd
+                else:
+                    if key is None:
+                        rdd = {}
+
+                        for k in self._default_rdd():
+                            tmp = []
+                            for r in self._rdd:
+                                if name in r:
+                                    if k in r[name]:
+                                        tmp.append(r[name][k])
+                            rdd[k] = func(tmp)
+
+                        return rdd
+                    else:
+                        rdd = []
+
+                        for r in self._rdd:
+                            rdd.append(r[name][key])
+
+                        return func(rdd)
         else:
             if self.logger:
                 self.logger('No measurement of RDD has been done')
             return self._rdd
 
-    def get_resources(self, key=None):
+    def get_resources(self, func=None, key=None):
         if len(self._resources):
-            if key is None:
-                resources = self._default_resources()
-
-                for k in resources.keys():
-                    resources[k] = self._resources[-1][k][-1]
-
-                return resources
-            else:
-                if not (key in self._resources[-1][key]):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(key))
-                    return None
-                return self._resources[-1][key][-1]
-        else:
-            if self.logger:
-                self.logger('No measurement of resources has been done')
-            return self._resources
-
-    def get_executors(self, exec_id=None, key=None):
-        if len(self._executors):
-            if exec_id is None:
-                if key is None:
-                    return self._rdd
-                else:
-                    executors = {}
-
-                    for k1, v1 in self._executors[-1].items():
-                        executors[k1] = {}
-                        for k2, v2 in v1.items():
-                            if key == k2:
-                                executors[k1][k2] = v2
-                    return executors
-            else:
-                if not (exec_id in self._executors[-1]):
+            if key is not None:
+                if not (key in self._default_resources()):
                     if self.logger:
                         self.logger.warning('key "{}" not present'.format(key))
                     return None
 
+            if func is None:
                 if key is None:
-                    resources = self._default_executor()
+                    resources = self._default_resources()
 
-                    for k in resources.keys():
-                        resources[k] = self._executors[-1][exec_id][k][-1]
+                    for k in resources:
+                        resources[k] = self._resources[-1][k][-1]
 
                     return resources
                 else:
-                    if not (key in self._executors[-1][exec_id]):
-                        if self.logger:
-                            self.logger.warning('key "{}" not present'.format(key))
-                        return None
-                    return self._executors[exec_id][key][-1]
+                    return self._resources[-1][key][-1]
+            else:
+                size = len([v for v in self._resources[-1].values()][0])
+
+                if key is None:
+                    resources = self._default_resources()
+
+                    for k in resources:
+                        for i in range(size):
+                            resources[k].append(func([r[k][i] for r in self._resources]))
+
+                    return resources
+                else:
+                    resources = []
+
+                    for i in range(size):
+                        resources.append(func([r[key][i] for r in self._resources]))
+
+                    return resources
+        else:
+            if self.logger:
+                self.logger('No measurement of general resources has been done')
+            return self._resources
+
+    def get_executors(self, func=None, exec_id=None, key=None):
+        if len(self._executors):
+            keys = []
+
+            for e in self._executors:
+                keys = keys + [k for k in e.keys()]
+
+            keys = set(keys)
+
+            if exec_id is not None:
+                if not (exec_id in keys):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(exec_id))
+                    return None
+
+            if key is not None:
+                if not (key in self._default_executor()):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(key))
+                    return None
+
+            if func is None:
+                if exec_id is None:
+                    if key is None:
+                        executors = {}
+
+                        for k1 in keys:
+                            executors[k1] = self._default_resources()
+
+                            for e in self._executors[::-1]:
+                                if k1 in e:
+                                    for k2 in executors[k1]:
+                                        executors[k1][k2] = e[k1][k2][-1]
+                                    break
+
+                        return executors
+                    else:
+                        executors = {}
+
+                        for k in keys:
+                            executors[k] = self._default_resources()
+
+                            for e in self._executors[::-1]:
+                                if k in e:
+                                    executors[k] = e[k][key][-1]
+                                    break
+
+                        return executors
+                else:
+                    if key is None:
+                        executor = self._default_executor()
+
+                        for e in self._executors[::-1]:
+                            if exec_id in e:
+                                for k in executor:
+                                    executor[k] = e[exec_id][k][-1]
+                                break
+
+                        return executor
+                    else:
+                        for e in self._executors[::-1]:
+                            if exec_id in e:
+                                return e[exec_id][key][-1]
+            else:
+                if exec_id is None:
+                    if key is None:
+                        executors = {}
+
+                        for k1 in keys:
+                            executors[k1] = self._default_resources()
+
+                            for e1 in self._executors[::-1]:
+                                if k1 in e1:
+                                    size = len([v for v in e1[k1].values()][0])
+
+                                    for k2 in executors[k1]:
+                                        for i in range(size):
+                                            tmp = []
+                                            for e2 in self._executors:
+                                                if k1 in e2:
+                                                    tmp.append(e2[k1][k2][i])
+                                            executors[k1][k2].append(func(tmp))
+
+                        return executors
+                    else:
+                        executors = {}
+
+                        for k in keys:
+                            executors[k] = self._default_resources()
+
+                            for e1 in self._executors[::-1]:
+                                if k in e1:
+                                    size = len([v for v in e1[k].values()][0])
+
+                                    for key in executors[k]:
+                                        for i in range(size):
+                                            tmp = []
+                                            for e2 in self._executors:
+                                                if k in e2:
+                                                    tmp.append(e2[k][key][i])
+                                            executors[k][key].append(func(tmp))
+
+                        return executors
+                else:
+                    if key is None:
+                        executors = self._default_resources()
+
+                        for e1 in self._executors[::-1]:
+                            if exec_id in e1:
+                                size = len([v for v in e1[exec_id].values()][0])
+
+                                for k in executors:
+                                    for i in range(size):
+                                        tmp = []
+                                        for e2 in self._executors:
+                                            if exec_id in e2:
+                                                tmp.append(e2[exec_id][k][i])
+                                        executors[k].append(func(tmp))
+
+                        return executors
+                    else:
+                        executors = []
+
+                        for e1 in self._executors[::-1]:
+                            if exec_id in e1:
+                                size = len(e1[exec_id][key])
+
+                                for i in range(size):
+                                    tmp = []
+                                    for e2 in self._executors:
+                                        if exec_id in e2:
+                                            tmp.append(e2[exec_id][key][i])
+                                    executors.append(func(tmp))
+
+                        return executors
         else:
             if self.logger:
                 self.logger('No measurement of executors has been done')
             return self._executors
-
-    def get_mean_times(self):
-        if len(self._times):
-            times = {}
-
-            for k in self._times[-1].keys():
-                tmp = []
-                for t in self._times:
-                    tmp.append(t[k])
-                times[k] = st.mean(tmp)
-
-            return times
-        else:
-            if self.logger:
-                self.logger('No measurement of time has been done')
-            return self._times
-
-    def get_pstdev_times(self):
-        if len(self._times):
-            times = {}
-
-            for k in self._times[-1].keys():
-                tmp = []
-                for t in self._times:
-                    tmp.append(t[k])
-                times[k] = st.pstdev(tmp)
-
-            return times
-        else:
-            if self.logger:
-                self.logger('No measurement of time has been done')
-            return self._times
-
-    def get_mean_resources(self):
-        if len(self._resources):
-            size = len([v for v in self._resources[-1].values()][0])
-            resources = [self._default_resources() for i in range(size)]
-
-            for k in resources[-1].keys():
-                for i in range(size):
-                    tmp = []
-                    for r in self._resources:
-                        tmp.append(r[k][i])
-                    resources[i][k] = st.mean(tmp)
-
-            return resources
-        else:
-            if self.logger:
-                self.logger('No measurement of resources has been done')
-            return self._resources
-
-    def get_pstdev_resources(self):
-        if len(self._resources):
-            size = len([v for v in self._resources[-1].values()][0])
-            resources = [self._default_resources() for i in range(size)]
-
-            for k in resources[-1].keys():
-                for i in range(size):
-                    tmp = []
-                    for r in self._resources:
-                        tmp.append(r[k][i])
-                    resources[i][k] = st.pstdev(tmp)
-
-            return resources
-        else:
-            if self.logger:
-                self.logger('No measurement of resources has been done')
-            return self._resources
 
     def export_times(self, filename, extension='csv'):
         if len(self._times):
@@ -423,7 +548,7 @@ class Profiler:
                 self.logger('No measurement of time has been done')
 
     def export_mean_times(self, filename, extension='csv'):
-        times = self.get_mean_times()
+        times = self.get_times(func=st.mean)
         if len(times):
             self._export_values((times, ), times.keys(), filename, extension)
         else:
@@ -431,7 +556,7 @@ class Profiler:
                 self.logger('No measurement of time has been done')
 
     def export_pstdev_times(self, filename, extension='csv'):
-        times = self.get_pstdev_times()
+        times = self.get_times(func=st.pstdev)
         if len(times):
             self._export_values((times, ), times.keys(), filename, extension)
         else:
@@ -442,7 +567,7 @@ class Profiler:
         pass
 
     def export_mean_resources(self, filename, extension='csv'):
-        resources = self.get_mean_resources()
+        resources = self.get_resources(func=st.mean)
         if len(resources):
             self._export_values(resources, resources[-1].keys(), filename, extension)
         else:
@@ -450,7 +575,7 @@ class Profiler:
                 self.logger('No measurement of resources has been done')
 
     def export_pstdev_resources(self, filename, extension='csv'):
-        resources = self.get_pstdev_resources()
+        resources = self.get_resources(func=st.pstdev)
         if len(resources):
             self._export_values(resources, resources[-1].keys(), filename, extension)
         else:
