@@ -483,6 +483,8 @@ class Profiler:
                                                     tmp.append(e2[k1][k2][i])
                                             executors[k1][k2].append(func(tmp))
 
+                                    break
+
                         return executors
                     else:
                         executors = {}
@@ -502,6 +504,8 @@ class Profiler:
                                                     tmp.append(e2[k][key][i])
                                             executors[k][key].append(func(tmp))
 
+                                    break
+
                         return executors
                 else:
                     if key is None:
@@ -519,6 +523,8 @@ class Profiler:
                                                 tmp.append(e2[exec_id][k][i])
                                         executors[k].append(func(tmp))
 
+                                break
+
                         return executors
                     else:
                         executors = []
@@ -534,50 +540,82 @@ class Profiler:
                                             tmp.append(e2[exec_id][key][i])
                                     executors.append(func(tmp))
 
+                                break
+
                         return executors
         else:
             if self.logger:
                 self.logger('No measurement of executors has been done')
             return self._executors
 
-    def export_times(self, filename, extension='csv'):
+    def export_times(self, filename, func=None, extension='csv'):
         if len(self._times):
-            self._export_values(self._times, self._times[-1].keys(), filename, extension)
+            if func is None:
+                times = self._times
+            else:
+                times = [self.get_times(func)]
+
+            self._export_values(times, times[-1].keys(), filename, extension)
         else:
             if self.logger:
                 self.logger('No measurement of time has been done')
 
-    def export_mean_times(self, filename, extension='csv'):
-        times = self.get_times(func=st.mean)
-        if len(times):
-            self._export_values((times, ), times.keys(), filename, extension)
+    def export_rdd(self, filename, func, extension='csv'):
+        if len(self._rdd):
+            rdd = []
+
+            for k, v in self.get_rdd(func).items():
+                tmp = v.copy()
+                tmp['rdd'] = k
+                rdd.append(tmp)
+
+            self._export_values(rdd, rdd[-1].keys(), filename, extension)
         else:
             if self.logger:
-                self.logger('No measurement of time has been done')
+                self.logger('No measurement of RDD has been done')
 
-    def export_pstdev_times(self, filename, extension='csv'):
-        times = self.get_times(func=st.pstdev)
-        if len(times):
-            self._export_values((times, ), times.keys(), filename, extension)
-        else:
-            if self.logger:
-                self.logger('No measurement of time has been done')
+    def export_resources(self, filename, func, extension='csv'):
+        if len(self._resources):
+            resources = []
+            rsrc = self.get_resources(func)
+            size = 0
 
-    def export_resources(self, filename, extension='csv'):
-        pass
+            for k, v in rsrc.items():
+                size = len(v)
+                break
 
-    def export_mean_resources(self, filename, extension='csv'):
-        resources = self.get_resources(func=st.mean)
-        if len(resources):
+            for i in range(size):
+                tmp = self._default_resources()
+
+                for k in tmp:
+                    tmp[k] = rsrc[k][i]
+
+                resources.append(tmp)
+
             self._export_values(resources, resources[-1].keys(), filename, extension)
         else:
             if self.logger:
                 self.logger('No measurement of resources has been done')
 
-    def export_pstdev_resources(self, filename, extension='csv'):
-        resources = self.get_resources(func=st.pstdev)
-        if len(resources):
-            self._export_values(resources, resources[-1].keys(), filename, extension)
+    def export_executors(self, filename, func, extension='csv'):
+        if len(self._executors):
+            for k1, v1 in self.get_executors(func).items():
+                executors = []
+                size = 0
+
+                for k2, v2 in v1.items():
+                    size = len(v2)
+                    break
+
+                for i in range(size):
+                    tmp = self._default_resources()
+
+                    for k2 in tmp:
+                        tmp[k2] = v1[k2][i]
+
+                    executors.append(tmp)
+
+                self._export_values(executors, executors[-1].keys(), "{}_{}".format(filename, k1), extension)
         else:
             if self.logger:
                 self.logger('No measurement of resources has been done')
