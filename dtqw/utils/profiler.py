@@ -545,7 +545,7 @@ class Profiler:
                         return executors
         else:
             if self.logger:
-                self.logger('No measurement of executors has been done')
+                self.logger('No measurement of executors resources has been done')
             return self._executors
 
     def export_times(self, filename, func=None, extension='csv'):
@@ -595,7 +595,7 @@ class Profiler:
             self._export_values(resources, resources[-1].keys(), filename, extension)
         else:
             if self.logger:
-                self.logger('No measurement of resources has been done')
+                self.logger('No measurement of general resources has been done')
 
     def export_executors(self, filename, func, extension='csv'):
         if len(self._executors):
@@ -618,84 +618,92 @@ class Profiler:
                 self._export_values(executors, executors[-1].keys(), "{}_{}".format(filename, k1), extension)
         else:
             if self.logger:
-                self.logger('No measurement of resources has been done')
+                self.logger('No measurement of executors resources has been done')
 
-    def plot_times(self, title, filename, **kwargs):
-        mean_times = []
-        pstdev_times = []
-        keys = self._times.keys()
+    def plot_times(self, title, filename, func=None, **kwargs):
+        if len(self._times):
+            keys = self._times[-1].keys()
+            index = np.arange(len(keys))
+            width = 0.35
 
-        for k in keys:
-            mean_times.append(st.mean(self._times[k]))
-            pstdev_times.append(st.pstdev(self._times[k]))
+            fig, ax = plt.subplots()
 
-        fig, ax = plt.subplots()
+            if func is None:
+                if len(self._times) == 1:
+                    times = []
 
-        index = np.arange(len(keys))
+                    for k in keys:
+                        times.append(self._times[-1][k])
 
-        plt.bar(index, mean_times, 0.35, color='r', yerr=pstdev_times)
+                    plt.bar(index, times, width, color='b')
+                else:
+                    mean_times = []
+                    pstdev_times = []
 
-        plt.xlabel('Operations')
-        plt.ylabel('Time (s)')
-        plt.xticks(index, keys, rotation='vertical')
-        plt.title(title)
+                    for k, v in self.get_times(st.mean).items():
+                        mean_times.append(v)
 
-        plt.tight_layout()
-        plt.savefig(filename, kwargs=kwargs)
+                    for k, v in self.get_times(st.pstdev).items():
+                        pstdev_times.append(v)
 
-    def plot_resources(self, title, filename, **kwargs):
-        mean_resources = []
-        pstdev_resources = []
-        keys = Profiler.resources_base2.keys()
+                    plt.bar(index, mean_times, width, color='b', yerr=pstdev_times)
+            else:
+                times = []
 
-        print(self._resources.keys())
-        print(keys)
+                for k, v in self.get_times(func).items():
+                    times.append(v)
 
-        for k in keys:
-            mean_resources.append(st.mean(self._resources[k]))
-            pstdev_resources.append(st.pstdev(self._resources[k]))
+                plt.bar(index, times, 0.35, color='b')
 
-        fig, ax = plt.subplots()
+            plt.xlabel('Operations')
+            plt.ylabel('Time (s)')
+            plt.xticks(index, keys, rotation='vertical')
+            plt.title(title)
 
-        index = np.arange(len(keys))
+            plt.tight_layout()
+            plt.savefig(filename, kwargs=kwargs)
+        else:
+            if self.logger:
+                self.logger('No measurement of time has been done')
 
-        plt.bar(index, mean_resources, 0.35, color='b', yerr=pstdev_resources)
+    def plot_resources(self, title, filename, func=None, **kwargs):
+        if len(self._resources):
+            keys = self._default_resources().keys()
 
-        plt.xlabel('Resources')
-        plt.ylabel('Bytes')
-        plt.xticks(index, keys, rotation='vertical')
-        plt.title(title)
+            for k in keys:
+                x = np.linspace(1, len(self._resources[-1][k]), len(self._resources[-1][k]))
+                break
 
-        plt.tight_layout()
-        plt.savefig(filename, kwargs=kwargs)
+            fig, ax = plt.subplots()
 
-    def plot_executor(self, title, filename, **kwargs):
-        mean_resources = {}
-        pstdev_resources = {}
-        e_keys = self._executors.keys()
-        r_keys = Profiler.resources_base2.keys()
+            if func is None:
+                if len(self._resources) == 1:
+                    for k, v in self._resources[-1].items():
+                        plt.plot(x, v, marker='s', label=k)
+                else:
+                    resources = {}
 
-        for k1 in r_keys:
-            mean_resources[k1] = []
-            pstdev_resources[k1] = []
+                    for k, v in self.get_resources(st.mean).items():
+                        resources[k] = {}
+                        resources[k]['mean'] = v.copy()
 
-            for k2 in e_keys:
-                mean_resources[k1].append(st.mean(self._executors[k2][k1]))
-                pstdev_resources[k1].append(st.pstdev(self._executors[k2][k1]))
+                    for k, v in self.get_resources(st.pstdev).items():
+                        resources[k]['pstdev'] = v.copy()
 
-        fig, ax = plt.subplots()
+                    for k, v in resources.items():
+                        plt.errorbar(x, v['mean'], yerr=v['pstdev'], marker='s', label=k)
+            else:
+                for k, v in self.get_resources(func).items():
+                    plt.plot(x, v, marker='s', label=k)
 
-        index = np.arange(len(e_keys))
+            plt.xlabel('Measurements')
+            plt.ylabel('Bytes')
+            plt.xticks(x, x)
+            plt.title(title)
+            plt.legend()
 
-        i = 0
-        for k in r_keys:
-            plt.bar(index + 0.35 * i, mean_resources[k], 0.35, yerr=pstdev_resources[k], label=k)
-            i += 1
-
-        plt.xlabel('Resources by executors')
-        plt.ylabel('Bytes')
-        plt.xticks(index + 0.35 * len(r_keys) / 2, e_keys)
-        plt.title(title)
-
-        plt.tight_layout()
-        plt.savefig(filename, kwargs=kwargs)
+            plt.tight_layout()
+            plt.savefig(filename, kwargs=kwargs)
+        else:
+            if self.logger:
+                self.logger('No measurement of general resources has been done')
