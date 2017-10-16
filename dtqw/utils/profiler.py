@@ -671,7 +671,7 @@ class Profiler:
             keys = self._default_resources().keys()
 
             for k in keys:
-                x = np.linspace(1, len(self._resources[-1][k]), len(self._resources[-1][k]))
+                x = range(1, len(self._resources[-1][k]) + 1)
                 break
 
             fig, ax = plt.subplots()
@@ -698,7 +698,7 @@ class Profiler:
 
             plt.xlabel('Measurements')
             plt.ylabel('Bytes')
-            plt.xticks(x, x)
+            plt.xticks(x)
             plt.title(title)
             plt.legend()
 
