@@ -39,7 +39,7 @@ class PDF(Matrix):
 
     def plot(self, title, labels, filename, **kwargs):
         if self.logger:
-            self.logger.info("starting ploting probabilities...")
+            self.logger.info("starting plot of probabilities...")
 
         if len(self._shape) > 2:
             if self.logger:
@@ -106,7 +106,7 @@ class PDF(Matrix):
         plt.clf()
 
         if self.logger:
-            self.logger.info("plots in {}s".format((datetime.now() - t1).total_seconds()))
+            self.logger.info("plot in {}s".format((datetime.now() - t1).total_seconds()))
 
 
 def is_pdf(obj):

@@ -8,6 +8,7 @@ __all__ = ['Coin1D']
 class Coin1D(Coin):
     def __init__(self, spark_context):
         super().__init__(spark_context)
+        self._size = 2
 
     def is_1d(self):
         return True

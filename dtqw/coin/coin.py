@@ -4,6 +4,7 @@ __all__ = ['Coin', 'is_coin']
 class Coin:
     def __init__(self, spark_context):
         self._spark_context = spark_context
+        self._size = None
         self._data = None
 
         self.logger = None
@@ -11,6 +12,10 @@ class Coin:
     @property
     def spark_context(self):
         return self._spark_context
+
+    @property
+    def size(self):
+        return self._size
 
     @property
     def data(self):

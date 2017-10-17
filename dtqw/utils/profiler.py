@@ -549,6 +549,9 @@ class Profiler:
             return self._executors
 
     def export_times(self, filename, func=None, extension='csv'):
+        if self.logger:
+            self.logger.info("exporting times in {} format...".format(extension))
+
         if len(self._times):
             if func is None:
                 times = self._times
@@ -556,11 +559,17 @@ class Profiler:
                 times = [self.get_times(func)]
 
             self._export_values(times, times[-1].keys(), filename, extension)
+
+            if self.logger:
+                self.logger.info("times successfully exported")
         else:
             if self.logger:
                 self.logger('No measurement of time has been done')
 
     def export_rdd(self, filename, func, extension='csv'):
+        if self.logger:
+            self.logger.info("exporting RDD in {} format...".format(extension))
+
         if len(self._rdd):
             rdd = []
 
@@ -570,11 +579,17 @@ class Profiler:
                 rdd.append(tmp)
 
             self._export_values(rdd, rdd[-1].keys(), filename, extension)
+
+            if self.logger:
+                self.logger.info("RDD successfully exported")
         else:
             if self.logger:
                 self.logger('No measurement of RDD has been done')
 
     def export_resources(self, filename, func, extension='csv'):
+        if self.logger:
+            self.logger.info("exporting general resources in {} format...".format(extension))
+
         if len(self._resources):
             resources = []
             rsrc = self.get_resources(func)
@@ -593,11 +608,17 @@ class Profiler:
                 resources.append(tmp)
 
             self._export_values(resources, resources[-1].keys(), filename, extension)
+
+            if self.logger:
+                self.logger.info("general resources successfully exported")
         else:
             if self.logger:
                 self.logger('No measurement of general resources has been done')
 
     def export_executors(self, filename, func, extension='csv'):
+        if self.logger:
+            self.logger.info("exporting executors resources in {} format...".format(extension))
+
         if len(self._executors):
             for k1, v1 in self.get_executors(func).items():
                 executors = []
@@ -616,11 +637,17 @@ class Profiler:
                     executors.append(tmp)
 
                 self._export_values(executors, executors[-1].keys(), "{}_{}".format(filename, k1), extension)
+
+            if self.logger:
+                self.logger.info("executors resources successfully exported")
         else:
             if self.logger:
                 self.logger('No measurement of executors resources has been done')
 
     def plot_times(self, title, filename, func=None, **kwargs):
+        if self.logger:
+            self.logger.info("plotting times...")
+
         if len(self._times):
             keys = self._times[-1].keys()
             index = np.arange(len(keys))
@@ -664,11 +691,17 @@ class Profiler:
             plt.savefig(filename, kwargs=kwargs)
             plt.cla()
             plt.clf()
+
+            if self.logger:
+                self.logger.info("times successfully plotted")
         else:
             if self.logger:
                 self.logger('No measurement of time has been done')
 
     def plot_resources(self, title, filename, func=None, **kwargs):
+        if self.logger:
+            self.logger.info("plotting general resources...")
+
         if len(self._resources):
             keys = self._default_resources().keys()
 
@@ -708,6 +741,9 @@ class Profiler:
             plt.savefig(filename, kwargs=kwargs)
             plt.cla()
             plt.clf()
+
+            if self.logger:
+                self.logger.info("general resources successfully exported")
         else:
             if self.logger:
                 self.logger('No measurement of general resources has been done')
