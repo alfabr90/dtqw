@@ -102,6 +102,8 @@ class PDF(Matrix):
             raise NotImplementedError("mesh dimension not implemented")
 
         plt.savefig(filename, kwargs=kwargs)
+        plt.cla()
+        plt.clf()
 
         if self.logger:
             self.logger.info("plots in {}s".format((datetime.now() - t1).total_seconds()))

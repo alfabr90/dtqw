@@ -662,6 +662,8 @@ class Profiler:
 
             plt.tight_layout()
             plt.savefig(filename, kwargs=kwargs)
+            plt.cla()
+            plt.clf()
         else:
             if self.logger:
                 self.logger('No measurement of time has been done')
@@ -704,6 +706,8 @@ class Profiler:
 
             plt.tight_layout()
             plt.savefig(filename, kwargs=kwargs)
+            plt.cla()
+            plt.clf()
         else:
             if self.logger:
                 self.logger('No measurement of general resources has been done')
