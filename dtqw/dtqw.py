@@ -308,7 +308,7 @@ class DiscreteTimeQuantumWalk:
         ).map(
             __map
         ).map(
-            lambda m: (m[0], (m[1], m[2]))
+            lambda m: (m[1], (m[0], m[2]))
         ).partitionBy(
             numPartitions=self._num_partitions
         )
@@ -356,7 +356,7 @@ class DiscreteTimeQuantumWalk:
                 self.logger.info("with just one particle, the walk operator is the unitary operator")
 
             rdd = self._unitary_operator.data.map(
-                lambda m: (m[0], (m[1], m[2]))
+                lambda m: (m[1], (m[0], m[2]))
             ).partitionBy(
                 numPartitions=self._num_partitions
             )
@@ -433,7 +433,7 @@ class DiscreteTimeQuantumWalk:
                 # op_tmp = op_tmp.dump()
 
                 rdd = op_tmp.data.map(
-                    lambda m: (m[0], (m[1], m[2]))
+                    lambda m: (m[1], (m[0], m[2]))
                 ).partitionBy(
                     numPartitions=self._num_partitions
                 )

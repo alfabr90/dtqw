@@ -47,12 +47,12 @@ class Operator(Matrix):
             other.data, numPartitions=num_partitions
         ).map(
             lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
+        ).filter(
+            lambda m: m[1] != complex()
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
-        ).filter(
-            lambda m: m[1] != complex
         ).map(
-            lambda m: (m[0][1], m[0][0], m[1])
+            lambda m: (m[0][0], m[0][1], m[1])
         )
 
         return Operator(self._spark_context, rdd, shape)
@@ -72,7 +72,7 @@ class Operator(Matrix):
         ).map(
             lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
         ).filter(
-            lambda m: m[1] != complex
+            lambda m: m[1] != complex()
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
         )
