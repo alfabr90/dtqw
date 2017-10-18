@@ -322,13 +322,6 @@ class State(Matrix):
                 self.logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
-        if self.logger:
-            self.logger.info(
-                "partial measurement for particle {} was done in {}s".format(
-                    particle + 1, (datetime.now() - t1).total_seconds()
-                )
-            )
-
         app_id = self._spark_context.applicationId
         rdd_id = pdf.data.id()
 
@@ -344,15 +337,19 @@ class State(Matrix):
                 self.logger.info(
                     "partial measurement for particle {} was done in {}s".format(
                         particle + 1,
-                        self.profiler.get_times(name='partialMeasurement{}'.format(particle + 1))
+                        self.profiler.get_times(name='partialMeasurementParticle{}'.format(particle + 1))
                     )
                 )
                 self.logger.info(
                     "PDF with partial measurements for particle {} "
                     "are consuming {} bytes in memory and {} bytes in disk".format(
                         particle + 1,
-                        self.profiler.get_rdd(name='partialMeasurement', key='memoryUsed'),
-                        self.profiler.get_rdd(name='partialMeasurement', key='diskUsed')
+                        self.profiler.get_rdd(
+                            name='partialMeasurementParticle{}'.format(particle + 1), key='memoryUsed'
+                        ),
+                        self.profiler.get_rdd(
+                            name='partialMeasurementParticle{}'.format(particle + 1), key='diskUsed'
+                        )
                     )
                 )
 
