@@ -596,7 +596,7 @@ class DiscreteTimeQuantumWalk:
                     )
                     self.logger.debug(
                         "number of elements of system state after {} step(s): {}, which {} are nonzero".format(
-                            i, result.num_elements, result.num_elements
+                            i, result.num_elements, result.num_nonzero_elements
                         )
                     )
                     self.logger.debug("sparsity of system state after {} step(s): {}".format(i, result.sparsity))
@@ -663,7 +663,7 @@ class DiscreteTimeQuantumWalk:
                     )
                     self.logger.debug(
                         "number of elements of system state after {} step(s): {}, which {} are nonzero".format(
-                            i, result.num_elements, result.num_elements
+                            i, result.num_elements, result.num_nonzero_elements
                         )
                     )
                     self.logger.debug("sparsity of system state after {} step(s): {}".format(i, result.sparsity))
