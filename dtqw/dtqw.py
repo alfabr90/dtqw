@@ -576,19 +576,6 @@ class DiscreteTimeQuantumWalk:
             if self.logger:
                 self.logger.debug("step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
 
-            t_tmp = datetime.now()
-
-            if self.logger:
-                self.logger.debug("checking if the state is unitary...")
-
-            if not result.is_unitary():
-                if self.logger:
-                    self.logger.error("the state is not unitary")
-                raise ValueError("the state is not unitary")
-
-            if self.logger:
-                self.logger.debug("unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
-
             rdd_id = result.data.id()
 
             if self.profiler:
@@ -655,19 +642,6 @@ class DiscreteTimeQuantumWalk:
 
             if self.logger:
                 self.logger.debug("step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
-
-            t_tmp = datetime.now()
-
-            if self.logger:
-                self.logger.debug("checking if the state is unitary...")
-
-            if not result.is_unitary():
-                if self.logger:
-                    self.logger.error("the state is not unitary")
-                raise ValueError("the state is not unitary")
-
-            if self.logger:
-                self.logger.debug("unitarity check was done in {}s".format((datetime.now() - t_tmp).total_seconds()))
 
             rdd_id = result.data.id()
 
@@ -779,6 +753,19 @@ class DiscreteTimeQuantumWalk:
 
                 if self.logger:
                     self.logger.info("walk was done in {}s".format(self.profiler.get_times(name='walk')))
+
+            t1 = datetime.now()
+
+            if self.logger:
+                self.logger.debug("checking if the final state is unitary...")
+
+            if not result.is_unitary():
+                if self.logger:
+                    self.logger.error("the final state is not unitary")
+                raise ValueError("the final state is not unitary")
+
+            if self.logger:
+                self.logger.debug("unitarity check was done in {}s".format((datetime.now() - t1).total_seconds()))
 
         rdd_id = result.data.id()
 
