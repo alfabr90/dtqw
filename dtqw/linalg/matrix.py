@@ -21,6 +21,9 @@ class Matrix:
                 raise ValueError("invalid shape")
 
         self._shape = shape
+        self._num_elements = self._shape[0] * self._shape[1]
+        self._num_nonzero_elements = 0
+        self._sparsity = 1
 
         self.logger = None
         self.profiler = None
@@ -33,13 +36,25 @@ class Matrix:
     def shape(self):
         return self._shape
 
+    @property
+    def num_elements(self):
+        return self._num_elements
+
+    @property
+    def num_nonzero_elements(self):
+        return self._num_nonzero_elements
+
+    @property
+    def sparsity(self):
+        return self._sparsity
+
     def __str__(self):
         return self.__class__.__name__
 
     def to_string(self):
         return self.__str__()
 
-    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
+    def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.data is not None:
             if not self.data.is_cached:
                 self.data.persist(storage_level)
@@ -72,9 +87,10 @@ class Matrix:
     def destroy(self):
         return self.unpersist()
 
-    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK_SER):
+    def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         self.persist(storage_level)
-        self.data.count()
+        self._num_nonzero_elements = self.data.count()
+        self._sparsity = 1.0 - self.num_nonzero_elements / self._num_elements
 
         if self.logger:
             self.logger.info("RDD {} was materialized".format(self.data.id()))

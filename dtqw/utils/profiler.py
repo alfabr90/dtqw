@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
@@ -17,9 +18,17 @@ class Profiler:
         self._base_url = base_url
 
         self._times = []
+        self._sparsity = []
         self._rdd = []
         self._resources = []
         self._executors = []
+
+        self._plot_markers = {
+            'totalShuffleWrite': 's',
+            'totalShuffleRead': 'o',
+            'diskUsed': '^',
+            'memoryUsed': 'd',
+        }
 
         self.logger = None
 
@@ -38,6 +47,10 @@ class Profiler:
     @property
     def resources(self):
         return self._resources
+
+    @staticmethod
+    def _default_sparsity():
+        return {'numElements': 0, 'numNonzeroElements': 0, 'sparsity': 0.0}
 
     @staticmethod
     def _default_rdd():
@@ -176,12 +189,25 @@ class Profiler:
 
     def start_round(self):
         self._times.append({})
+        self._sparsity.append({})
         self._rdd.append({})
         self._resources.append(self._default_resources())
         self._executors.append({})
 
     def profile_times(self, name, value):
+        if self.logger:
+            self.logger.info('profiling time for "{}"...'.format(name))
+
         self._times[-1][name] = value
+
+    def profile_sparsity(self, name, matrix):
+        if self.logger:
+            self.logger.info('profiling sparsity for "{}"...'.format(name))
+
+        self._sparsity[-1][name] = self._default_sparsity()
+        self._sparsity[-1][name]['numElements'] = matrix.shape[0] * matrix.shape[1]
+        self._sparsity[-1][name]['numNonzeroElements'] = matrix.num_nonzero_elements
+        self._sparsity[-1][name]['sparsity'] = matrix.sparsity
 
     def profile_rdd(self, name, app_id, rdd_id):
         if self.logger:
@@ -251,7 +277,7 @@ class Profiler:
 
             if func is None:
                 if name is None:
-                    return self._times[-1]
+                    return self._times[-1].copy()
                 else:
                     return self._times[-1][name]
             else:
@@ -268,6 +294,77 @@ class Profiler:
             if self.logger:
                 self.logger('No measurement of time has been done')
             return self._times
+
+    def get_sparsity(self, func=None, name=None, key=None):
+        if len(self._sparsity):
+            keys = []
+
+            for s in self._sparsity:
+                keys = keys + [k for k in s.keys()]
+
+            keys = set(keys)
+
+            if name is not None:
+                if not (name in keys):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(name))
+                    return None
+
+            if key is not None:
+                if not (key in self._default_sparsity()):
+                    if self.logger:
+                        self.logger.warning('key "{}" not present'.format(key))
+                    return None
+
+            if func is None:
+                if name is None:
+                    if key is None:
+                        return self._sparsity[-1].copy()
+                    else:
+                        sparsity = {}
+
+                        for k in keys:
+                            sparsity[k] = self._sparsity[-1][k][key]
+
+                        return sparsity
+                else:
+                    if key is None:
+                        return self._sparsity[-1][name].copy()
+                    else:
+                        return self._sparsity[-1][name][key]
+            else:
+                if name is None:
+                    if key is None:
+                        sparsity = {}
+
+                        for k1 in keys:
+                            sparsity[k1] = self._default_sparsity()
+
+                            for k2 in sparsity[k1]:
+                                sparsity[k1][k2] = func([s[k1][k2] for s in self._sparsity])
+
+                        return sparsity
+                    else:
+                        sparsity = {}
+
+                        for k in keys:
+                            sparsity[k] = func([s[k][key] for s in self._sparsity])
+
+                        return sparsity
+                else:
+                    if key is None:
+                        sparsity = self._default_sparsity()
+
+                        for k in sparsity:
+                            sparsity[name][k] = func([s[name][k] for s in self._sparsity])
+
+                        return sparsity
+                    else:
+                        return func([s[name][key] for s in self._sparsity])
+        else:
+            if self.logger:
+                self.logger('No measurement of operators and state sparsities have been done')
+            return self._sparsity
 
     def get_rdd(self, func=None, name=None, key=None):
         if len(self._rdd):
@@ -286,7 +383,7 @@ class Profiler:
             if func is None:
                 if name is None:
                     if key is None:
-                        return self._rdd[-1]
+                        return self._rdd[-1].copy()
                     else:
                         rdd = {}
 
@@ -296,7 +393,7 @@ class Profiler:
                         return rdd
                 else:
                     if key is None:
-                        return self._rdd[-1][name]
+                        return self._rdd[-1][name].copy()
                     else:
                         return self._rdd[-1][name][key]
             else:
@@ -314,24 +411,14 @@ class Profiler:
                         for k1 in keys:
                             rdd[k1] = {}
                             for k2 in self._default_rdd():
-                                tmp = []
-                                for r in self._rdd:
-                                    if k1 in r:
-                                        if k2 in r[k1]:
-                                            tmp.append(r[k1][k2])
-                                rdd[k1][k2] = func(tmp)
+                                rdd[k1][k2] = func([r[k1][k2] for r in self._rdd])
 
                         return rdd
                     else:
                         rdd = {}
 
                         for k in keys:
-                            tmp = []
-                            for r in self._rdd:
-                                if k in r:
-                                    if key in r[k]:
-                                        tmp.append(r[k][key])
-                            rdd[k] = func(tmp)
+                            rdd[k] = func([r[k][key] for r in self._rdd])
 
                         return rdd
                 else:
@@ -339,21 +426,11 @@ class Profiler:
                         rdd = {}
 
                         for k in self._default_rdd():
-                            tmp = []
-                            for r in self._rdd:
-                                if name in r:
-                                    if k in r[name]:
-                                        tmp.append(r[name][k])
-                            rdd[k] = func(tmp)
+                            rdd[k] = func([r[name][k] for r in self._rdd])
 
                         return rdd
                     else:
-                        rdd = []
-
-                        for r in self._rdd:
-                            rdd.append(r[name][key])
-
-                        return func(rdd)
+                        return func([r[name][key] for r in self._rdd])
         else:
             if self.logger:
                 self.logger('No measurement of RDD has been done')
@@ -473,13 +550,15 @@ class Profiler:
 
                             for e1 in self._executors[::-1]:
                                 if k1 in e1:
-                                    size = len([v for v in e1[k1].values()][0])
-
                                     for k2 in executors[k1]:
-                                        for i in range(size):
+                                        size_last = len(e1[k1][k2])
+
+                                        for i in range(size_last):
                                             tmp = []
-                                            for e2 in self._executors:
-                                                if k1 in e2:
+                                            for e2 in self._executors[::-1]:
+                                                size_current = len(e2[k1][k2])
+
+                                                if k1 in e2 and size_last - i <= size_current:
                                                     tmp.append(e2[k1][k2][i])
                                             executors[k1][k2].append(func(tmp))
 
@@ -494,13 +573,15 @@ class Profiler:
 
                             for e1 in self._executors[::-1]:
                                 if k in e1:
-                                    size = len([v for v in e1[k].values()][0])
-
                                     for key in executors[k]:
-                                        for i in range(size):
+                                        size_last = len(e1[k][key])
+
+                                        for i in range(size_last):
                                             tmp = []
-                                            for e2 in self._executors:
-                                                if k in e2:
+                                            for e2 in self._executors[::-1]:
+                                                size_current = len(e2[k][key])
+
+                                                if k in e2 and size_last - i <= size_current:
                                                     tmp.append(e2[k][key][i])
                                             executors[k][key].append(func(tmp))
 
@@ -513,13 +594,15 @@ class Profiler:
 
                         for e1 in self._executors[::-1]:
                             if exec_id in e1:
-                                size = len([v for v in e1[exec_id].values()][0])
-
                                 for k in executors:
-                                    for i in range(size):
+                                    size_last = len(e1[exec_id][k])
+
+                                    for i in range(size_last):
                                         tmp = []
-                                        for e2 in self._executors:
-                                            if exec_id in e2:
+                                        for e2 in self._executors[::-1]:
+                                            size_current = len(e2[exec_id][k])
+
+                                            if exec_id in e2 and size_last - i <= size_current:
                                                 tmp.append(e2[exec_id][k][i])
                                         executors[k].append(func(tmp))
 
@@ -531,12 +614,14 @@ class Profiler:
 
                         for e1 in self._executors[::-1]:
                             if exec_id in e1:
-                                size = len(e1[exec_id][key])
+                                size_last = e1[exec_id][key]
 
-                                for i in range(size):
+                                for i in range(size_last):
                                     tmp = []
-                                    for e2 in self._executors:
-                                        if exec_id in e2:
+                                    for e2 in self._executors[::-1]:
+                                        size_current = len(e2[exec_id][key])
+
+                                        if exec_id in e2 and size_last - i <= size_current:
                                             tmp.append(e2[exec_id][key][i])
                                     executors.append(func(tmp))
 
@@ -565,6 +650,26 @@ class Profiler:
         else:
             if self.logger:
                 self.logger('No measurement of time has been done')
+
+    def export_sparsity(self, filename, extension='csv'):
+        if self.logger:
+            self.logger.info("exporting sparsities in {} format...".format(extension))
+
+        if len(self._sparsity):
+            sparsity = []
+
+            for k, v in self.get_sparsity(st.mean).items():
+                tmp = v.copy()
+                tmp['rdd'] = k
+                sparsity.append(tmp)
+
+            self._export_values(sparsity, sparsity[-1].keys(), filename, extension)
+
+            if self.logger:
+                self.logger.info("sparsities successfully exported")
+        else:
+            if self.logger:
+                self.logger('No measurement of sparsity has been done')
 
     def export_rdd(self, filename, func, extension='csv'):
         if self.logger:
@@ -653,14 +758,23 @@ class Profiler:
             index = np.arange(len(keys))
             width = 0.35
 
+            plt.cla()
+            plt.clf()
+
             fig, ax = plt.subplots()
+
+            max_time = 0
+            for t in self._times:
+                max_time = max(max(t.values()), max_time)
+
+            magnitude = round(math.log10(max_time) / 3)
 
             if func is None:
                 if len(self._times) == 1:
                     times = []
 
                     for k in keys:
-                        times.append(self._times[-1][k])
+                        times.append(self._times[-1][k] / 10 ** magnitude)
 
                     plt.bar(index, times, width, color='b')
                 else:
@@ -668,17 +782,17 @@ class Profiler:
                     pstdev_times = []
 
                     for k, v in self.get_times(st.mean).items():
-                        mean_times.append(v)
+                        mean_times.append(v / 10 ** magnitude)
 
                     for k, v in self.get_times(st.pstdev).items():
-                        pstdev_times.append(v)
+                        pstdev_times.append(v / 10 ** magnitude)
 
                     plt.bar(index, mean_times, width, color='b', yerr=pstdev_times)
             else:
                 times = []
 
                 for k, v in self.get_times(func).items():
-                    times.append(v)
+                    times.append(v / 10 ** magnitude)
 
                 plt.bar(index, times, 0.35, color='b')
 
@@ -709,12 +823,22 @@ class Profiler:
                 x = range(1, len(self._resources[-1][k]) + 1)
                 break
 
+            plt.cla()
+            plt.clf()
+
             fig, ax = plt.subplots()
+
+            max_bytes = 0
+            for r in self._resources:
+                for m in r.values():
+                    max_bytes = max(max(m), max_bytes)
+
+            magnitude = round(math.log10(max_bytes) / 3)
 
             if func is None:
                 if len(self._resources) == 1:
                     for k, v in self._resources[-1].items():
-                        plt.plot(x, v, marker='s', label=k)
+                        plt.plot(x, [m / 10 ** magnitude for m in v], marker=self._plot_markers[k], label=k)
                 else:
                     resources = {}
 
@@ -726,19 +850,25 @@ class Profiler:
                         resources[k]['pstdev'] = v.copy()
 
                     for k, v in resources.items():
-                        plt.errorbar(x, v['mean'], yerr=v['pstdev'], marker='s', label=k)
+                        plt.errorbar(
+                            x,
+                            [m / 10 ** magnitude for m in v['mean']],
+                            yerr=[m / 10 ** magnitude for m in v['pstdev']],
+                            marker=self._plot_markers[k],
+                            label=k
+                        )
             else:
                 for k, v in self.get_resources(func).items():
-                    plt.plot(x, v, marker='s', label=k)
+                    plt.plot(x, [m / 10 ** magnitude for m in v], marker=self._plot_markers[k], label=k)
 
             plt.xlabel('Measurements')
             plt.ylabel('Bytes')
             plt.xticks(x)
             plt.title(title)
-            plt.legend()
+            plt.legend(bbox_to_anchor= (1.02, 0.5), loc='center left', borderaxespad=0)
 
             plt.tight_layout()
-            plt.savefig(filename, kwargs=kwargs)
+            plt.savefig(filename, bbox_inches='tight',kwargs=kwargs)
             plt.cla()
             plt.clf()
 
