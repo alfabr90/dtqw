@@ -436,6 +436,8 @@ class DiscreteTimeQuantumWalk:
                 lambda m: (m, m, 1)
             )
 
+            t_tmp = datetime.now()
+
             identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
             io = broadcast(self._spark_context, identity.data.collect())
             uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
@@ -447,14 +449,14 @@ class DiscreteTimeQuantumWalk:
                 if self.logger:
                     self.logger.debug("building walk operator for particle {}...".format(p + 1))
 
-                t_tmp = datetime.now()
-
                 if p == 0:
                     op_tmp = self._unitary_operator
 
                     for i in range(self._num_particles - 1 - p):
                         op_tmp = op_tmp.kron(io, identity.shape)
                 else:
+                    t_tmp = datetime.now()
+
                     op_tmp = identity
 
                     for i in range(p - 1):
