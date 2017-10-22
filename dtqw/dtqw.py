@@ -566,7 +566,7 @@ class DiscreteTimeQuantumWalk:
         if self.logger:
             self.logger.info("starting the walk...")
 
-        for i in range(1, steps, 1):
+        for i in range(1, steps + 1, 1):
             t_tmp = datetime.now()
 
             result_tmp = wo.multiply(result).materialize(storage_level)
@@ -623,7 +623,7 @@ class DiscreteTimeQuantumWalk:
         if self.logger:
             self.logger.info("starting the walk...")
 
-        for i in range(1, steps, 1):
+        for i in range(1, steps + 1, 1):
             t_tmp = datetime.now()
 
             if io is not None:

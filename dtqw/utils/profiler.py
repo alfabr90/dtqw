@@ -763,18 +763,12 @@ class Profiler:
 
             fig, ax = plt.subplots()
 
-            max_time = 0
-            for t in self._times:
-                max_time = max(max(t.values()), max_time)
-
-            magnitude = round(math.log10(max_time) / 3)
-
             if func is None:
                 if len(self._times) == 1:
                     times = []
 
                     for k in keys:
-                        times.append(self._times[-1][k] / 10 ** magnitude)
+                        times.append(self._times[-1][k])
 
                     plt.bar(index, times, width, color='b')
                 else:
@@ -782,17 +776,17 @@ class Profiler:
                     pstdev_times = []
 
                     for k, v in self.get_times(st.mean).items():
-                        mean_times.append(v / 10 ** magnitude)
+                        mean_times.append(v)
 
                     for k, v in self.get_times(st.pstdev).items():
-                        pstdev_times.append(v / 10 ** magnitude)
+                        pstdev_times.append(v)
 
                     plt.bar(index, mean_times, width, color='b', yerr=pstdev_times)
             else:
                 times = []
 
                 for k, v in self.get_times(func).items():
-                    times.append(v / 10 ** magnitude)
+                    times.append(v)
 
                 plt.bar(index, times, 0.35, color='b')
 
@@ -828,12 +822,12 @@ class Profiler:
 
             fig, ax = plt.subplots()
 
-            max_bytes = 0
-            for r in self._resources:
-                for m in r.values():
-                    max_bytes = max(max(m), max_bytes)
+            # max_bytes = 0
+            # for r in self._resources:
+            #     for m in r.values():
+            #         max_bytes = max(max(m), max_bytes)
 
-            magnitude = round(math.log10(max_bytes) / 3)
+            magnitude = 9  # round(math.log10(max_bytes) / 3)
 
             if func is None:
                 if len(self._resources) == 1:
@@ -862,7 +856,7 @@ class Profiler:
                     plt.plot(x, [m / 10 ** magnitude for m in v], marker=self._plot_markers[k], label=k)
 
             plt.xlabel('Measurements')
-            plt.ylabel('Bytes')
+            plt.ylabel('Resources (GB)')
             plt.xticks(x)
             plt.title(title)
             plt.legend(bbox_to_anchor= (1.02, 0.5), loc='center left', borderaxespad=0)
