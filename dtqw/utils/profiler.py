@@ -551,17 +551,17 @@ class Profiler:
                             for e1 in self._executors[::-1]:
                                 if k1 in e1:
                                     for k2 in executors[k1]:
-                                        size_last = len(e1[k1][k2])
+                                        max_size = 0
+                                        for e2 in self._executors[::-1]:
+                                            if k1 in e2:
+                                                max_size = max(len(e2[k1][k2]), max_size)
 
-                                        for i in range(size_last):
+                                        for i in range(max_size):
                                             tmp = []
                                             for e2 in self._executors[::-1]:
-                                                size_current = len(e2[k1][k2])
-
-                                                if k1 in e2 and size_last - i <= size_current:
+                                                if k1 in e2 and i < len(e2[k1][k2]):
                                                     tmp.append(e2[k1][k2][i])
                                             executors[k1][k2].append(func(tmp))
-
                                     break
 
                         return executors
@@ -573,19 +573,18 @@ class Profiler:
 
                             for e1 in self._executors[::-1]:
                                 if k in e1:
-                                    for key in executors[k]:
-                                        size_last = len(e1[k][key])
+                                    max_size = 0
+                                    for e2 in self._executors[::-1]:
+                                        if k in e2:
+                                            max_size = max(len(e2[k][key]), max_size)
 
-                                        for i in range(size_last):
-                                            tmp = []
-                                            for e2 in self._executors[::-1]:
-                                                size_current = len(e2[k][key])
-
-                                                if k in e2 and size_last - i <= size_current:
-                                                    tmp.append(e2[k][key][i])
-                                            executors[k][key].append(func(tmp))
-
-                                    break
+                                    for i in range(max_size):
+                                        tmp = []
+                                        for e2 in self._executors[::-1]:
+                                            if k in e2 and i < len(e2[k][key]):
+                                                tmp.append(e2[k][key][i])
+                                        executors[k][key].append(func(tmp))
+                                break
 
                         return executors
                 else:
@@ -595,17 +594,17 @@ class Profiler:
                         for e1 in self._executors[::-1]:
                             if exec_id in e1:
                                 for k in executors:
-                                    size_last = len(e1[exec_id][k])
+                                    max_size = 0
+                                    for e2 in self._executors[::-1]:
+                                        if exec_id in e2:
+                                            max_size = max(len(e2[exec_id][k]), max_size)
 
-                                    for i in range(size_last):
+                                    for i in range(max_size):
                                         tmp = []
                                         for e2 in self._executors[::-1]:
-                                            size_current = len(e2[exec_id][k])
-
-                                            if exec_id in e2 and size_last - i <= size_current:
+                                            if exec_id in e2 and i < len(e2[exec_id][k]):
                                                 tmp.append(e2[exec_id][k][i])
-                                        executors[k].append(func(tmp))
-
+                                        executors[exec_id][k].append(func(tmp))
                                 break
 
                         return executors
@@ -614,18 +613,18 @@ class Profiler:
 
                         for e1 in self._executors[::-1]:
                             if exec_id in e1:
-                                size_last = e1[exec_id][key]
+                                max_size = 0
+                                for e2 in self._executors[::-1]:
+                                    if exec_id in e2:
+                                        max_size = max(len(e2[exec_id][key]), max_size)
 
-                                for i in range(size_last):
+                                for i in range(max_size):
                                     tmp = []
                                     for e2 in self._executors[::-1]:
-                                        size_current = len(e2[exec_id][key])
-
-                                        if exec_id in e2 and size_last - i <= size_current:
+                                        if exec_id in e2 and i < len(e2[exec_id][key]):
                                             tmp.append(e2[exec_id][key][i])
-                                    executors.append(func(tmp))
-
-                                break
+                                    executors[exec_id][key].append(func(tmp))
+                            break
 
                         return executors
         else:
