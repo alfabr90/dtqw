@@ -685,7 +685,15 @@ class DiscreteTimeQuantumWalk:
             if self._num_particles > 1:
                 self.logger.info("collision phase: {}".format(phase))
 
-        result = initial_state.materialize(storage_level)
+        rdd = initial_state.data.partitionBy(
+            numPartitions=self._num_partitions
+        )
+
+        result = State(
+            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles
+        ).materialize(storage_level)
+
+        initial_state.unpersist()
 
         if not result.is_unitary():
             if self.logger:
