@@ -5,8 +5,8 @@ __all__ = ['Mesh2D']
 
 
 class Mesh2D(Mesh):
-    def __init__(self, spark_context, size):
-        super().__init__(spark_context, size)
+    def __init__(self, spark_context, size, bl_prob=None):
+        super().__init__(spark_context, size, bl_prob)
 
     def _validate(self, size):
         if isinstance(size, (list, tuple)):

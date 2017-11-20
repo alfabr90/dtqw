@@ -1,3 +1,4 @@
+from pyspark import StorageLevel
 from dtqw.coin.coin import Coin
 from dtqw.mesh.mesh import is_mesh
 from dtqw.linalg.operator import Operator
@@ -13,7 +14,7 @@ class Coin2D(Coin):
     def is_2d(self):
         return True
 
-    def create_operator(self, mesh):
+    def create_operator(self, mesh, storage_level=StorageLevel.MEMORY_AND_DISK):
         if not is_mesh(mesh):
             if self.logger:
                 self.logger.error("expected mesh, not {}".format(type(mesh)))
@@ -39,4 +40,4 @@ class Coin2D(Coin):
             __map
         )
 
-        return Operator(self._spark_context, rdd, shape)
+        return Operator(self._spark_context, rdd, shape).materialize(storage_level)

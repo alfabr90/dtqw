@@ -47,8 +47,6 @@ class Operator(Matrix):
             other.data, numPartitions=num_partitions
         ).map(
             lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
-        ).filter(
-            lambda m: m[1] != complex()
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
         ).map(
@@ -71,8 +69,6 @@ class Operator(Matrix):
             other.data, numPartitions=num_partitions
         ).map(
             lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
-        ).filter(
-            lambda m: m[1] != complex()
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
         )

@@ -128,7 +128,7 @@ class DiscreteTimeQuantumWalk:
             self.logger.info("building coin operator...")
         t1 = datetime.now()
 
-        self._coin_operator = self._coin.create_operator(self._mesh).materialize(storage_level)
+        self._coin_operator = self._coin.create_operator(self._mesh, storage_level)
 
         app_id = self._spark_context.applicationId
         rdd_id = self._coin_operator.data.id()
@@ -164,7 +164,7 @@ class DiscreteTimeQuantumWalk:
             self.logger.info("building shift operator...")
         t1 = datetime.now()
 
-        self._shift_operator = self._mesh.create_operator().materialize(storage_level)
+        self._shift_operator = self._mesh.create_operator(storage_level)
 
         app_id = self._spark_context.applicationId
         rdd_id = self._shift_operator.data.id()
@@ -529,37 +529,50 @@ class DiscreteTimeQuantumWalk:
     def title(self):
         return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
 
+    def destroy_coin_operator(self):
+        if self._coin_operator is not None:
+            self._coin_operator.destroy()
+            self._coin_operator = None
+
+    def destroy_shift_operator(self):
+        if self._shift_operator is not None:
+            self._shift_operator.destroy()
+            self._shift_operator = None
+
+    def destroy_unitary_operator(self):
+        if self._unitary_operator is not None:
+            self._unitary_operator.destroy()
+            self._unitary_operator = None
+
+    def destroy_interaction_operator(self):
+        if self._interaction_operator is not None:
+            self._interaction_operator.destroy()
+            self._interaction_operator = None
+
+    def destroy_walk_operator(self):
+        if self._walk_operator is not None:
+            if self._num_particles == 1:
+                    self._walk_operator.destroy()
+            else:
+                for wo in self._walk_operator:
+                    wo.destroy()
+            self._walk_operator = None
+
     def destroy_operators(self):
         if self.logger:
             self.logger.info('destroying operators...')
 
-        if self._coin_operator is not None:
-            self._coin_operator.destroy()
-
-        if self._shift_operator is not None:
-            self._shift_operator.destroy()
-
-        if self._unitary_operator is not None:
-            self._unitary_operator.destroy()
-
-        if self._interaction_operator is not None:
-            self._interaction_operator.destroy()
-
-        if self._num_particles == 1:
-            if self._walk_operator is not None:
-                self._walk_operator.destroy()
-        else:
-            for wo in self._walk_operator:
-                if wo is not None:
-                    wo.destroy()
+        self.destroy_coin_operator()
+        self.destroy_shift_operator()
+        self.destroy_unitary_operator()
+        self.destroy_interaction_operator()
+        self.destroy_walk_operator()
 
     def _monoparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
-        wo = self._walk_operator
-
         app_id = self._spark_context.applicationId
 
-        if self.logger:
-            self.logger.debug("walk operator lineage:\n{}".format(wo.data.toDebugString().decode()))
+        # if self.logger:
+        #     self.logger.debug("walk operator lineage:\n{}".format(self._walk_operator.data.toDebugString().decode()))
 
         result = initial_state
 
@@ -567,9 +580,15 @@ class DiscreteTimeQuantumWalk:
             self.logger.info("starting the walk...")
 
         for i in range(1, steps + 1, 1):
+            if self._mesh.broken_links_probability:
+                self.destroy_shift_operator()
+                self.destroy_unitary_operator()
+                self.destroy_walk_operator()
+                self.create_walk_operator(storage_level)
+
             t_tmp = datetime.now()
 
-            result_tmp = wo.multiply(result).materialize(storage_level)
+            result_tmp = self._walk_operator.multiply(result).materialize(storage_level)
 
             result.unpersist()
 
@@ -579,7 +598,7 @@ class DiscreteTimeQuantumWalk:
                 self.logger.debug("step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
 
             rdd_id = result.data.id()
-
+            result.is_unitary()
             if self.profiler:
                 self.profiler.profile_rdd('systemStateStep{}'.format(i), app_id, rdd_id)
                 self.profiler.profile_sparsity('systemStateStep{}'.format(i), result)
@@ -604,19 +623,21 @@ class DiscreteTimeQuantumWalk:
         return result
 
     def _multiparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
-        wo = self._walk_operator
-        io = self._interaction_operator
-
         app_id = self._spark_context.applicationId
 
-        for o in range(len(wo)):
-            if self.logger:
-                self.logger.debug(
-                    "walk operator lineage for particle {}:\n{}".format(o + 1, wo[o].data.toDebugString().decode())
-                )
-
-        if self.logger:
-            self.logger.debug("interaction operator lineage:\n{}".format(io.data.toDebugString().decode()))
+        # for o in range(len(self._walk_operator)):
+        #     if self.logger:
+        #         self.logger.debug(
+        #             "walk operator lineage for particle {}:\n{}".format(
+        #                 o + 1, self._walk_operator[o].data.toDebugString().decode()
+        #             )
+        #         )
+        #
+        # if self.logger:
+        #     self.logger.debug("interaction operator lineage:\n{}".format(
+        #             self._interaction_operator.data.toDebugString().decode()
+        #         )
+        #     )
 
         result = initial_state
 
@@ -624,18 +645,25 @@ class DiscreteTimeQuantumWalk:
             self.logger.info("starting the walk...")
 
         for i in range(1, steps + 1, 1):
+            if self._mesh.broken_links_probability:
+                self.destroy_shift_operator()
+                self.destroy_unitary_operator()
+                self.destroy_interaction_operator()
+                self.destroy_walk_operator()
+                self.create_walk_operator(storage_level)
+
             t_tmp = datetime.now()
 
-            if io is not None:
-                result_tmp = io.multiply(result)
+            if self._interaction_operator is not None:
+                result_tmp = self._interaction_operator.multiply(result)
 
-                for o in wo:
-                    result_tmp = o.multiply(result_tmp)
+                for wo in self._walk_operator:
+                    result_tmp = wo.multiply(result_tmp)
             else:
-                result_tmp = wo[0].multiply(result)
+                result_tmp = self._walk_operator[0].multiply(result)
 
-                for o in range(len(wo) - 1):
-                    result_tmp = wo[o].multiply(result_tmp)
+                for wo in range(len(self._walk_operator) - 1):
+                    result_tmp = self._walk_operator[wo].multiply(result_tmp)
 
             result_tmp.materialize(storage_level)
             result.unpersist()
@@ -728,20 +756,21 @@ class DiscreteTimeQuantumWalk:
             self.profiler.log_rdd(app_id=app_id)
 
         if steps > 0:
-            if self._walk_operator is None:
-                if self.logger:
-                    self.logger.info("no walk operator has been set. A new one will be built")
-                self.create_walk_operator(storage_level)
-
-            if self._num_particles > 1:
-                if phase is None:
+            if not self._mesh.broken_links_probability:
+                if self._walk_operator is None:
                     if self.logger:
-                        self.logger.info("no collision phase has been defined")
-                else:
-                    if self._interaction_operator is None:
+                        self.logger.info("no walk operator has been set. A new one will be built")
+                    self.create_walk_operator(storage_level)
+
+                if self._num_particles > 1:
+                    if phase is None:
                         if self.logger:
-                            self.logger.info("no interaction operator has been set. A new one will be built")
-                        self.create_interaction_operator(phase, storage_level)
+                            self.logger.info("no collision phase has been defined")
+                    else:
+                        if self._interaction_operator is None:
+                            if self.logger:
+                                self.logger.info("no interaction operator has been set. A new one will be built")
+                            self.create_interaction_operator(phase, storage_level)
 
             t1 = datetime.now()
 
