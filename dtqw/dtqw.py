@@ -429,19 +429,11 @@ class DiscreteTimeQuantumWalk:
                 self.logger.info("building walk operator...")
 
             shape = self._unitary_operator.shape
-
-            rdd = self._spark_context.range(
-                shape[0]
-            ).map(
-                lambda m: (m, m, 1)
-            )
+            shape_tmp = shape
 
             t_tmp = datetime.now()
 
-            identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
-            io = broadcast(self._spark_context, identity.data.collect())
             uo = broadcast(self._spark_context, self._unitary_operator.data.collect())
-            identity.destroy()
 
             self._walk_operator = []
 
@@ -449,27 +441,56 @@ class DiscreteTimeQuantumWalk:
                 if self.logger:
                     self.logger.debug("building walk operator for particle {}...".format(p + 1))
 
-                if p == 0:
-                    op_tmp = self._unitary_operator
+                shape = shape_tmp
 
-                    for i in range(self._num_particles - 1 - p):
-                        op_tmp = op_tmp.kron(io, identity.shape)
+                if p == 0:
+                    rdd = self._unitary_operator.data
+                    shape_broad = broadcast(self._spark_context, (shape[0], shape[1]))
+
+                    for p2 in range(self._num_particles - 1 - p):
+                        def __map(m):
+                            for i in range(shape_tmp[0]):
+                                yield (m[0] * shape_broad.value[0] + i, m[1] * shape_broad.value[1] + i, m[2])
+
+                        rdd = rdd.flatMap(
+                            __map
+                        )
+
+                        shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
                 else:
                     t_tmp = datetime.now()
 
-                    op_tmp = identity
+                    for p2 in range(p - 1):
+                        shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
-                    for i in range(p - 1):
-                        op_tmp = op_tmp.kron(io, identity.shape)
+                    shape_broad = broadcast(self._spark_context, (shape[0], shape[1]))
 
-                    op_tmp = op_tmp.kron(uo, self._unitary_operator.shape)
+                    def __map(m):
+                        for i in uo.value:
+                            yield (m * shape_broad.value[0] + i[0], m * shape_broad.value[1] + i[1], i[2])
 
-                    for i in range(self._num_particles - 1 - p):
-                        op_tmp = op_tmp.kron(io, identity.shape)
+                    rdd = self._spark_context.range(
+                        shape[0]
+                    ).flatMap(
+                        __map
+                    )
 
-                # op_tmp = op_tmp.dump()
+                    shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
-                rdd = op_tmp.data.map(
+                    shape_broad2 = broadcast(self._spark_context, (shape[0], shape[1]))
+
+                    for p2 in range(self._num_particles - 1 - p):
+                        def __map(m):
+                            for i in range(shape_tmp[0]):
+                                yield (m[0] * shape_broad2.value[0] + i, m[1] * shape_broad2.value[1] + i, m[2])
+
+                        rdd = rdd.flatMap(
+                            __map
+                        )
+
+                        shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+
+                rdd = rdd.map(
                     lambda m: (m[1], (m[0], m[2]))
                 ).partitionBy(
                     numPartitions=self._num_partitions
@@ -477,9 +498,13 @@ class DiscreteTimeQuantumWalk:
 
                 self._walk_operator.append(
                     Operator(
-                        self._spark_context, rdd, op_tmp.shape
+                        self._spark_context, rdd, shape
                     ).persist(storage_level).checkpoint().materialize(storage_level)
                 )
+
+                shape_broad.unpersist()
+                if p > 0:
+                    shape_broad2.unpersist()
 
                 if self.profiler:
                     self.profiler.profile_times(
@@ -516,7 +541,6 @@ class DiscreteTimeQuantumWalk:
                         )
 
             uo.unpersist()
-            io.unpersist()
             self._unitary_operator.unpersist()
 
             if self.profiler:
@@ -598,7 +622,7 @@ class DiscreteTimeQuantumWalk:
                 self.logger.debug("step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
 
             rdd_id = result.data.id()
-            result.is_unitary()
+
             if self.profiler:
                 self.profiler.profile_rdd('systemStateStep{}'.format(i), app_id, rdd_id)
                 self.profiler.profile_sparsity('systemStateStep{}'.format(i), result)
@@ -712,6 +736,9 @@ class DiscreteTimeQuantumWalk:
 
             if self._num_particles > 1:
                 self.logger.info("collision phase: {}".format(phase))
+
+            if self._mesh.broken_links_probability:
+                self.logger.info("broken links probability: {}".format(self._mesh.broken_links_probability))
 
         rdd = initial_state.data.partitionBy(
             numPartitions=self._num_partitions

@@ -32,4 +32,4 @@ class Mesh2D(Mesh):
         return True
 
     def filename(self):
-        return "{}_{}-{}".format(self.to_string(), self._size[0], self._size[1])
+        return "{}_{}-{}_{}".format(self.to_string(), self._size[0], self._size[1], self._broken_links_probability)

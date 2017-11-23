@@ -32,7 +32,7 @@ class Mesh1D(Mesh):
         return True
 
     def filename(self):
-        return "{}_{}".format(self.to_string(), self._size)
+        return "{}_{}_{}".format(self.to_string(), self._size, self._broken_links_probability)
 
     def broken_links(self):
         size = self._size
