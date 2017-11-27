@@ -678,16 +678,13 @@ class DiscreteTimeQuantumWalk:
 
             t_tmp = datetime.now()
 
+            result_tmp = result
+
             if self._interaction_operator is not None:
-                result_tmp = self._interaction_operator.multiply(result)
+                result_tmp = self._interaction_operator.multiply(result_tmp)
 
-                for wo in self._walk_operator:
-                    result_tmp = wo.multiply(result_tmp)
-            else:
-                result_tmp = self._walk_operator[0].multiply(result)
-
-                for wo in range(len(self._walk_operator) - 1):
-                    result_tmp = self._walk_operator[wo].multiply(result_tmp)
+            for wo in self._walk_operator:
+                result_tmp = wo.multiply(result_tmp)
 
             result_tmp.materialize(storage_level)
             result.unpersist()
@@ -735,9 +732,18 @@ class DiscreteTimeQuantumWalk:
             self.logger.info("nº of partitions: {}".format(self._num_partitions))
 
             if self._num_particles > 1:
-                self.logger.info("collision phase: {}".format(phase))
+                if phase is None:
+                    self.logger.info("no collision phase has been defined")
+                elif phase == 0.0:
+                    self.logger.info("a zeroed collision phase was defined. No interaction operator will be built")
+                else:
+                    self.logger.info("collision phase: {}".format(phase))
 
-            if self._mesh.broken_links_probability:
+            if self._mesh.broken_links_probability is None:
+                self.logger.info("no broken links probability has been defined")
+            elif self._mesh.broken_links_probability == 0.0:
+                self.logger.info("a zeroed broken links probability was defined. No decoherence will be simulated")
+            else:
                 self.logger.info("broken links probability: {}".format(self._mesh.broken_links_probability))
 
         rdd = initial_state.data.partitionBy(
@@ -789,15 +795,10 @@ class DiscreteTimeQuantumWalk:
                         self.logger.info("no walk operator has been set. A new one will be built")
                     self.create_walk_operator(storage_level)
 
-                if self._num_particles > 1:
-                    if phase is None:
-                        if self.logger:
-                            self.logger.info("no collision phase has been defined")
-                    else:
-                        if self._interaction_operator is None:
-                            if self.logger:
-                                self.logger.info("no interaction operator has been set. A new one will be built")
-                            self.create_interaction_operator(phase, storage_level)
+                if self._num_particles > 1 and phase and self._interaction_operator is None:
+                    if self.logger:
+                        self.logger.info("no interaction operator has been set. A new one will be built")
+                    self.create_interaction_operator(phase, storage_level)
 
             t1 = datetime.now()
 
