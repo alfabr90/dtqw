@@ -445,12 +445,11 @@ class DiscreteTimeQuantumWalk:
 
                 if p == 0:
                     rdd = self._unitary_operator.data
-                    shape_broad = broadcast(self._spark_context, (shape[0], shape[1]))
 
                     for p2 in range(self._num_particles - 1 - p):
                         def __map(m):
                             for i in range(shape_tmp[0]):
-                                yield (m[0] * shape_broad.value[0] + i, m[1] * shape_broad.value[1] + i, m[2])
+                                yield (m[0] * shape_tmp[0] + i, m[1] * shape_tmp[1] + i, m[2])
 
                         rdd = rdd.flatMap(
                             __map
@@ -463,11 +462,9 @@ class DiscreteTimeQuantumWalk:
                     for p2 in range(p - 1):
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
-                    shape_broad = broadcast(self._spark_context, (shape[0], shape[1]))
-
                     def __map(m):
                         for i in uo.value:
-                            yield (m * shape_broad.value[0] + i[0], m * shape_broad.value[1] + i[1], i[2])
+                            yield (m * shape_tmp[0] + i[0], m * shape_tmp[1] + i[1], i[2])
 
                     rdd = self._spark_context.range(
                         shape[0]
@@ -477,12 +474,10 @@ class DiscreteTimeQuantumWalk:
 
                     shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
-                    shape_broad2 = broadcast(self._spark_context, (shape[0], shape[1]))
-
                     for p2 in range(self._num_particles - 1 - p):
                         def __map(m):
                             for i in range(shape_tmp[0]):
-                                yield (m[0] * shape_broad2.value[0] + i, m[1] * shape_broad2.value[1] + i, m[2])
+                                yield (m[0] * shape_tmp[0] + i, m[1] * shape_tmp[1] + i, m[2])
 
                         rdd = rdd.flatMap(
                             __map
@@ -501,10 +496,6 @@ class DiscreteTimeQuantumWalk:
                         self._spark_context, rdd, shape
                     ).persist(storage_level).checkpoint().materialize(storage_level)
                 )
-
-                shape_broad.unpersist()
-                if p > 0:
-                    shape_broad2.unpersist()
 
                 if self.profiler:
                     self.profiler.profile_times(
