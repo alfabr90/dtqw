@@ -38,12 +38,12 @@ class PDF(Matrix):
         return round(n, round_precision)
 
     def plot(self, title, labels, filename, **kwargs):
-        if self.logger:
-            self.logger.info("starting plot of probabilities...")
+        if self._logger:
+            self._logger.info("starting plot of probabilities...")
 
         if len(self._shape) > 2:
-            if self.logger:
-                self.logger.warning('it is only possible to plot one and two dimensional meshes')
+            if self._logger:
+                self._logger.warning('it is only possible to plot one and two dimensional meshes')
             return None
 
         t1 = datetime.now()
@@ -97,16 +97,16 @@ class PDF(Matrix):
 
             # figure.set_size_inches(12.8, 12.8)
         else:
-            if self.logger:
-                self.logger.error("mesh dimension not implemented")
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         plt.savefig(filename, kwargs=kwargs)
         plt.cla()
         plt.clf()
 
-        if self.logger:
-            self.logger.info("plot in {}s".format((datetime.now() - t1).total_seconds()))
+        if self._logger:
+            self._logger.info("plot in {}s".format((datetime.now() - t1).total_seconds()))
 
 
 def is_pdf(obj):

@@ -870,3 +870,7 @@ class Profiler:
         else:
             if self.logger:
                 self.logger('No measurement of general resources has been done')
+
+
+def is_profiler(obj):
+    return isinstance(obj, Profiler)

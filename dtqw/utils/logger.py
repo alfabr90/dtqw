@@ -51,3 +51,7 @@ class Logger:
     def error(self, message):
         if self._level <= logging.ERROR:
             self.__write_message('ERROR', self._name, message)
+
+
+def is_logger(obj):
+    return isinstance(obj, Logger)

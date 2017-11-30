@@ -16,8 +16,8 @@ class Operator(Matrix):
             lambda m: "{} {} {}".format(m[0], m[1], m[2])
         ).saveAsTextFile(path)
 
-        if self.logger:
-            self.logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
+        if self._logger:
+            self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
 
         self.data.unpersist()
 
@@ -35,8 +35,8 @@ class Operator(Matrix):
 
     def _multiply_operator(self, other):
         if self._shape[1] != other.shape[0]:
-            if self.logger:
-                self.logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
+            if self._logger:
+                self._logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
             raise ValueError('incompatible shapes {} and {}'.format(self._shape, other.shape))
 
         shape = (self._shape[0], other.shape[1])
@@ -57,8 +57,8 @@ class Operator(Matrix):
 
     def _multiply_state(self, other):
         if self._shape[1] != other.shape[0]:
-            if self.logger:
-                self.logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
+            if self._logger:
+                self._logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
             raise ValueError("incompatible shapes {} and {}".format(self._shape, other.shape))
 
         shape = other.shape
@@ -81,8 +81,8 @@ class Operator(Matrix):
         elif is_state(other):
             return self._multiply_state(other)
         else:
-            if self.logger:
-                self.logger.error('State or Operator instance expected, not "{}"'.format(type(other)))
+            if self._logger:
+                self._logger.error('State or Operator instance expected, not "{}"'.format(type(other)))
             raise TypeError('State or Operator instance expected, not "{}"'.format(type(other)))
 
     def kron(self, other_broadcast, other_shape):

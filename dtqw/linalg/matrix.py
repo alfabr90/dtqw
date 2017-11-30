@@ -1,6 +1,8 @@
 import math
 from pyspark import RDD, StorageLevel
 from dtqw.utils.utils import is_shape
+from dtqw.utils.logger import is_logger
+from dtqw.utils.profiler import is_profiler
 
 __all__ = ['Matrix']
 
@@ -25,8 +27,8 @@ class Matrix:
         self._num_nonzero_elements = 0
         self._sparsity = 1
 
-        self.logger = None
-        self.profiler = None
+        self._logger = None
+        self._profiler = None
 
     @property
     def spark_context(self):
@@ -48,6 +50,28 @@ class Matrix:
     def sparsity(self):
         return self._sparsity
 
+    @property
+    def logger(self):
+        return self._logger
+
+    @property
+    def profiler(self):
+        return self._profiler
+
+    @logger.setter
+    def logger(self, logger):
+        if is_logger(logger) or logger is None:
+            self._logger = logger
+        else:
+            raise TypeError('Logger instance expected, not "{}"'.format(type(logger)))
+
+    @profiler.setter
+    def profiler(self, profiler):
+        if is_profiler(profiler) or profiler is None:
+            self._profiler = profiler
+        else:
+            raise TypeError('Profiler instance expected, not "{}"'.format(type(profiler)))
+
     def __str__(self):
         return self.__class__.__name__
 
@@ -58,14 +82,14 @@ class Matrix:
         if self.data is not None:
             if not self.data.is_cached:
                 self.data.persist(storage_level)
-                if self.logger:
-                    self.logger.info("RDD {} was persisted".format(self.data.id()))
+                if self._logger:
+                    self._logger.info("RDD {} was persisted".format(self.data.id()))
             else:
-                if self.logger:
-                    self.logger.info("RDD {} has already been persisted".format(self.data.id()))
+                if self._logger:
+                    self._logger.info("RDD {} has already been persisted".format(self.data.id()))
         else:
-            if self.logger:
-                self.logger.warning("there is no data to be persisted")
+            if self._logger:
+                self._logger.warning("there is no data to be persisted")
 
         return self
 
@@ -73,14 +97,14 @@ class Matrix:
         if self.data is not None:
             if self.data.is_cached:
                 self.data.unpersist()
-                if self.logger:
-                    self.logger.info("RDD {} was unpersisted".format(self.data.id()))
+                if self._logger:
+                    self._logger.info("RDD {} was unpersisted".format(self.data.id()))
             else:
-                if self.logger:
-                    self.logger.info("RDD has already been unpersisted".format(self.data.id()))
+                if self._logger:
+                    self._logger.info("RDD has already been unpersisted".format(self.data.id()))
         else:
-            if self.logger:
-                self.logger.warning("there is no data to be unpersisted")
+            if self._logger:
+                self._logger.warning("there is no data to be unpersisted")
 
         return self
 
@@ -92,20 +116,20 @@ class Matrix:
         self._num_nonzero_elements = self.data.count()
         self._sparsity = 1.0 - self.num_nonzero_elements / self._num_elements
 
-        if self.logger:
-            self.logger.info("RDD {} was materialized".format(self.data.id()))
+        if self._logger:
+            self._logger.info("RDD {} was materialized".format(self.data.id()))
 
         return self
 
     def checkpoint(self):
         if not self.data.is_cached:
-            if self.logger:
-                self.logger.warning("it is recommended to cache the RDD before checkpointing it")
+            if self._logger:
+                self._logger.warning("it is recommended to cache the RDD before checkpointing it")
 
         self.data.checkpoint()
 
-        if self.logger:
-            self.logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
+        if self._logger:
+            self._logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
 
         return self
 

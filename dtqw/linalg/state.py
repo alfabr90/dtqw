@@ -53,8 +53,8 @@ class State(Matrix):
         return State(self._spark_context, rdd, shape, self._mesh, self._num_particles)
 
     def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.logger:
-            self.logger.info("measuring the state of the system...")
+        if self._logger:
+            self._logger.info("measuring the state of the system...")
 
         t1 = datetime.now()
 
@@ -125,8 +125,8 @@ class State(Matrix):
 
                 return tuple(a)
         else:
-            if self.logger:
-                self.logger.error("mesh dimension not implemented")
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.data.filter(
@@ -141,47 +141,47 @@ class State(Matrix):
 
         pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
-        if self.logger:
-            self.logger.info("checking if the probabilities sum one...")
+        if self._logger:
+            self._logger.info("checking if the probabilities sum one...")
 
         if pdf.sum(ind) != 1.0:
-            if self.logger:
-                self.logger.error("PDFs must sum one")
+            if self._logger:
+                self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
         app_id = self._spark_context.applicationId
         rdd_id = pdf.data.id()
 
-        if self.profiler:
-            self.profiler.profile_times('fullMeasurement', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_rdd('fullMeasurement', app_id, rdd_id)
-            self.profiler.profile_resources(app_id)
-            self.profiler.profile_executors(app_id)
+        if self._profiler:
+            self._profiler.profile_times('fullMeasurement', (datetime.now() - t1).total_seconds())
+            self._profiler.profile_rdd('fullMeasurement', app_id, rdd_id)
+            self._profiler.profile_resources(app_id)
+            self._profiler.profile_executors(app_id)
 
-            if self.logger:
-                self.logger.info(
-                    "full measurement was done in {}s".format(self.profiler.get_times(name='fullMeasurement'))
+            if self._logger:
+                self._logger.info(
+                    "full measurement was done in {}s".format(self._profiler.get_times(name='fullMeasurement'))
                 )
-                self.logger.info(
+                self._logger.info(
                     "PDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd(name='fullMeasurement', key='memoryUsed'),
-                        self.profiler.get_rdd(name='fullMeasurement', key='diskUsed')
+                        self._profiler.get_rdd(name='fullMeasurement', key='memoryUsed'),
+                        self._profiler.get_rdd(name='fullMeasurement', key='diskUsed')
                     )
                 )
 
-            self.profiler.log_rdd(app_id=app_id)
+            self._profiler.log_rdd(app_id=app_id)
 
         return pdf
 
     def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.logger:
-            self.logger.info("measuring the state of the system which the particles are at the same positions...")
+        if self._logger:
+            self._logger.info("measuring the state of the system which the particles are at the same positions...")
 
         t1 = datetime.now()
 
         if not is_pdf(full_measurement):
-            if self.logger:
-                self.logger.error('PDF instance expected, not "{}"'.format(type(full_measurement)))
+            if self._logger:
+                self._logger.error('PDF instance expected, not "{}"'.format(type(full_measurement)))
             raise TypeError('PDF instance expected, not "{}"'.format(type(full_measurement)))
 
         if self._mesh.is_1d():
@@ -216,8 +216,8 @@ class State(Matrix):
             def __map(m):
                 return m[0], m[1], m[ind]
         else:
-            if self.logger:
-                self.logger.error("mesh dimension not implemented")
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = full_measurement.data.filter(
@@ -231,30 +231,30 @@ class State(Matrix):
         app_id = self._spark_context.applicationId
         rdd_id = pdf.data.id()
 
-        if self.profiler:
-            self.profiler.profile_times('filteredMeasurement', (datetime.now() - t1).total_seconds())
-            self.profiler.profile_rdd('filteredMeasurement', app_id, rdd_id)
-            self.profiler.profile_resources(app_id)
-            self.profiler.profile_executors(app_id)
+        if self._profiler:
+            self._profiler.profile_times('filteredMeasurement', (datetime.now() - t1).total_seconds())
+            self._profiler.profile_rdd('filteredMeasurement', app_id, rdd_id)
+            self._profiler.profile_resources(app_id)
+            self._profiler.profile_executors(app_id)
 
-            if self.logger:
-                self.logger.info(
-                    "filtered measurement was done in {}s".format(self.profiler.get_times(name='filteredMeasurement'))
+            if self._logger:
+                self._logger.info(
+                    "filtered measurement was done in {}s".format(self._profiler.get_times(name='filteredMeasurement'))
                 )
-                self.logger.info(
+                self._logger.info(
                     "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self.profiler.get_rdd(name='filteredMeasurement', key='memoryUsed'),
-                        self.profiler.get_rdd(name='filteredMeasurement', key='diskUsed')
+                        self._profiler.get_rdd(name='filteredMeasurement', key='memoryUsed'),
+                        self._profiler.get_rdd(name='filteredMeasurement', key='diskUsed')
                     )
                 )
 
-            self.profiler.log_rdd(app_id=app_id)
+            self._profiler.log_rdd(app_id=app_id)
 
         return pdf
 
     def _partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
-        if self.logger:
-            self.logger.info("measuring the state of the system for particle {}...".format(particle + 1))
+        if self._logger:
+            self._logger.info("measuring the state of the system for particle {}...".format(particle + 1))
 
         t1 = datetime.now()
 
@@ -298,8 +298,8 @@ class State(Matrix):
             def __unmap(m):
                 return m[0][0], m[0][1], m[1]
         else:
-            if self.logger:
-                self.logger.error("mesh dimension not implemented")
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
         rdd = self.data.filter(
@@ -314,46 +314,46 @@ class State(Matrix):
 
         pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
-        if self.logger:
-            self.logger.info("checking if the probabilities sum one...")
+        if self._logger:
+            self._logger.info("checking if the probabilities sum one...")
 
         if pdf.sum(ind) != 1.0:
-            if self.logger:
-                self.logger.error("PDFs must sum one")
+            if self._logger:
+                self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
 
         app_id = self._spark_context.applicationId
         rdd_id = pdf.data.id()
 
-        if self.profiler:
-            self.profiler.profile_times('partialMeasurementParticle{}'.format(
+        if self._profiler:
+            self._profiler.profile_times('partialMeasurementParticle{}'.format(
                 particle + 1), (datetime.now() - t1).total_seconds()
             )
-            self.profiler.profile_rdd('partialMeasurementParticle{}'.format(particle + 1), app_id, rdd_id)
-            self.profiler.profile_resources(app_id)
-            self.profiler.profile_executors(app_id)
+            self._profiler.profile_rdd('partialMeasurementParticle{}'.format(particle + 1), app_id, rdd_id)
+            self._profiler.profile_resources(app_id)
+            self._profiler.profile_executors(app_id)
 
-            if self.logger:
-                self.logger.info(
+            if self._logger:
+                self._logger.info(
                     "partial measurement for particle {} was done in {}s".format(
                         particle + 1,
-                        self.profiler.get_times(name='partialMeasurementParticle{}'.format(particle + 1))
+                        self._profiler.get_times(name='partialMeasurementParticle{}'.format(particle + 1))
                     )
                 )
-                self.logger.info(
+                self._logger.info(
                     "PDF with partial measurements for particle {} "
                     "are consuming {} bytes in memory and {} bytes in disk".format(
                         particle + 1,
-                        self.profiler.get_rdd(
+                        self._profiler.get_rdd(
                             name='partialMeasurementParticle{}'.format(particle + 1), key='memoryUsed'
                         ),
-                        self.profiler.get_rdd(
+                        self._profiler.get_rdd(
                             name='partialMeasurementParticle{}'.format(particle + 1), key='diskUsed'
                         )
                     )
                 )
 
-            self.profiler.log_rdd(app_id=app_id)
+            self._profiler.log_rdd(app_id=app_id)
 
         return pdf
 
