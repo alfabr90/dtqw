@@ -1,6 +1,7 @@
 import math
 from datetime import datetime
 from pyspark import StorageLevel
+from dtqw.utils.utils import get_tmp_path
 from dtqw.linalg.pdf import PDF, is_pdf
 from dtqw.mesh.mesh import is_mesh
 from dtqw.linalg.matrix import Matrix
@@ -28,6 +29,30 @@ class State(Matrix):
     def num_particles(self):
         return self._num_particles
 
+    def dump(self):
+        path = get_tmp_path()
+
+        self.data.map(
+            lambda m: "{} {}".format(m[0], m[1])
+        ).saveAsTextFile(path)
+
+        if self._logger:
+            self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
+
+        self.data.unpersist()
+
+        def __map(m):
+            m = m.split()
+            return int(m[0]), complex(m[2])
+
+        self.data = self._spark_context.textFile(
+            path
+        ).map(
+            __map
+        )
+
+        return self
+
     def is_unitary(self, round_precision=10):
         n = self.data.filter(
             lambda m: m[1] != complex()
@@ -38,6 +63,14 @@ class State(Matrix):
         )
 
         return round(math.sqrt(n), round_precision) == 1.0
+
+    def multiply(self, other):
+        if is_state(other):
+            raise NotImplementedError
+        else:
+            if self._logger:
+                self._logger.error('State instance expected, not "{}"'.format(type(other)))
+            raise TypeError('State instance expected, not "{}"'.format(type(other)))
 
     def kron(self, other_broadcast, other_shape):
         shape = (self._shape[0] * other_shape[0], 1)

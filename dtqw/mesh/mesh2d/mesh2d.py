@@ -1,4 +1,5 @@
 import numpy as np
+from pyspark import StorageLevel
 from dtqw.mesh.mesh import Mesh
 
 __all__ = ['Mesh2D']
@@ -28,8 +29,17 @@ class Mesh2D(Mesh):
     def axis(self):
         return np.meshgrid(range(self._size[0]), range(self._size[1]))
 
+    def is_1d(self):
+        return False
+
     def is_2d(self):
         return True
+
+    def check_steps(self, steps):
+        raise NotImplementedError
+
+    def create_operator(self, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+        raise NotImplementedError
 
     def filename(self):
         return "{}_{}-{}_{}".format(self.to_string(), self._size[0], self._size[1], self._broken_links_probability)

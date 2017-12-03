@@ -1,4 +1,5 @@
 import random
+from pyspark import StorageLevel
 from dtqw.utils.utils import broadcast
 from dtqw.mesh.mesh2d.mesh2d import Mesh2D
 
@@ -8,6 +9,12 @@ __all__ = ['Natural']
 class Natural(Mesh2D):
     def __init__(self, spark_context, size, bl_prob=None):
         super().__init__(spark_context, size, bl_prob)
+
+    def check_steps(self, steps):
+        raise NotImplementedError
+
+    def create_operator(self, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+        raise NotImplementedError
 
     def broken_links(self):
         size = self._size

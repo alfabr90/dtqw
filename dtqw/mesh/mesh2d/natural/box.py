@@ -1,3 +1,4 @@
+from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.mesh.mesh2d.natural.natural import Natural
 from dtqw.linalg.operator import Operator
@@ -13,7 +14,35 @@ class BoxNatural(Natural):
     def title(self):
         return 'Natural Box'
 
-    def create_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def check_steps(self, steps):
+        return True
+
+    def create_operator(self, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Build the shift operator for the walk.
+
+        Parameters
+        ----------
+        num_partitions : int
+            The desired number of partitions for the RDD.
+        mul_format : bool, optional
+            Indicate if the operator must be returned in an apropriate format for multiplications.
+            Default value is True.
+
+            If mul_format is True, the returned operator will not be in (i,j,value) format, but in (j,(i,value)) format.
+        storage_level : StorageLevel, optional
+            The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
+
+        Returns
+        -------
+        Operator
+
+        """
+        if self._logger:
+            self._logger.info("building shift operator...")
+
+        initial_time = datetime.now()
+
         coin_size = 2
         size = self.__size
         size_xy = size[0] * size[1]
@@ -77,9 +106,20 @@ class BoxNatural(Natural):
             __map
         )
 
+        if mul_format:
+            rdd = rdd.map(
+                lambda m: (m[1], (m[0], m[2]))
+            )
+
+        rdd = rdd.partitionBy(
+            numPartitions=num_partitions
+        )
+
         operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
 
         if self._broken_links_probability:
             bl_broad.unpersist()
+
+        self._profile(operator, initial_time)
 
         return operator

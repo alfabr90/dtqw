@@ -60,23 +60,58 @@ class Matrix:
 
     @logger.setter
     def logger(self, logger):
+        """
+
+        Parameters
+        ----------
+        logger : Logger
+            A Logger object or None to disable logging.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+
+        """
         if is_logger(logger) or logger is None:
             self._logger = logger
         else:
-            raise TypeError('Logger instance expected, not "{}"'.format(type(logger)))
+            raise TypeError('logger instance expected, not "{}"'.format(type(logger)))
 
     @profiler.setter
     def profiler(self, profiler):
+        """
+
+        Parameters
+        ----------
+        profiler : Profiler
+            A Profiler object or None to disable profiling.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+
+        """
         if is_profiler(profiler) or profiler is None:
             self._profiler = profiler
         else:
-            raise TypeError('Profiler instance expected, not "{}"'.format(type(profiler)))
+            raise TypeError('profiler instance expected, not "{}"'.format(type(profiler)))
 
     def __str__(self):
         return self.__class__.__name__
 
     def to_string(self):
         return self.__str__()
+
+    def dump(self):
+        raise NotImplementedError
 
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         if self.data is not None:
@@ -145,4 +180,4 @@ class Matrix:
         return round(math.sqrt(n), round_precision) == 1.0
 
     def multiply(self, other):
-        return None
+        raise NotImplementedError

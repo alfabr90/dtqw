@@ -1,4 +1,5 @@
 import random
+from pyspark import StorageLevel
 from dtqw.utils.utils import broadcast
 from dtqw.mesh.mesh import Mesh
 
@@ -25,14 +26,23 @@ class Mesh1D(Mesh):
 
         return size
 
+    def check_steps(self, steps):
+        raise NotImplementedError
+
     def axis(self):
         return range(self._size)
 
     def is_1d(self):
         return True
 
+    def is_2d(self):
+        return False
+
     def filename(self):
         return "{}_{}_{}".format(self.to_string(), self._size, self._broken_links_probability)
+
+    def create_operator(self, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+        raise NotImplementedError
 
     def broken_links(self):
         size = self._size
