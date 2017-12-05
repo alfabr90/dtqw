@@ -6,6 +6,10 @@ __all__ = ['Operator', 'is_operator']
 
 
 class Operator(Matrix):
+    CoordinateDefault = 0
+    CoordinateMultiplier = 1
+    CoordinateMultiplicand = 2
+
     def __init__(self, spark_context, rdd, shape):
         super().__init__(spark_context, rdd, shape)
 

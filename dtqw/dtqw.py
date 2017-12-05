@@ -93,14 +93,9 @@ class DiscreteTimeQuantumWalk:
     @coin_operator.setter
     def coin_operator(self, co):
         """
-
         Parameters
         ----------
         co : Operator
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -117,14 +112,9 @@ class DiscreteTimeQuantumWalk:
     @shift_operator.setter
     def shift_operator(self, so):
         """
-
         Parameters
         ----------
         so : Operator
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -141,14 +131,9 @@ class DiscreteTimeQuantumWalk:
     @evolution_operator.setter
     def evolution_operator(self, uo):
         """
-
         Parameters
         ----------
         uo : Operator
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -165,14 +150,9 @@ class DiscreteTimeQuantumWalk:
     @interaction_operator.setter
     def interaction_operator(self, io):
         """
-
         Parameters
         ----------
         io : Operator
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -189,15 +169,10 @@ class DiscreteTimeQuantumWalk:
     @walk_operator.setter
     def walk_operator(self, wo):
         """
-
         Parameters
         ----------
         wo : Operator or list of Operator
             An Operator or a list of Operators (for multiparticle walk simulator).
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -226,15 +201,10 @@ class DiscreteTimeQuantumWalk:
     @logger.setter
     def logger(self, logger):
         """
-
         Parameters
         ----------
         logger : Logger
             A Logger object or None to disable logging.
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -249,15 +219,10 @@ class DiscreteTimeQuantumWalk:
     @profiler.setter
     def profiler(self, profiler):
         """
-
         Parameters
         ----------
         profiler : Profiler
             A Profiler object or None to disable profiling.
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -275,6 +240,9 @@ class DiscreteTimeQuantumWalk:
     def to_string(self):
         return self.__str__()
 
+    def title(self):
+        return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
+
     def create_evolution_operator(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the evolution operator for the walk.
@@ -284,10 +252,6 @@ class DiscreteTimeQuantumWalk:
         storage_level : StorageLevel
             The desired storage level when materializing the RDD.
 
-        Returns
-        -------
-        None
-
         """
         if self._logger:
             self._logger.info("building evolution operator...")
@@ -295,12 +259,16 @@ class DiscreteTimeQuantumWalk:
         if self._coin_operator is None:
             if self._logger:
                 self._logger.info("no coin operator has been set. A new one will be built")
-            self._coin_operator = self._coin.create_operator(self._mesh, self._num_partitions, False, storage_level)
+            self._coin_operator = self._coin.create_operator(
+                self._mesh, self._num_partitions, Operator.CoordinateMultiplicand, storage_level
+            )
 
         if self._shift_operator is None:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
-            self._shift_operator = self._mesh.create_operator(self._num_partitions, storage_level)
+            self._shift_operator = self._mesh.create_operator(
+                self._num_partitions, Operator.CoordinateMultiplier, storage_level
+            )
 
         t1 = datetime.now()
 
@@ -346,10 +314,6 @@ class DiscreteTimeQuantumWalk:
         phase : float
         storage_level : StorageLevel
             The desired storage level when materializing the RDD.
-
-        Returns
-        -------
-        None
 
         """
         if self._logger:
@@ -461,17 +425,13 @@ class DiscreteTimeQuantumWalk:
         applying a tensor product between the evolution operator and n-1 identity matrices as follows:
 
             W1 = W (X) I2 (X) ... (X) In
-            Wi = I1 (X) ... (X) Wi (X) ... In
-            Wn = I1 (X) ... (X) In-1 (X )W
+            Wi = I1 (X) ... (X) Ii-1 (X) Wi (X) Ii+1 (X) ... In
+            Wn = I1 (X) ... (X) In-1 (X) W
 
         Parameters
         ----------
         storage_level : StorageLevel
             The desired storage level when materializing the RDD.
-
-        Returns
-        -------
-        None
 
         """
         if self._evolution_operator is None:
@@ -487,6 +447,7 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("with just one particle, the walk operator is the evolution operator")
 
+            # Converting to an apropriate coordinate for multiplication
             rdd = self._evolution_operator.data.map(
                 lambda m: (m[1], (m[0], m[2]))
             ).partitionBy(
@@ -547,6 +508,9 @@ class DiscreteTimeQuantumWalk:
                 if p == 0:
                     rdd = self._evolution_operator.data
 
+                    # The first particle's walk operator consists in applying the tensor product between the
+                    # evolution operator and the other particles' corresponding identity matrices
+                    # W1 = W (X) I2 (X) ... (X) In
                     for p2 in range(self._num_particles - 1 - p):
                         def __map(m):
                             for i in range(shape_tmp[0]):
@@ -560,6 +524,9 @@ class DiscreteTimeQuantumWalk:
                 else:
                     t_tmp = datetime.now()
 
+                    # For the other particles, each one has its operator built by applying the
+                    # tensor product between its previous particles' identity matrices and its evolution operator.
+                    # Wi = I1 (X) ... (X) Ii-1 (X) Wi ...
                     for p2 in range(p - 1):
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
@@ -575,6 +542,8 @@ class DiscreteTimeQuantumWalk:
 
                     shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
+                    # Then, the tensor product is applied between the following particles' identity matrices
+                    # ... (X) Ii+1 (X) ... In
                     for p2 in range(self._num_particles - 1 - p):
                         def __map(m):
                             for i in range(shape_tmp[0]):
@@ -586,6 +555,7 @@ class DiscreteTimeQuantumWalk:
 
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
+                # Converting to an apropriate coordinate for multiplication
                 rdd = rdd.map(
                     lambda m: (m[1], (m[0], m[2]))
                 ).partitionBy(
@@ -639,30 +609,32 @@ class DiscreteTimeQuantumWalk:
                 self._profiler.profile_resources(app_id)
                 self._profiler.profile_executors(app_id)
 
-    def title(self):
-        return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
-
     def destroy_coin_operator(self):
+        """Call the Operator's method destroy."""
         if self._coin_operator is not None:
             self._coin_operator.destroy()
             self._coin_operator = None
 
     def destroy_shift_operator(self):
+        """Call the Operator's method destroy."""
         if self._shift_operator is not None:
             self._shift_operator.destroy()
             self._shift_operator = None
 
     def destroy_evolution_operator(self):
+        """Call the Operator's method destroy."""
         if self._evolution_operator is not None:
             self._evolution_operator.destroy()
             self._evolution_operator = None
 
     def destroy_interaction_operator(self):
+        """Call the Operator's method destroy."""
         if self._interaction_operator is not None:
             self._interaction_operator.destroy()
             self._interaction_operator = None
 
     def destroy_walk_operator(self):
+        """Call the Operator's method destroy."""
         if self._walk_operator is not None:
             if self._num_particles == 1:
                     self._walk_operator.destroy()
@@ -672,14 +644,7 @@ class DiscreteTimeQuantumWalk:
             self._walk_operator = None
 
     def destroy_operators(self):
-        """
-        Release all operators from memory
-
-        Returns
-        -------
-        None
-
-        """
+        """Release all operators from memory."""
         if self._logger:
             self._logger.info('destroying operators...')
 
@@ -825,8 +790,8 @@ class DiscreteTimeQuantumWalk:
         if self._logger:
             self._logger.info("steps: {}".format(steps))
             self._logger.info("space size: {}".format(self._mesh.size))
-            self._logger.info("nº of particles: {}".format(self._num_particles))
-            self._logger.info("nº of partitions: {}".format(self._num_partitions))
+            self._logger.info("number of particles: {}".format(self._num_particles))
+            self._logger.info("number of partitions: {}".format(self._num_partitions))
 
             if self._num_particles > 1:
                 if phase is None:
@@ -843,6 +808,7 @@ class DiscreteTimeQuantumWalk:
             else:
                 self._logger.info("broken links probability: {}".format(self._mesh.broken_links_probability))
 
+        # Partitioning the initial state of the system in order to reduce some shuffling operations
         rdd = initial_state.data.partitionBy(
             numPartitions=self._num_partitions
         )
@@ -855,8 +821,8 @@ class DiscreteTimeQuantumWalk:
 
         if not result.is_unitary():
             if self._logger:
-                self._logger.error("the initial state is not evolution")
-            raise ValueError("the initial state is not evolution")
+                self._logger.error("the initial state is not unitary")
+            raise ValueError("the initial state is not unitary")
 
         app_id = self._spark_context.applicationId
         rdd_id = result.data.id()
@@ -883,6 +849,8 @@ class DiscreteTimeQuantumWalk:
                 self._logger.debug("sparsity of initial state: {}".format(result.sparsity))
 
         if steps > 0:
+            # Building operators once if not simulating decoherence with broken links
+            # When there is a broken links probability, the operators will be built in each step of the walk
             if not self._mesh.broken_links_probability:
                 if self._walk_operator is None:
                     if self._logger:
@@ -892,7 +860,7 @@ class DiscreteTimeQuantumWalk:
                 if self._num_particles > 1 and phase and self._interaction_operator is None:
                     if self._logger:
                         self._logger.info("no interaction operator has been set. A new one will be built")
-                    self.create_interaction_operator(phase, self._num_partitions, storage_level)
+                    self.create_interaction_operator(phase, storage_level)
 
             t1 = datetime.now()
 

@@ -38,15 +38,10 @@ class Mesh:
     @logger.setter
     def logger(self, logger):
         """
-
         Parameters
         ----------
         logger : Logger
             A Logger object or None to disable logging.
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -61,15 +56,10 @@ class Mesh:
     @profiler.setter
     def profiler(self, profiler):
         """
-
         Parameters
         ----------
         profiler : Profiler
             A Profiler object or None to disable profiling.
-
-        Returns
-        -------
-        None
 
         Raises
         ------

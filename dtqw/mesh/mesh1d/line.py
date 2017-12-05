@@ -25,7 +25,8 @@ class Line(Mesh1D):
     def check_steps(self, steps):
         return steps <= int((self._size - 1) / 2)
 
-    def create_operator(self, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, num_partitions,
+                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
@@ -33,11 +34,9 @@ class Line(Mesh1D):
         ----------
         num_partitions : int
             The desired number of partitions for the RDD.
-        mul_format : bool, optional
+        coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is True.
-
-            If mul_format is True, the returned operator will not be in (i,j,value) format, but in (j,(i,value)) format.
+            Default value is Operator.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -78,9 +77,13 @@ class Line(Mesh1D):
             __map
         )
 
-        if mul_format:
+        if coord_format == Operator.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
+            )
+        elif coord_format == Operator.CoordinateMultiplicand:
+            rdd = rdd.map(
+                lambda m: (m[0], (m[1], m[2]))
             )
 
         rdd = rdd.partitionBy(

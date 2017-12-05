@@ -2,6 +2,7 @@ from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
+from dtqw.linalg.operator import Operator
 
 __all__ = ['Coin', 'is_coin']
 
@@ -38,15 +39,10 @@ class Coin:
     @logger.setter
     def logger(self, logger):
         """
-
         Parameters
         ----------
         logger : Logger
             A Logger object or None to disable logging.
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -61,15 +57,10 @@ class Coin:
     @profiler.setter
     def profiler(self, profiler):
         """
-
         Parameters
         ----------
         profiler : Profiler
             A Profiler object or None to disable profiling.
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -122,7 +113,8 @@ class Coin:
     def is_2d(self):
         raise NotImplementedError
 
-    def create_operator(self, mesh, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, mesh, num_partitions,
+                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         raise NotImplementedError
 
 
