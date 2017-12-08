@@ -4,6 +4,7 @@ from pyspark import StorageLevel
 from dtqw.utils.utils import broadcast
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
+from dtqw.linalg.matrix import Matrix
 from dtqw.linalg.operator import *
 from dtqw.linalg.state import *
 
@@ -260,14 +261,14 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("no coin operator has been set. A new one will be built")
             self._coin_operator = self._coin.create_operator(
-                self._mesh, self._num_partitions, Operator.CoordinateMultiplicand, storage_level
+                self._mesh, self._num_partitions, Matrix.CoordinateMultiplicand, storage_level
             )
 
         if self._shift_operator is None:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
             self._shift_operator = self._mesh.create_operator(
-                self._num_partitions, Operator.CoordinateMultiplier, storage_level
+                self._num_partitions, Matrix.CoordinateMultiplier, storage_level
             )
 
         t1 = datetime.now()
@@ -328,7 +329,7 @@ class DiscreteTimeQuantumWalk:
 
         if self._mesh.is_1d():
             size = self._mesh.size
-            cs_size = coin_size * self._mesh.size
+            cs_size = coin_size * size
 
             rdd_range = cs_size ** num_particles
             shape = (rdd_range, rdd_range)
@@ -339,8 +340,8 @@ class DiscreteTimeQuantumWalk:
                 for p in range(num_particles):
                     a.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
 
-                for i in range(num_particles):
-                    if a[0] != a[i]:
+                for p in range(num_particles):
+                    if a[0] != a[p]:
                         return m, m, 1
 
                 return m, m, phase
@@ -428,6 +429,9 @@ class DiscreteTimeQuantumWalk:
             Wi = I1 (X) ... (X) Ii-1 (X) Wi (X) Ii+1 (X) ... In
             Wn = I1 (X) ... (X) In-1 (X) W
 
+        Regardless the number of particles, the walk operators have their (i,j,value) coordinates converted to
+        apropriate coordinates for multiplication, in this case, the Operator.MultiplierCoordinate.
+
         Parameters
         ----------
         storage_level : StorageLevel
@@ -510,6 +514,7 @@ class DiscreteTimeQuantumWalk:
 
                     # The first particle's walk operator consists in applying the tensor product between the
                     # evolution operator and the other particles' corresponding identity matrices
+                    #
                     # W1 = W (X) I2 (X) ... (X) In
                     for p2 in range(self._num_particles - 1 - p):
                         def __map(m):
@@ -526,6 +531,7 @@ class DiscreteTimeQuantumWalk:
 
                     # For the other particles, each one has its operator built by applying the
                     # tensor product between its previous particles' identity matrices and its evolution operator.
+                    #
                     # Wi = I1 (X) ... (X) Ii-1 (X) Wi ...
                     for p2 in range(p - 1):
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
@@ -542,7 +548,8 @@ class DiscreteTimeQuantumWalk:
 
                     shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
-                    # Then, the tensor product is applied between the following particles' identity matrices
+                    # Then, the tensor product is applied between the following particles' identity matrices.
+                    #
                     # ... (X) Ii+1 (X) ... In
                     for p2 in range(self._num_particles - 1 - p):
                         def __map(m):

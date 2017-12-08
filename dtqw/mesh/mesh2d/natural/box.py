@@ -1,6 +1,7 @@
 from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.mesh.mesh2d.natural.natural import Natural
+from dtqw.linalg.matrix import Matrix
 from dtqw.linalg.operator import Operator
 
 __all__ = ['BoxNatural']
@@ -15,10 +16,22 @@ class BoxNatural(Natural):
         return 'Natural Box'
 
     def check_steps(self, steps):
+        """
+        Check if the number of steps is valid for the size of the mesh.
+
+        Parameters
+        ----------
+        steps : int
+
+        Returns
+        -------
+        bool
+
+        """
         return True
 
     def create_operator(self, num_partitions,
-                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
@@ -28,7 +41,7 @@ class BoxNatural(Natural):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is Matrix.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -59,16 +72,21 @@ class BoxNatural(Natural):
                     for j in range(coin_size):
                         delta = int(not (i ^ j))
 
+                        # Finding the correspondent edge number from the x,y coordinate of the vertex
                         e = delta * (((size[0] + 1) * size[1]) + x * (size[1] + 1) + y + (1 - i)) + \
                             (1 - delta) * (y * (size[0] + 1) + x + (1 - i))
 
                         pos1 = x + l * (1 - delta)
                         pos2 = y + l * delta
 
-                        if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0 or e in bl_broad.value:
+                        if e in bl_broad.value:
                             bl = 0
                         else:
-                            bl = l
+                            # The border edges are considered broken so that they become reflexive
+                            if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
+                                bl = 0
+                            else:
+                                bl = l
 
                         m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
                             (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
@@ -88,6 +106,7 @@ class BoxNatural(Natural):
                         pos1 = x + l * (1 - delta)
                         pos2 = y + l * delta
 
+                        # The border edges are considered broken so that they become reflexive
                         if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
                             bl = 0
                         else:
@@ -105,11 +124,11 @@ class BoxNatural(Natural):
             __map
         )
 
-        if coord_format == Operator.CoordinateMultiplier:
+        if coord_format == Matrix.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
-        elif coord_format == Operator.CoordinateMultiplicand:
+        elif coord_format == Matrix.CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
             )

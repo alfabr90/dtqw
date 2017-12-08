@@ -1,13 +1,28 @@
 from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.mesh.mesh1d.mesh1d import Mesh1D
+from dtqw.linalg.matrix import Matrix
 from dtqw.linalg.operator import Operator
 
 __all__ = ['Line']
 
 
 class Line(Mesh1D):
+    """Class for Line mesh."""
+
     def __init__(self, spark_context, size, bl_prob=None):
+        """
+        Build a Line mesh object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        size : int
+            Size of the mesh.
+        bl_prob : float, optional
+            Probability of the occurences of broken links in the mesh.
+        """
         super().__init__(spark_context, size, bl_prob)
         self._size = self._define_size(size)
 
@@ -23,10 +38,22 @@ class Line(Mesh1D):
         return range(- int((self._size - 1) / 2), int((self._size - 1) / 2) + 1)
 
     def check_steps(self, steps):
+        """
+        Check if the number of steps is valid for the size of the mesh.
+
+        Parameters
+        ----------
+        steps : int
+
+        Returns
+        -------
+        bool
+
+        """
         return steps <= int((self._size - 1) / 2)
 
     def create_operator(self, num_partitions,
-                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
@@ -36,7 +63,7 @@ class Line(Mesh1D):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is Matrix.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -61,7 +88,10 @@ class Line(Mesh1D):
                 for i in range(coin_size):
                     l = (-1) ** i
 
-                    if bl_broad.value.get(x + i + l) is not None:
+                    # Finding the correspondent edge number from the x coordinate of the vertex
+                    e = x + i + l
+
+                    if e in bl_broad.value:
                         l = 0
 
                     yield ((i + l) * size + (x + l) % size, (1 - i) * size + x, 1)
@@ -77,11 +107,11 @@ class Line(Mesh1D):
             __map
         )
 
-        if coord_format == Operator.CoordinateMultiplier:
+        if coord_format == Matrix.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
-        elif coord_format == Operator.CoordinateMultiplicand:
+        elif coord_format == Matrix.CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
             )

@@ -2,12 +2,27 @@ from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
+from dtqw.linalg.matrix import Matrix
 
 __all__ = ['Mesh', 'is_mesh']
 
 
 class Mesh:
+    """Top level class for Meshes."""
+
     def __init__(self, spark_context, size, bl_prob=None):
+        """
+        Build a top level Mesh object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        size : int
+            Size of the mesh.
+        bl_prob : float, optional
+            Probability of the occurences of broken links in the mesh.
+        """
         self._spark_context = spark_context
         self._size = self._define_size(size)
         self._broken_links_probability = bl_prob
@@ -124,15 +139,62 @@ class Mesh:
         raise NotImplementedError
 
     def is_1d(self):
+        """
+        Check if this is a 1-dimensional Mesh.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
     def is_2d(self):
+        """
+        Check if this is a 2-dimensional Mesh.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
     def check_steps(self, steps):
+        """
+        Check if the number of steps is valid for the size of the mesh.
+
+        Parameters
+        ----------
+        steps : int
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
-    def create_operator(self, num_partitions, mul_format=True, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, num_partitions,
+                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Build the mesh operator.
+
+        Parameters
+        ----------
+        num_partitions : int
+            The desired number of partitions for the RDD.
+        coord_format : int, optional
+            Indicate if the operator must be returned in an apropriate format for multiplications.
+            Default value is Matrix.CoordinateDefault.
+        storage_level : StorageLevel, optional
+            The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
 

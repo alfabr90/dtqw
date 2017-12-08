@@ -5,7 +5,18 @@ __all__ = ['Hadamard2D']
 
 
 class Hadamard2D(Coin2D):
+    """Class that represents the 2-dimensional Hadamard coin."""
+
     def __init__(self, spark_context):
+        """
+        Build a 2-dimensional Hadamard coin object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+
+        """
         super().__init__(spark_context)
 
         self._data = np.array(

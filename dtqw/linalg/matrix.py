@@ -8,6 +8,10 @@ __all__ = ['Matrix']
 
 
 class Matrix:
+    CoordinateDefault = 0
+    CoordinateMultiplier = 1
+    CoordinateMultiplicand = 2
+
     def __init__(self, spark_context, rdd, shape):
         self._spark_context = spark_context
 

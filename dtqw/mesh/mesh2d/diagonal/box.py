@@ -1,6 +1,7 @@
 from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.mesh.mesh2d.diagonal.diagonal import Diagonal
+from dtqw.linalg.matrix import Matrix
 from dtqw.linalg.operator import Operator
 
 __all__ = ['BoxDiagonal']
@@ -15,10 +16,22 @@ class BoxDiagonal(Diagonal):
         return 'Diagonal Box'
 
     def check_steps(self, steps):
+        """
+        Check if the number of steps is valid for the size of the mesh.
+
+        Parameters
+        ----------
+        steps : int
+
+        Returns
+        -------
+        bool
+
+        """
         return True
 
     def create_operator(self, num_partitions,
-                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
@@ -28,7 +41,7 @@ class BoxDiagonal(Diagonal):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is Matrix.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -59,12 +72,17 @@ class BoxDiagonal(Diagonal):
                     for j in range(coin_size):
                         l2 = (-1) ** j
 
+                        # Finding the correspondent edge number from the x,y coordinate of the vertex
                         e = (y + 1 - j) * (size[0] + 1) + x + 1 - i
 
-                        if x + l1 >= size[0] or x + l1 < 0 or y + l2 >= size[1] or y + l2 < 0 or e in bl_broad.value:
+                        if e in bl_broad.value:
                             bl1, bl2 = 0, 0
                         else:
-                            bl1, bl2 = l1, l2
+                            # The border edges are considered broken so that they become reflexive
+                            if x + l1 >= size[0] or x + l1 < 0 or y + l2 >= size[1] or y + l2 < 0:
+                                bl1, bl2 = 0, 0
+                            else:
+                                bl1, bl2 = l1, l2
 
                         m = ((i + bl1) * coin_size + (j + bl2)) * size_xy + (x + bl1) * size[1] + (y + bl2)
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
@@ -80,6 +98,7 @@ class BoxDiagonal(Diagonal):
                     for j in range(coin_size):
                         l2 = (-1) ** j
 
+                        # The border edges are considered broken so that they become reflexive
                         if x + l1 >= size[0] or x + l1 < 0 or y + l2 >= size[1] or y + l2 < 0:
                             bl1, bl2 = 0, 0
                         else:
@@ -96,11 +115,11 @@ class BoxDiagonal(Diagonal):
             __map
         )
 
-        if coord_format == Operator.CoordinateMultiplier:
+        if coord_format == Matrix.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
-        elif coord_format == Operator.CoordinateMultiplicand:
+        elif coord_format == Matrix.CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
             )

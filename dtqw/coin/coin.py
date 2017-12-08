@@ -2,13 +2,24 @@ from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
-from dtqw.linalg.operator import Operator
+from dtqw.linalg.matrix import Matrix
 
 __all__ = ['Coin', 'is_coin']
 
 
 class Coin:
+    """Top level class for Coins."""
+
     def __init__(self, spark_context):
+        """
+        Build a top level Coin object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+
+        """
         self._spark_context = spark_context
         self._size = None
         self._data = None
@@ -108,13 +119,37 @@ class Coin:
         return self.__str__()
 
     def is_1d(self):
+        """
+        Check if this is a Coin for 1-dimensional meshes.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
     def is_2d(self):
+        """
+        Check if this is a Coin for 2-dimensional meshes.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
     def create_operator(self, mesh, num_partitions,
-                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Build the coin operator.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
 

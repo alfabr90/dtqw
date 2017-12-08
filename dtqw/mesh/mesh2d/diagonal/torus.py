@@ -1,6 +1,7 @@
 from datetime import datetime
 from pyspark import StorageLevel
 from dtqw.mesh.mesh2d.diagonal.diagonal import Diagonal
+from dtqw.linalg.matrix import Matrix
 from dtqw.linalg.operator import Operator
 
 __all__ = ['TorusDiagonal']
@@ -15,10 +16,22 @@ class TorusDiagonal(Diagonal):
         return 'Diagonal Torus'
 
     def check_steps(self, steps):
+        """
+        Check if the number of steps is valid for the size of the mesh.
+
+        Parameters
+        ----------
+        steps : int
+
+        Returns
+        -------
+        bool
+
+        """
         return True
 
     def create_operator(self, num_partitions,
-                        coord_format=Operator.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
@@ -28,7 +41,7 @@ class TorusDiagonal(Diagonal):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is Matrix.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -59,6 +72,7 @@ class TorusDiagonal(Diagonal):
                     for j in range(coin_size):
                         l2 = (-1) ** j
 
+                        # Finding the correspondent edge number from the x,y coordinate of the vertex
                         e = (y + 1 - j) * (size[0] + 1) + x + 1 - i
 
                         if e in bl_broad.value:
@@ -92,11 +106,11 @@ class TorusDiagonal(Diagonal):
             __map
         )
 
-        if coord_format == Operator.CoordinateMultiplier:
+        if coord_format == Matrix.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
-        elif coord_format == Operator.CoordinateMultiplicand:
+        elif coord_format == Matrix.CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
             )
