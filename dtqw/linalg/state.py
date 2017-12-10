@@ -10,7 +10,26 @@ __all__ = ['State', 'is_state']
 
 
 class State(Matrix):
+    """Class for the system state."""
+
     def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+        """
+        Build a State object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        rdd : RDD
+            The base RDD of this object.
+        shape : tuple
+            The shape of this operator object. Must be a 2-dimensional tuple.
+        mesh : Mesh
+            The mesh where the particles will walk on.
+        num_particles : int
+            The number of particles present in the walk.
+
+        """
         super().__init__(spark_context, rdd, shape)
 
         if not is_mesh(mesh):
@@ -30,6 +49,15 @@ class State(Matrix):
         return self._num_particles
 
     def dump(self):
+        """
+        Dump all this object's RDD to disk.
+
+        Returns
+        ------
+        State
+            A reference to this object.
+
+        """
         path = get_tmp_path()
 
         self.data.map(
@@ -53,7 +81,16 @@ class State(Matrix):
 
         return self
 
-    def is_unitary(self, round_precision=10):
+    def norm(self):
+        """
+        Calculate the norm of this state.
+
+        Returns
+        -------
+        float
+            The norm of this state.
+
+        """
         n = self.data.filter(
             lambda m: m[1] != complex()
         ).map(
@@ -62,9 +99,28 @@ class State(Matrix):
             lambda a, b: a + b
         )
 
-        return round(math.sqrt(n), round_precision) == 1.0
+        return math.sqrt(n)
 
     def multiply(self, other):
+        """
+        Multiply this state with another one.
+
+        Parameters
+        ----------
+        other : State
+            An operator if multiplying another operator, State otherwise.
+
+        Returns
+        -------
+        :obj:Operator or :obj:State
+            An operator if multiplying another operator, State otherwise.
+
+        Raises
+        ------
+        TypeError
+            If other is neither an operator nor a state.
+
+        """
         if is_state(other):
             raise NotImplementedError
         else:
@@ -73,6 +129,23 @@ class State(Matrix):
             raise TypeError('State instance expected, not "{}"'.format(type(other)))
 
     def kron(self, other_broadcast, other_shape):
+        """
+        Perform the tensor product between this object and another operator.
+
+        Parameters
+        ----------
+        other_broadcast : Broadcast
+            A Spark's broadcast variable containing a collection of the other
+            operator's entries in (i,j,value) coordinate.
+        other_shape : tuple
+            The shape of the other operator. Must be a 2-dimensional tuple.
+
+        Returns
+        -------
+        Operator
+            The resulting operator.
+
+        """
         shape = (self._shape[0] * other_shape[0], 1)
 
         def __map(m):

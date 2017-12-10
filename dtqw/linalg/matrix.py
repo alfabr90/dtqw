@@ -8,11 +8,40 @@ __all__ = ['Matrix']
 
 
 class Matrix:
+    """Top level class for operators and system states."""
+
     CoordinateDefault = 0
+    """
+    CoordinateDefault : int
+        Indicate that the Operator object must have its entries stored as (i,j,value) coordinates.
+    """
     CoordinateMultiplier = 1
+    """
+    CoordinateMultiplier : int
+        Indicate that the Operator object must have its entries stored as (j,(i,value)) coordinates. This is mandatory
+        when the object is the multiplier operand.
+    """
     CoordinateMultiplicand = 2
+    """
+    CoordinateMultiplicand : int
+        Indicate that the Operator object must have its entries stored as (i,(j,value)) coordinates. This is mandatory
+        when the object is the multiplicand operand.
+    """
 
     def __init__(self, spark_context, rdd, shape):
+        """
+        Build a top level object for operators and system states.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        rdd : RDD
+            The base RDD of this object.
+        shape : tuple
+            The shape of this matrix object. Must be a 2-dimensional tuple.
+
+        """
         self._spark_context = spark_context
 
         if not isinstance(rdd, RDD):
@@ -115,9 +144,31 @@ class Matrix:
         return self.__str__()
 
     def dump(self):
+        """
+        Dump all this object's RDD to disk.
+
+        Raises
+        ------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Persist this object's RDD considering the chosen storage level.
+
+        Parameters
+        ----------
+        storage_level : StorageLevel, optional
+            The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
+
+        Returns
+        -------
+        Matrix
+            A reference to this object.
+
+        """
         if self.data is not None:
             if not self.data.is_cached:
                 self.data.persist(storage_level)
@@ -133,6 +184,15 @@ class Matrix:
         return self
 
     def unpersist(self):
+        """
+        Unpersist this object's RDD.
+
+        Returns
+        -------
+        Matrix
+            A reference to this object.
+
+        """
         if self.data is not None:
             if self.data.is_cached:
                 self.data.unpersist()
@@ -148,9 +208,35 @@ class Matrix:
         return self
 
     def destroy(self):
+        """
+        Alias of the method unpersist.
+
+        Returns
+        -------
+        Matrix
+            A reference to this object.
+
+        """
         return self.unpersist()
 
     def materialize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Materialize this object's RDD considering the chosen storage level.
+
+        This method calls persist and right after counts how many elements there are in the RDD to force its
+        persistence and find the sparsity of the matrix.
+
+        Parameters
+        ----------
+        storage_level : StorageLevel, optional
+            The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
+
+        Returns
+        -------
+        Matrix
+            A reference to this object.
+
+        """
         self.persist(storage_level)
         self._num_nonzero_elements = self.data.count()
         self._sparsity = 1.0 - self.num_nonzero_elements / self._num_elements
@@ -161,6 +247,15 @@ class Matrix:
         return self
 
     def checkpoint(self):
+        """
+        Checkpoint this object's RDD.
+
+        Returns
+        -------
+        Matrix
+            A reference to this object.
+
+        """
         if not self.data.is_cached:
             if self._logger:
                 self._logger.warning("it is recommended to cache the RDD before checkpointing it")
@@ -172,7 +267,16 @@ class Matrix:
 
         return self
 
-    def is_unitary(self, round_precision=10):
+    def norm(self):
+        """
+        Calculate the norm of this matrix.
+
+        Returns
+        -------
+        float
+            The norm of this matrix.
+
+        """
         n = self.data.filter(
             lambda m: m[2] != complex()
         ).map(
@@ -181,7 +285,37 @@ class Matrix:
             lambda a, b: a + b
         )
 
-        return round(math.sqrt(n), round_precision) == 1.0
+        return math.sqrt(n)
+
+    def is_unitary(self, round_precision=10):
+        """
+        Check if this matrix is unitary by calculating its norm.
+
+        Parameters
+        ----------
+        round_precision : int, optional
+            The desired precision when rounding the norm of this matrix. The default value is 10.
+
+        Returns
+        -------
+        bool
+            True if the norm of this matrix is 1.0, False otherwise.
+
+        """
+        return round(self.norm(), round_precision) == 1.0
 
     def multiply(self, other):
+        """
+        Multiply this matrix with another one.
+
+        Parameters
+        ----------
+        other :obj:Operator or :obj:State
+            An operator if multiplying another operator, State otherwise.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError

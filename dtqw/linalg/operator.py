@@ -6,10 +6,33 @@ __all__ = ['Operator', 'is_operator']
 
 
 class Operator(Matrix):
+    """Class for the operators of quantum walks."""
+
     def __init__(self, spark_context, rdd, shape):
+        """
+        Build an Operator object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        rdd : RDD
+            The base RDD of this object.
+        shape : tuple
+            The shape of this operator object. Must be a 2-dimensional tuple.
+        """
         super().__init__(spark_context, rdd, shape)
 
     def dump(self):
+        """
+        Dump all this object's RDD to disk.
+
+        Returns
+        ------
+        Operator
+            A reference to this object.
+
+        """
         path = get_tmp_path()
 
         self.data.map(
@@ -76,6 +99,25 @@ class Operator(Matrix):
         return State(self._spark_context, rdd, shape, other.mesh, other.num_particles)
 
     def multiply(self, other):
+        """
+        Multiply this operator with another one or a system state.
+
+        Parameters
+        ----------
+        other :obj:Operator or :obj:State
+            An operator if multiplying another operator, State otherwise.
+
+        Returns
+        -------
+        :obj:Operator or :obj:State
+            An operator if multiplying another operator, State otherwise.
+
+        Raises
+        ------
+        TypeError
+            If other is neither an operator nor a state.
+
+        """
         if is_operator(other):
             return self._multiply_operator(other)
         elif is_state(other):
@@ -86,6 +128,23 @@ class Operator(Matrix):
             raise TypeError('State or Operator instance expected, not "{}"'.format(type(other)))
 
     def kron(self, other_broadcast, other_shape):
+        """
+        Perform the tensor product between this object and another operator.
+
+        Parameters
+        ----------
+        other_broadcast : Broadcast
+            A Spark's broadcast variable containing a collection of the other
+            operator's entries in (i,j,value) coordinate.
+        other_shape : tuple
+            The shape of the other operator. Must be a 2-dimensional tuple.
+
+        Returns
+        -------
+        Operator
+            The resulting operator.
+
+        """
         shape = (self._shape[0] * other_shape[0], self._shape[1] * other_shape[1])
 
         def __map(m):
