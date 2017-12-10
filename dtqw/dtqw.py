@@ -322,7 +322,7 @@ class DiscreteTimeQuantumWalk:
 
         t1 = datetime.now()
 
-        phase = cmath.exp(phase * (0.0 + 1.0j))
+        phase = cmath.exp(phase * (0.0+1.0j))
         num_particles = self._num_particles
 
         coin_size = 2
@@ -335,20 +335,17 @@ class DiscreteTimeQuantumWalk:
             shape = (rdd_range, rdd_range)
 
             def __map(m):
-                a = []
+                x = []
 
                 for p in range(num_particles):
-                    a.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
+                    x.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
 
                 for p in range(num_particles):
-                    if a[0] != a[p]:
+                    if x[0] != x[p]:
                         return m, m, 1
 
                 return m, m, phase
         elif self._mesh.is_2d():
-            ndim = 2
-            ind = ndim * num_particles
-
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
             cs_size_x = coin_size * size_x
@@ -359,14 +356,18 @@ class DiscreteTimeQuantumWalk:
             shape = (rdd_range, rdd_range)
 
             def __map(m):
-                a = []
+                xy = []
 
                 for p in range(num_particles):
-                    a.append(int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x)
-                    a.append(int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y)
+                    xy.append(
+                        (
+                            int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
+                            int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
+                        )
+                    )
 
-                for i in range(0, ind, ndim):
-                    if a[0] != a[i] or a[1] != a[i + 1]:
+                for p in range(num_particles):
+                    if xy[0][0] != xy[p][0] or xy[0][1] != xy[p][1]:
                         return m, m, 1
 
                 return m, m, phase

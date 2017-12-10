@@ -95,8 +95,8 @@ class State(Matrix):
 
         if self._mesh.is_1d():
             ndim = 1
-            num_p = self._num_particles
-            ind = ndim * num_p
+            num_particles = self._num_particles
+            ind = ndim * num_particles
             size = self._mesh.size
             cs_size = coin_size * size
             dims = [size for p in range(ind)]
@@ -107,17 +107,17 @@ class State(Matrix):
             shape = tuple(dims)
 
             def __map(m):
-                a = []
+                x = []
 
-                for p in range(num_p):
-                    a.append(int(m[0] / (cs_size ** (num_p - 1 - p))) % size)
+                for p in range(num_particles):
+                    x.append(int(m[0] / (cs_size ** (num_particles - 1 - p))) % size)
 
-                return tuple(a), (abs(m[1]) ** 2).real
+                return tuple(x), (abs(m[1]) ** 2).real
 
             def __unmap(m):
                 a = []
 
-                for p in range(num_p):
+                for p in range(num_particles):
                     a.append(m[0][p])
 
                 a.append(m[1])
@@ -125,8 +125,8 @@ class State(Matrix):
                 return tuple(a)
         elif self._mesh.is_2d():
             ndim = 2
-            num_p = self._num_particles
-            ind = ndim * num_p
+            num_particles = self._num_particles
+            ind = ndim * num_particles
             dims = []
 
             for p in range(0, ind, ndim):
@@ -137,26 +137,32 @@ class State(Matrix):
             size_y = self._mesh.size[1]
             cs_size_x = coin_size * size_x
             cs_size_y = coin_size * size_y
+            cs_size_xy = cs_size_x * cs_size_y
             shape = tuple(dims)
 
             def __map(m):
-                a = []
+                xy = []
 
-                for p in range(num_p):
-                    a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p) * size_y)) % size_x)
-                    a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p))) % size_y)
+                for p in range(num_particles):
+                    xy.append(
+                        (
+                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
+                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p))) % size_y
+                        )
+                    )
 
-                return tuple(a), (abs(m[1]) ** 2).real
+                return tuple(xy), (abs(m[1]) ** 2).real
 
             def __unmap(m):
-                a = []
+                xy = []
 
-                for p in range(ind):
-                    a.append(m[0][p])
+                for p in range(num_particles):
+                    xy.append(m[0][p][0])
+                    xy.append(m[0][p][1])
 
-                a.append(m[1])
+                xy.append(m[1])
 
-                return tuple(a)
+                return tuple(xy)
         else:
             if self._logger:
                 self._logger.error("mesh dimension not implemented")
@@ -219,13 +225,13 @@ class State(Matrix):
 
         if self._mesh.is_1d():
             ndim = 1
-            num_p = self._num_particles
-            ind = ndim * num_p
+            num_particles = self._num_particles
+            ind = ndim * num_particles
             size = self._mesh.size
             shape = (size, 1)
 
             def __filter(m):
-                for p in range(num_p):
+                for p in range(num_particles):
                     if m[0] != m[p]:
                         return False
                 return True
@@ -234,8 +240,8 @@ class State(Matrix):
                 return m[0], m[ind]
         elif self._mesh.is_2d():
             ndim = 2
-            num_p = self._num_particles
-            ind = ndim * num_p
+            num_particles = self._num_particles
+            ind = ndim * num_particles
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
             shape = (size_x, size_y)
@@ -295,38 +301,43 @@ class State(Matrix):
 
         if self._mesh.is_1d():
             ind = 1
-            num_p = self._num_particles
+            num_particles = self._num_particles
             size = self._mesh.size
             cs_size = coin_size * size
             shape = (size, 1)
 
             def __map(m):
-                a = []
+                x = []
 
-                for p in range(num_p):
-                    a.append(int(m[0] / (cs_size ** (num_p - 1 - p))) % size)
+                for p in range(num_particles):
+                    x.append(int(m[0] / (cs_size ** (num_particles - 1 - p))) % size)
 
-                return a[particle], (abs(m[1]) ** 2).real
+                return x[particle], (abs(m[1]) ** 2).real
 
             def __unmap(m):
                 return m
         elif self._mesh.is_2d():
             ind = 2
-            num_p = self._num_particles
+            num_particles = self._num_particles
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
             cs_size_x = coin_size * size_x
             cs_size_y = coin_size * size_y
+            cs_size_xy = cs_size_x * cs_size_y
             shape = (size_x, size_y)
 
             def __map(m):
-                a = []
+                xy = []
 
-                for p in range(num_p):
-                    a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p) * size_y)) % size_x)
-                    a.append(int(m[0] / ((cs_size_x * cs_size_y) ** (num_p - 1 - p))) % size_y)
+                for p in range(num_particles):
+                    xy.append(
+                        (
+                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
+                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p))) % size_y
+                        )
+                    )
 
-                return (a[particle], a[particle + 1]), (abs(m[1]) ** 2).real
+                return xy[particle], (abs(m[1]) ** 2).real
 
             def __unmap(m):
                 return m[0][0], m[0][1], m[1]

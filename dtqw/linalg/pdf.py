@@ -26,9 +26,15 @@ class PDF(Matrix):
     def mesh(self):
         return self._mesh
 
+    def dump(self):
+        raise NotImplementedError
+
+    def multiply(self, other):
+        raise NotImplementedError
+
     def sum(self, ind, round_precision=10):
         n = self.data.filter(
-            lambda m: m[ind] != 0.0
+            lambda m: m[ind] != float()
         ).map(
             lambda m: m[ind]
         ).reduce(

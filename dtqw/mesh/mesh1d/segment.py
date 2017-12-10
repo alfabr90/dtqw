@@ -82,6 +82,7 @@ class Segment(Mesh1D):
 
                     if e in bl_broad.value:
                         bl = 0
+                    else:
                         if x + l >= size or x + l < 0:
                             bl = 0
                         else:
