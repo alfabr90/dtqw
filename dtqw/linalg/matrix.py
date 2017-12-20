@@ -42,23 +42,22 @@ class Matrix:
             The shape of this matrix object. Must be a 2-dimensional tuple.
 
         """
-        self._spark_context = spark_context
-
         if not isinstance(rdd, RDD):
             # self.logger.error("Invalid argument to instantiate an Operator object")
             raise TypeError("invalid argument to instantiate an Operator object")
-
-        self.data = rdd
 
         if shape is not None:
             if not is_shape(shape):
                 # self.logger.error("Invalid shape")
                 raise ValueError("invalid shape")
 
+        self._spark_context = spark_context
         self._shape = shape
         self._num_elements = self._shape[0] * self._shape[1]
         self._num_nonzero_elements = 0
         self._sparsity = 1
+
+        self.data = rdd
 
         self._logger = None
         self._profiler = None
@@ -256,6 +255,11 @@ class Matrix:
             A reference to this object.
 
         """
+        if self.data.isCheckpointed():
+            if self._logger:
+                self._logger.info("RDD already checkpointed")
+            return self
+
         if not self.data.is_cached:
             if self._logger:
                 self._logger.warning("it is recommended to cache the RDD before checkpointing it")

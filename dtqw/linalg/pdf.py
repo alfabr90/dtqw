@@ -11,15 +11,33 @@ __all__ = ['PDF', 'is_pdf']
 
 
 class PDF(Matrix):
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
-        super().__init__(spark_context, rdd, shape)
+    """Class for probability density function of the system."""
 
+    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+        """
+        Build a top level object for operators and system states.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        rdd : RDD
+            The base RDD of this object.
+        shape : tuple
+            The shape of this matrix object. Must be a 2-dimensional tuple.
+        mesh : Mesh
+            The mesh where the particles will walk on.
+        num_particles : int
+            The number of particles present in the walk.
+
+        """
         if not is_mesh(mesh):
             # self.logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
             raise TypeError('mesh instance expected, not "{}"'.format(type(mesh)))
 
-        self._mesh = mesh
+        super().__init__(spark_context, rdd, shape)
 
+        self._mesh = mesh
         self._num_particles = num_particles
 
     @property
@@ -30,9 +48,36 @@ class PDF(Matrix):
         raise NotImplementedError
 
     def multiply(self, other):
+        """
+        Multiply this matrix with another one.
+
+        Parameters
+        ----------
+        other :obj:Operator or :obj:State
+            An operator if multiplying another operator, State otherwise.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError
 
     def sum(self, ind, round_precision=10):
+        """
+        Sum the probabilities of this PDF.
+
+        Parameters
+        ----------
+        ind : int
+            The index to get the probability value. Depends on the dimension of the mesh and the number of particles.
+        round_precision : int, optional
+            The precision used to round the value. Default is 10 decimal digits.
+
+        Returns
+        -------
+
+        """
         n = self.data.filter(
             lambda m: m[ind] != float()
         ).map(
@@ -43,7 +88,26 @@ class PDF(Matrix):
 
         return round(n, round_precision)
 
-    def plot(self, title, labels, filename, **kwargs):
+    def plot(self, filename, title, labels=None, **kwargs):
+        """
+        Plot the probabilities over the mesh.
+
+        Parameters
+        ----------
+        filename: str
+            The filename to save the plot.
+        title: str
+            The title of the plot.
+        labels: tuple or list, optional
+            The labels of each axis.
+        kwargs
+            Keyword arguments being passed to matplotlib.
+
+        Returns
+        -------
+        None
+
+        """
         if self._logger:
             self._logger.info("starting plot of probabilities...")
 

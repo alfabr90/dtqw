@@ -30,14 +30,13 @@ class State(Matrix):
             The number of particles present in the walk.
 
         """
-        super().__init__(spark_context, rdd, shape)
-
         if not is_mesh(mesh):
             # self.logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
             raise TypeError('mesh instance expected, not "{}"'.format(type(mesh)))
 
-        self._mesh = mesh
+        super().__init__(spark_context, rdd, shape)
 
+        self._mesh = mesh
         self._num_particles = num_particles
 
     @property
@@ -112,13 +111,14 @@ class State(Matrix):
 
         Returns
         -------
-        :obj:Operator or :obj:State
-            An operator if multiplying another operator, State otherwise.
+        :obj:State
+            The resulting state.
 
         Raises
         ------
         TypeError
             If other is neither an operator nor a state.
+        NotImplementedError
 
         """
         if is_state(other):
@@ -159,6 +159,20 @@ class State(Matrix):
         return State(self._spark_context, rdd, shape, self._mesh, self._num_particles)
 
     def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Perform the measurement of the entire system state.
+
+        Parameters
+        ----------
+        storage_level : StorageLevel
+            The desired storage level when materializing the RDD.
+
+        Returns
+        -------
+        :obj:PDF
+            The PDF of the entire system.
+
+        """
         if self._logger:
             self._logger.info("measuring the state of the system...")
 
@@ -286,6 +300,23 @@ class State(Matrix):
         return pdf
 
     def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Filter the measurement of the entire system by checking when
+        all particles are located at the same site of the mesh.
+
+        Parameters
+        ----------
+        full_measurement : :obj:PDF
+            The measurement of the entire system.
+        storage_level : StorageLevel
+            The desired storage level when materializing the RDD.
+
+        Returns
+        -------
+        :obj:PDF
+            The PDF of the system when all particles are located at the same site.
+
+        """
         if self._logger:
             self._logger.info("measuring the state of the system which the particles are at the same positions...")
 
@@ -474,8 +505,51 @@ class State(Matrix):
 
         return pdf
 
-    def partial_measurements(self, particles, storage_level=StorageLevel.MEMORY_AND_DISK):
-        return [self._partial_measurement(p, storage_level) for p in particles]
+    def partial_measurements(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Perform the partial measurement of each particle of the system state.
+
+        Parameters
+        ----------
+        storage_level : StorageLevel
+            The desired storage level when materializing the RDD.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the PDF of each particle.
+
+        """
+        return [self._partial_measurement(p, storage_level) for p in range(self._num_particles)]
+
+    def measure(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Perform the measurement of the system state.
+
+        If the state is composed by only one particle, the full measurement of the
+        system is performed and returned. In other cases, the measurement process will return a tuple containing
+        the full measurement, the filtered measurement - probabilities of each mesh site
+        with all particles located at - and the partial measurement of each particle.
+
+        Parameters
+        ----------
+        storage_level : StorageLevel
+            The desired storage level when materializing the RDD.
+
+        Returns
+        -------
+        :obj:PDF or tuple
+            PDF if the system is composed by only one particle, tuple otherwise.
+
+        """
+        if self._num_particles == 1:
+            return self.full_measurement(storage_level)
+        else:
+            full_measurement = self.full_measurement(storage_level)
+            filtered_measurement = self.filtered_measurement(full_measurement, storage_level)
+            partial_measurements = self.partial_measurements(storage_level)
+
+            return full_measurement, filtered_measurement, partial_measurements
 
 
 def is_state(obj):
