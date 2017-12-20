@@ -136,8 +136,14 @@ class PDF(Matrix):
                 linestyle='-',
                 linewidth=1.0
             )
-            plt.xlabel(labels[0])
-            plt.ylabel(labels[1])
+
+            if labels:
+                plt.xlabel(labels[0])
+                plt.ylabel(labels[1])
+            else:
+                plt.xlabel('Position')
+                plt.ylabel('Probability')
+
             plt.title(title)
         elif self._mesh.is_2d():
             pdf = np.zeros(self._shape, dtype=float)
@@ -159,9 +165,15 @@ class PDF(Matrix):
                 antialiased=True
             )
 
-            axes.set_xlabel(labels[0])
-            axes.set_ylabel(labels[1])
-            axes.set_zlabel(labels[2])
+            if labels:
+                axes.set_xlabel(labels[0])
+                axes.set_ylabel(labels[1])
+                axes.set_zlabel(labels[2])
+            else:
+                axes.set_xlabel('Position x')
+                axes.set_ylabel('Position y')
+                axes.set_zlabel('Probability')
+
             axes.set_title(title)
             axes.view_init(elev=50)
 
