@@ -199,4 +199,18 @@ class Mesh:
 
 
 def is_mesh(obj):
+    """
+    Check whether argument is a Mesh object.
+
+    Parameters
+    ----------
+    obj
+        Any Python object.
+
+    Returns
+    -------
+    bool
+        True if argument is a Mesh object, False otherwise.
+
+    """
     return isinstance(obj, Mesh)

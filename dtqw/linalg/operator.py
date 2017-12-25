@@ -29,7 +29,7 @@ class Operator(Matrix):
 
         Returns
         ------
-        Operator
+        :obj:Operator
             A reference to this object.
 
         """
@@ -56,7 +56,7 @@ class Operator(Matrix):
 
         return self
 
-    def _multiply_operator(self, other):
+    def _multiply_operator(self, other, coord_format):
         if self._shape[1] != other.shape[0]:
             if self._logger:
                 self._logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
@@ -72,9 +72,20 @@ class Operator(Matrix):
             lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
-        ).map(
-            lambda m: (m[0][0], m[0][1], m[1])
         )
+
+        if coord_format == Matrix.CoordinateMultiplier:
+            rdd = rdd.map(
+                lambda m: (m[0][1], (m[0][0], m[1]))
+            )
+        elif coord_format == Matrix.CoordinateMultiplicand:
+            rdd = rdd.map(
+                lambda m: (m[0][0], (m[0][1], m[1]))
+            )
+        else:  # Matrix.CoordinateDefault
+            rdd = rdd.map(
+                lambda m: (m[0][0], m[0][1], m[1])
+            )
 
         return Operator(self._spark_context, rdd, shape)
 
@@ -98,7 +109,7 @@ class Operator(Matrix):
 
         return State(self._spark_context, rdd, shape, other.mesh, other.num_particles)
 
-    def multiply(self, other):
+    def multiply(self, other, coord_format=Matrix.CoordinateDefault):
         """
         Multiply this operator with another one or a system state.
 
@@ -106,6 +117,9 @@ class Operator(Matrix):
         ----------
         other :obj:Operator or :obj:State
             An operator if multiplying another operator, State otherwise.
+        coord_format : int, optional
+            Indicate if the operator must be returned in an apropriate format for multiplications.
+            Default value is Matrix.CoordinateDefault. Not applicable when multiplying a State.
 
         Returns
         -------
@@ -119,7 +133,7 @@ class Operator(Matrix):
 
         """
         if is_operator(other):
-            return self._multiply_operator(other)
+            return self._multiply_operator(other, coord_format)
         elif is_state(other):
             return self._multiply_state(other)
         else:
@@ -141,7 +155,7 @@ class Operator(Matrix):
 
         Returns
         -------
-        Operator
+        :obj:Operator
             The resulting operator.
 
         """
@@ -159,4 +173,18 @@ class Operator(Matrix):
 
 
 def is_operator(obj):
+    """
+    Check whether argument is an Operator object.
+
+    Parameters
+    ----------
+    obj
+        Any Python object.
+
+    Returns
+    -------
+    bool
+        True if argument is an Operator object, False otherwise.
+
+    """
     return isinstance(obj, Operator)

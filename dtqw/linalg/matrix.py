@@ -55,7 +55,6 @@ class Matrix:
         self._shape = shape
         self._num_elements = self._shape[0] * self._shape[1]
         self._num_nonzero_elements = 0
-        self._sparsity = 1
 
         self.data = rdd
 
@@ -79,10 +78,6 @@ class Matrix:
         return self._num_nonzero_elements
 
     @property
-    def sparsity(self):
-        return self._sparsity
-
-    @property
     def logger(self):
         return self._logger
 
@@ -93,7 +88,6 @@ class Matrix:
     @logger.setter
     def logger(self, logger):
         """
-
         Parameters
         ----------
         logger : Logger
@@ -116,7 +110,6 @@ class Matrix:
     @profiler.setter
     def profiler(self, profiler):
         """
-
         Parameters
         ----------
         profiler : Profiler
@@ -152,6 +145,18 @@ class Matrix:
 
         """
         raise NotImplementedError
+
+    def sparsity(self):
+        """
+        Calculate the sparsity of this object.
+
+        Returns
+        -------
+        float
+            The sparsity of this object.
+
+        """
+        return 1.0 - self.num_nonzero_elements / self._num_elements
 
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
@@ -223,7 +228,7 @@ class Matrix:
         Materialize this object's RDD considering the chosen storage level.
 
         This method calls persist and right after counts how many elements there are in the RDD to force its
-        persistence and find the sparsity of the matrix.
+        persistence.
 
         Parameters
         ----------
@@ -232,13 +237,12 @@ class Matrix:
 
         Returns
         -------
-        Matrix
+        :obj:Matrix or :obj:Operator or :obj:State
             A reference to this object.
 
         """
         self.persist(storage_level)
         self._num_nonzero_elements = self.data.count()
-        self._sparsity = 1.0 - self.num_nonzero_elements / self._num_elements
 
         if self._logger:
             self._logger.info("RDD {} was materialized".format(self.data.id()))

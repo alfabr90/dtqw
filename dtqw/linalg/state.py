@@ -553,4 +553,18 @@ class State(Matrix):
 
 
 def is_state(obj):
+    """
+    Check whether argument is a State object.
+
+    Parameters
+    ----------
+    obj
+        Any Python object.
+
+    Returns
+    -------
+    bool
+        True if argument is a State object, False otherwise.
+
+    """
     return isinstance(obj, State)

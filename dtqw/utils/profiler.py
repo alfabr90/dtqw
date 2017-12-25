@@ -207,7 +207,7 @@ class Profiler:
         self._sparsity[-1][name] = self._default_sparsity()
         self._sparsity[-1][name]['numElements'] = matrix.shape[0] * matrix.shape[1]
         self._sparsity[-1][name]['numNonzeroElements'] = matrix.num_nonzero_elements
-        self._sparsity[-1][name]['sparsity'] = matrix.sparsity
+        self._sparsity[-1][name]['sparsity'] = matrix.sparsity()
 
     def profile_rdd(self, name, app_id, rdd_id):
         if self.logger:

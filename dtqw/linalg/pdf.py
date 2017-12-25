@@ -192,4 +192,18 @@ class PDF(Matrix):
 
 
 def is_pdf(obj):
+    """
+    Check whether argument is a PDF object.
+
+    Parameters
+    ----------
+    obj
+        Any Python object.
+
+    Returns
+    -------
+    bool
+        True if argument is a PDF object, False otherwise.
+
+    """
     return isinstance(obj, PDF)

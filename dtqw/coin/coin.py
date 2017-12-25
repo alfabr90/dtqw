@@ -154,4 +154,18 @@ class Coin:
 
 
 def is_coin(obj):
+    """
+    Check whether argument is a Coin object.
+
+    Parameters
+    ----------
+    obj
+        Any Python object.
+
+    Returns
+    -------
+    bool
+        True if argument is a Coin object, False otherwise.
+
+    """
     return isinstance(obj, Coin)
