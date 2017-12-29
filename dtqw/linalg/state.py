@@ -290,8 +290,8 @@ class State(Matrix):
                 )
                 self._logger.info(
                     "PDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='fullMeasurement', key='memoryUsed'),
-                        self._profiler.get_rdd(name='fullMeasurement', key='diskUsed')
+                        self._profiler.get_rdd(name='fullMeasurement')['memoryUsed'],
+                        self._profiler.get_rdd(name='fullMeasurement')['diskUsed']
                     )
                 )
 
@@ -386,8 +386,8 @@ class State(Matrix):
                 )
                 self._logger.info(
                     "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='filteredMeasurement', key='memoryUsed'),
-                        self._profiler.get_rdd(name='filteredMeasurement', key='diskUsed')
+                        self._profiler.get_rdd(name='filteredMeasurement')['memoryUsed'],
+                        self._profiler.get_rdd(name='filteredMeasurement')['diskUsed']
                     )
                 )
 
@@ -492,12 +492,8 @@ class State(Matrix):
                     "PDF with partial measurements for particle {} "
                     "are consuming {} bytes in memory and {} bytes in disk".format(
                         particle + 1,
-                        self._profiler.get_rdd(
-                            name='partialMeasurementParticle{}'.format(particle + 1), key='memoryUsed'
-                        ),
-                        self._profiler.get_rdd(
-                            name='partialMeasurementParticle{}'.format(particle + 1), key='diskUsed'
-                        )
+                        self._profiler.get_rdd(name='partialMeasurementParticle{}'.format(particle + 1))['memoryUsed'],
+                        self._profiler.get_rdd(name='partialMeasurementParticle{}'.format(particle + 1))['diskUsed']
                     )
                 )
 

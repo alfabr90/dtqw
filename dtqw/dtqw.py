@@ -322,7 +322,6 @@ class DiscreteTimeQuantumWalk:
 
         if self._profiler:
             self._profiler.profile_times('interactionOperator', (datetime.now() - t1).total_seconds())
-            self._profiler.profile_sparsity('interactionOperator', self._interaction_operator)
             self._profiler.profile_rdd('interactionOperator', app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
@@ -333,17 +332,10 @@ class DiscreteTimeQuantumWalk:
                 )
                 self._logger.info(
                     "interaction operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='interactionOperator', key='memoryUsed'),
-                        self._profiler.get_rdd(name='interactionOperator', key='diskUsed')
+                        self._profiler.get_rdd(name='interactionOperator')['memoryUsed'],
+                        self._profiler.get_rdd(name='interactionOperator')['diskUsed']
                     )
                 )
-                self._logger.debug("shape of interaction operator: {}".format(self._interaction_operator.shape))
-                self._logger.debug(
-                    "number of elements of interaction operator: {}, which {} are nonzero".format(
-                        self._interaction_operator.num_elements, self._interaction_operator.num_nonzero_elements
-                    )
-                )
-                self._logger.debug("sparsity of interaction operator: {}".format(self._interaction_operator.sparsity()))
 
     def create_walk_operator(self, coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
@@ -408,7 +400,6 @@ class DiscreteTimeQuantumWalk:
 
             if self._profiler:
                 self._profiler.profile_times('walkOperator', (datetime.now() - t1).total_seconds())
-                self._profiler.profile_sparsity('walkOperator', self._walk_operator)
                 self._profiler.profile_rdd('walkOperator', app_id, rdd_id)
                 self._profiler.profile_resources(app_id)
                 self._profiler.profile_executors(app_id)
@@ -419,17 +410,10 @@ class DiscreteTimeQuantumWalk:
                     )
                     self._logger.info(
                         "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
-                            self._profiler.get_rdd(name='walkOperator', key='memoryUsed'),
-                            self._profiler.get_rdd(name='walkOperator', key='diskUsed')
+                            self._profiler.get_rdd(name='walkOperator')['memoryUsed'],
+                            self._profiler.get_rdd(name='walkOperator')['diskUsed']
                         )
                     )
-                    self._logger.debug("shape of walk operator: {}".format(self._walk_operator.shape))
-                    self._logger.debug(
-                        "number of elements of walk operator: {}, which {} are nonzero".format(
-                            self._walk_operator.num_elements, self._walk_operator.num_nonzero_elements
-                        )
-                    )
-                    self._logger.debug("sparsity of walk operator: {}".format(self._walk_operator.sparsity()))
         else:
             if self._logger:
                 self._logger.info("building walk operator...")
@@ -530,7 +514,6 @@ class DiscreteTimeQuantumWalk:
                     self._profiler.profile_times(
                         'walkOperatorParticle{}'.format(p + 1), (datetime.now() - t_tmp).total_seconds()
                     )
-                    self._profiler.profile_sparsity('walkOperatorParticle{}'.format(p + 1), self._walk_operator[p])
                     self._profiler.profile_rdd(
                         'walkOperatorParticle{}'.format(p + 1), app_id, self._walk_operator[p].data.id()
                     )
@@ -544,20 +527,9 @@ class DiscreteTimeQuantumWalk:
                         self._logger.info(
                             "walk operator for particle {} is consuming {} bytes in memory and {} bytes in disk".format(
                                 p + 1,
-                                self._profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1), key='memoryUsed'),
-                                self._profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1), key='diskUsed')
+                                self._profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1))['memoryUsed'],
+                                self._profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1))['diskUsed']
                             )
-                        )
-                        self._logger.debug(
-                            "shape of walk operator for particle {}: {}".format(p + 1, self._walk_operator[p].shape)
-                        )
-                        self._logger.debug(
-                            "number of elements of walk operator for particle {}: {}, which {} are nonzero".format(
-                                p + 1, self._walk_operator[p].num_elements, self._walk_operator[p].num_nonzero_elements
-                            )
-                        )
-                        self._logger.debug("sparsity of walk operator for particle {}: {}".format(
-                            p + 1, self._walk_operator[p].sparsity())
                         )
 
             eo.unpersist()
@@ -605,113 +577,6 @@ class DiscreteTimeQuantumWalk:
         self.destroy_interaction_operator()
         self.destroy_walk_operator()
 
-    def _monoparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
-        app_id = self._spark_context.applicationId
-
-        result = initial_state
-
-        if self._logger:
-            self._logger.info("starting the walk...")
-
-        for i in range(1, steps + 1, 1):
-            if self._mesh.broken_links_probability:
-                self.destroy_shift_operator()
-                self.destroy_walk_operator()
-                self.create_walk_operator(Matrix.CoordinateMultiplier, storage_level)
-
-            t_tmp = datetime.now()
-
-            result_tmp = self._walk_operator.multiply(result).materialize(storage_level)
-
-            result.unpersist()
-
-            result = result_tmp
-
-            if self._logger:
-                self._logger.debug("step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
-
-            rdd_id = result.data.id()
-
-            if self._profiler:
-                self._profiler.profile_rdd('systemStateStep{}'.format(i), app_id, rdd_id)
-                self._profiler.profile_sparsity('systemStateStep{}'.format(i), result)
-                self._profiler.profile_resources(app_id)
-                self._profiler.profile_executors(app_id)
-
-                if self._logger:
-                    self._logger.info(
-                        "system state after {} step(s) is consuming {} bytes in memory and {} bytes in disk".format(
-                            i,
-                            self._profiler.get_rdd(name='systemStateStep{}'.format(i), key='memoryUsed'),
-                            self._profiler.get_rdd(name='systemStateStep{}'.format(i), key='diskUsed')
-                        )
-                    )
-                    self._logger.debug(
-                        "number of elements of system state after {} step(s): {}, which {} are nonzero".format(
-                            i, result.num_elements, result.num_nonzero_elements
-                        )
-                    )
-                    self._logger.debug("sparsity of system state after {} step(s): {}".format(i, result.sparsity()))
-
-        return result
-
-    def _multiparticle_walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
-        app_id = self._spark_context.applicationId
-
-        result = initial_state
-
-        if self._logger:
-            self._logger.info("starting the walk...")
-
-        for i in range(1, steps + 1, 1):
-            if self._mesh.broken_links_probability:
-                self.destroy_shift_operator()
-                self.destroy_walk_operator()
-                self.create_walk_operator(Matrix.CoordinateMultiplier, storage_level)
-
-            t_tmp = datetime.now()
-
-            result_tmp = result
-
-            if self._interaction_operator is not None:
-                result_tmp = self._interaction_operator.multiply(result_tmp)
-
-            for wo in self._walk_operator:
-                result_tmp = wo.multiply(result_tmp)
-
-            result_tmp.materialize(storage_level)
-            result.unpersist()
-
-            result = result_tmp
-
-            if self._logger:
-                self._logger.debug("step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
-
-            rdd_id = result.data.id()
-
-            if self._profiler:
-                self._profiler.profile_rdd('systemStateStep{}'.format(i), app_id, rdd_id)
-                self._profiler.profile_sparsity('systemStateStep{}'.format(i), result)
-                self._profiler.profile_resources(app_id)
-                self._profiler.profile_executors(app_id)
-
-                if self._logger:
-                    self._logger.info(
-                        "system state after {} step(s) is consuming {} bytes in memory and {} bytes in disk".format(
-                            i,
-                            self._profiler.get_rdd(name='systemStateStep{}'.format(i), key='memoryUsed'),
-                            self._profiler.get_rdd(name='systemStateStep{}'.format(i), key='diskUsed')
-                        )
-                    )
-                    self._logger.debug(
-                        "number of elements of system state after {} step(s): {}, which {} are nonzero".format(
-                            i, result.num_elements, result.num_nonzero_elements
-                        )
-                    )
-                    self._logger.debug("sparsity of system state after {} step(s): {}".format(i, result.sparsity()))
-
-        return result
-
     def walk(self, steps, initial_state, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Perform a walk
@@ -733,8 +598,8 @@ class DiscreteTimeQuantumWalk:
         """
         if not self._mesh.check_steps(steps):
             if self._logger:
-                self._logger.error("invalid number of steps")
-            raise ValueError("invalid number of steps")
+                self._logger.error("invalid number of steps for the chosen mesh")
+            raise ValueError("invalid number of steps for the chosen mesh")
 
         if self._logger:
             self._logger.info("steps: {}".format(steps))
@@ -785,17 +650,10 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info(
                     "initial state is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='initialState', key='memoryUsed'),
-                        self._profiler.get_rdd(name='initialState', key='diskUsed')
+                        self._profiler.get_rdd(name='initialState')['memoryUsed'],
+                        self._profiler.get_rdd(name='initialState')['diskUsed']
                     )
                 )
-                self._logger.debug("shape of initial state: {}".format(result.shape))
-                self._logger.debug(
-                    "number of elements of initial state: {}, which {} are nonzero".format(
-                        result.num_elements, result.num_nonzero_elements
-                    )
-                )
-                self._logger.debug("sparsity of initial state: {}".format(result.sparsity()))
 
         if steps > 0:
             # Building operators once if not simulating decoherence with broken links
@@ -813,10 +671,53 @@ class DiscreteTimeQuantumWalk:
 
             t1 = datetime.now()
 
-            if self._num_particles == 1:
-                result = self._monoparticle_walk(steps, result, storage_level)
-            else:
-                result = self._multiparticle_walk(steps, result, storage_level)
+            if self._logger:
+                self._logger.info("starting the walk...")
+
+            for i in range(1, steps + 1, 1):
+                if self._mesh.broken_links_probability:
+                    self.destroy_shift_operator()
+                    self.destroy_walk_operator()
+                    self.create_walk_operator(Matrix.CoordinateMultiplier, storage_level)
+
+                t_tmp = datetime.now()
+
+                result_tmp = result
+
+                if self._num_particles == 1:
+                    result_tmp = self._walk_operator.multiply(result_tmp)
+                else:
+                    if self._interaction_operator is not None:
+                        result_tmp = self._interaction_operator.multiply(result_tmp)
+
+                    for wo in self._walk_operator:
+                        result_tmp = wo.multiply(result_tmp)
+
+                result_tmp.materialize(storage_level)
+                result.unpersist()
+
+                result = result_tmp
+
+                if self._logger:
+                    self._logger.debug(
+                        "step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
+
+                rdd_id = result.data.id()
+
+                if self._profiler:
+                    self._profiler.profile_rdd('systemStateStep{}'.format(i), app_id, rdd_id)
+                    self._profiler.profile_sparsity('systemStateStep{}'.format(i), result)
+                    self._profiler.profile_resources(app_id)
+                    self._profiler.profile_executors(app_id)
+
+                    if self._logger:
+                        self._logger.info(
+                            "system state after {} step(s) is consuming {} bytes in memory and {} bytes in disk".format(
+                                i,
+                                self._profiler.get_rdd(name='systemStateStep{}'.format(i))['memoryUsed'],
+                                self._profiler.get_rdd(name='systemStateStep{}'.format(i))['diskUsed']
+                            )
+                        )
 
             if self._profiler:
                 self._profiler.profile_times('walk', (datetime.now() - t1).total_seconds())
@@ -827,12 +728,12 @@ class DiscreteTimeQuantumWalk:
             t1 = datetime.now()
 
             if self._logger:
-                self._logger.debug("checking if the final state is evolution...")
+                self._logger.debug("checking if the final state is unitary...")
 
             if not result.is_unitary():
                 if self._logger:
-                    self._logger.error("the final state is not evolution")
-                raise ValueError("the final state is not evolution")
+                    self._logger.error("the final state is not unitary")
+                raise ValueError("the final state is not unitary")
 
             if self._logger:
                 self._logger.debug("unitarity check was done in {}s".format((datetime.now() - t1).total_seconds()))
@@ -848,16 +749,9 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info(
                     "final state is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='finalState', key='memoryUsed'),
-                        self._profiler.get_rdd(name='finalState', key='diskUsed')
+                        self._profiler.get_rdd(name='finalState')['memoryUsed'],
+                        self._profiler.get_rdd(name='finalState')['diskUsed']
                     )
                 )
-                self._logger.debug("shape of final state: {}".format(result.shape))
-                self._logger.debug(
-                    "number of elements of final state: {}, which {} are nonzero".format(
-                        result.num_elements, result.num_nonzero_elements
-                    )
-                )
-                self._logger.debug("sparsity of final state: {}".format(result.sparsity()))
 
         return result

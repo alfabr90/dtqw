@@ -9,28 +9,32 @@ import statistics as st
 from datetime import datetime
 from urllib import request, error
 from mpl_toolkits.mplot3d import Axes3D
+from dtqw.utils.logger import is_logger
 
 __all__ = ['Profiler']
 
 
 class Profiler:
+    """Profile and export the resources consumed by Spark."""
+
     def __init__(self, base_url='http://localhost:4040/api/v1/'):
+        """
+        Build a Profiler object.
+
+        Parameters
+        ----------
+        base_url: str, optional
+            The base URL for getting information about the resources consumed. Default is http://localhost:4040/api/v1/.
+        """
         self._base_url = base_url
 
-        self._times = []
-        self._sparsity = []
-        self._rdd = []
-        self._resources = []
-        self._executors = []
+        self._times = None
+        self._sparsity = None
+        self._rdd = None
+        self._resources = None
+        self._executors = None
 
-        self._plot_markers = {
-            'totalShuffleWrite': 's',
-            'totalShuffleRead': 'o',
-            'diskUsed': '^',
-            'memoryUsed': 'd',
-        }
-
-        self.logger = None
+        self._logger = None
 
     @property
     def times(self):
@@ -48,9 +52,31 @@ class Profiler:
     def resources(self):
         return self._resources
 
+    @property
+    def logger(self):
+        return self._logger
+
+    @logger.setter
+    def logger(self, logger):
+        """
+        Parameters
+        ----------
+        logger : Logger
+            A Logger object or None to disable logging.
+
+        Raises
+        ------
+        TypeError
+
+        """
+        if is_logger(logger) or logger is None:
+            self._logger = logger
+        else:
+            raise TypeError('logger instance expected, not "{}"'.format(type(logger)))
+
     @staticmethod
     def _default_sparsity():
-        return {'numElements': 0, 'numNonzeroElements': 0, 'sparsity': 0.0}
+        return {'numElements': 0, 'numNonzeroElements': 0}
 
     @staticmethod
     def _default_rdd():
@@ -109,42 +135,206 @@ class Profiler:
         return result
 
     def request_applications(self):
+        """
+        Request applications info.
+
+        Returns
+        -------
+        list
+            A list with applications info.
+
+        """
         return self._request()
 
     def request_jobs(self, app_id, job_id=None):
+        """
+        Request an application's jobs info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        job_id : int, optional
+            The job's id.
+
+        Returns
+        -------
+        list or dict
+            A list with all application's jobs info or a dict with the job info. None when an error occurred.
+
+        """
         if job_id is None:
             return self._request('/{}/jobs'.format(app_id))
         else:
             return self._request('/{}/jobs/{}'.format(app_id, job_id))
 
     def request_stages(self, app_id, stage_id=None):
+        """
+        Request an application's stages info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        stage_id : int, optional
+            The stage's id.
+
+        Returns
+        -------
+        list or dict
+            A list with all application's stages info or a dict with the stage info. None when an error occurred.
+
+        """
         if stage_id is None:
             return self._request('/{}/stages'.format(app_id))
         else:
             return self._request('/{}/stages/{}'.format(app_id, stage_id))
 
     def request_stageattempt(self, app_id, stage_id, stageattempt_id):
+        """
+        Request an application's stage attempts info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        stage_id : int
+            The stage's id.
+        stageattempt_id : int
+            The stage attempt's id.
+
+        Returns
+        -------
+        dict
+            A dict with an application's stage attempt info. None when an error occurred.
+
+        """
         return self._request('/{}/stages/{}/{}'.format(app_id, stage_id, stageattempt_id))
 
     def request_stageattempt_tasksummary(self, app_id, stage_id, stageattempt_id):
+        """
+        Request the task summary of a stage attempt info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        stage_id : int
+            The stage's id.
+        stageattempt_id : int
+            The stage attempt's id.
+
+        Returns
+        -------
+        dict
+            A dict with the task summary of a stage attempt. None when an error occurred.
+
+        """
         return self._request('/{}/stages/{}/{}/taskSummary'.format(app_id, stage_id, stageattempt_id))
 
     def request_stageattempt_tasklist(self, app_id, stage_id, stageattempt_id):
+        """
+        Request the task list of a stage attempt info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        stage_id : int
+            The stage's id.
+        stageattempt_id : int
+            The stage attempt's id.
+
+        Returns
+        -------
+        list
+            A list with the task list of a stage attempt. None when an error occurred.
+
+        """
         return self._request('/{}/stages/{}/{}/taskList'.format(app_id, stage_id, stageattempt_id))
 
     def request_executors(self, app_id):
+        """
+        Request an application's active executors info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+
+        Returns
+        -------
+        list
+            A list with all application's active executors info. None when an error occurred.
+
+        """
         return self._request('/{}/executors'.format(app_id))
 
     def request_allexecutors(self, app_id):
+        """
+        Request an application's executors info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+
+        Returns
+        -------
+        list
+            A list with all application's executors info. None when an error occurred.
+
+        """
         return self._request('/{}/allexecutors'.format(app_id))
 
     def request_rdd(self, app_id, rdd_id=None):
+        """
+        Request an application's RDD info.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        rdd_id : int, optional
+            The RDD's id.
+
+        Returns
+        -------
+        list or dict
+            A list with all application's RDD info or a dict with the RDD info. None when an error occurred.
+
+        """
         if rdd_id is None:
             return self._request('/{}/storage/rdd'.format(app_id))
         else:
             return self._request('/{}/storage/rdd/{}'.format(app_id, rdd_id))
 
+    def start(self):
+        """Reset the profiler attributes to get info for a new profile round."""
+        self._times = {}
+        self._sparsity = {}
+        self._rdd = {}
+        self._resources = self._default_resources()
+        self._executors = {}
+
     def log_executors(self, data=None, app_id=None):
+        """
+        Log all executors info into the log file.
+
+        When no data is provided, the application's id is used to request those data.
+
+        Parameters
+        ----------
+        data : list, optional
+            The executors data.
+        app_id : int
+            The application's id.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             if data is None:
                 if app_id is None:
@@ -153,14 +343,34 @@ class Profiler:
                 data = self.request_executors(app_id)
 
             if data is not None:
-                self.logger.info("Printing executors data...")
+                self.logger.info("printing executors data...")
                 for d in data:
                     for k, v in d.items():
                         self.logger.info("{}: {}".format(k, v))
         else:
-            print('No logger has been defined')
+            print('no logger has been defined')
 
     def log_rdd(self, data=None, app_id=None, rdd_id=None):
+        """
+        Log all RDD info into the log file.
+
+        When no data is provided, the application's id is used to request all its RDD data.
+        If the RDD's id are also provided, they are used to get its data.
+
+        Parameters
+        ----------
+        data : list, optional
+            The executors data.
+        app_id : int, optional
+            The application's id.
+        rdd_id : int, optional
+            The RDD's id.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             if data is None:
                 if app_id is None:
@@ -187,58 +397,127 @@ class Profiler:
         else:
             print('No logger has been defined')
 
-    def start_round(self):
-        self._times.append({})
-        self._sparsity.append({})
-        self._rdd.append({})
-        self._resources.append(self._default_resources())
-        self._executors.append({})
-
     def profile_times(self, name, value):
+        """
+        Store the execution time for a named quantum walk element.
+
+        Parameters
+        ----------
+        name : str
+            A name for the element.
+        value : float
+            The measured execution time of the element.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info('profiling time for "{}"...'.format(name))
 
-        self._times[-1][name] = value
+        self._times[name] = value
 
-    def profile_sparsity(self, name, matrix):
+    def profile_sparsity(self, name, elem):
+        """
+        Store info about the number of elements for a named system state.
+
+        Parameters
+        ----------
+        name : str
+            A name for the element.
+        elem : :obj: State
+            The system state.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info('profiling sparsity for "{}"...'.format(name))
 
-        self._sparsity[-1][name] = self._default_sparsity()
-        self._sparsity[-1][name]['numElements'] = matrix.shape[0] * matrix.shape[1]
-        self._sparsity[-1][name]['numNonzeroElements'] = matrix.num_nonzero_elements
-        self._sparsity[-1][name]['sparsity'] = matrix.sparsity()
+        self._sparsity[name] = self._default_sparsity()
+        self._sparsity[name]['numElements'] = elem.shape[0] * elem.shape[1]
+        self._sparsity[name]['numNonzeroElements'] = elem.num_nonzero_elements
 
     def profile_rdd(self, name, app_id, rdd_id):
+        """
+        Store information about a RDD that represents a quantum walk element.
+
+        Parameters
+        ----------
+        name : str
+            A name for the element.
+        app_id : int
+            The application's id.
+        rdd_id : int
+            The RDD's id.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info('profiling RDD for "{}"...'.format(name))
 
-        if not (name in self._rdd[-1]):
-            self._rdd[-1][name] = self._default_rdd()
+        if not (name in self._rdd):
+            self._rdd[name] = self._default_rdd()
 
         data = self.request_rdd(app_id, rdd_id)
 
         if data is not None:
             for k, v in data.items():
-                if k in self._rdd[-1][name]:
-                    self._rdd[-1][name][k] = v
+                if k in self._rdd[name]:
+                    self._rdd[name][k] = v
 
     def profile_resources(self, app_id):
+        """
+        Store information about the resources consumed by the application.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info('profiling application resources...')
 
         data = self.request_executors(app_id)
 
-        for k in self._resources[-1]:
-            self._resources[-1][k].append(0)
+        for k in self._resources:
+            self._resources[k].append(0)
 
         if data is not None:
             for d in data:
                 for k, v in d.items():
-                    if k in self._resources[-1]:
-                        self._resources[-1][k][-1] += v
+                    if k in self._resources:
+                        self._resources[k][-1] += v
 
     def profile_executors(self, app_id, exec_id=None):
+        """
+        Store all executors info.
+
+        When no executor's id is provided, all the application's executors info are requested and stored.
+
+        Parameters
+        ----------
+        app_id : int
+            The application's id.
+        exec_id : int, optional
+            The executor's id.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             if exec_id is None:
                 self.logger.info('profiling resources of executors...')
@@ -250,456 +529,290 @@ class Profiler:
         if data is not None:
             if exec_id is None:
                 for d in data:
-                    if not (d['id'] in self._executors[-1]):
-                        self._executors[-1][d['id']] = self._default_executor()
+                    if not (d['id'] in self._executors):
+                        self._executors[d['id']] = self._default_executor()
 
                     for k, v in d.items():
-                        if k in self._executors[-1][d['id']]:
-                            self._executors[-1][d['id']][k].append(v)
+                        if k in self._executors[d['id']]:
+                            self._executors[d['id']][k].append(v)
             else:
                 for d in data:
                     if d['id'] == exec_id:
                         if not (d['id'] in self._executors):
-                            self._executors[-1][d['id']] = self._default_executor()
+                            self._executors[d['id']] = self._default_executor()
 
                         for k, v in d.items():
-                            if k in self._executors[-1][d['id']]:
-                                self._executors[-1][d['id']][k].append(v)
+                            if k in self._executors[d['id']]:
+                                self._executors[d['id']][k].append(v)
                         break
 
-    def get_times(self, func=None, name=None):
+    def get_times(self, name=None):
+        """
+        Get all measured times or for a specific quantum walk element.
+
+        Parameters
+        ----------
+        name : str, optional
+            A name for the element.
+
+        Returns
+        -------
+        dict or float
+            A dict with all measured times or the measured time for the specific quantum walk element.
+
+        """
         if len(self._times):
-            if name is not None:
-                if not (name in self._times[-1]):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(name))
-                    return None
-
-            if func is None:
-                if name is None:
-                    return self._times[-1].copy()
-                else:
-                    return self._times[-1][name]
+            if name is None:
+                return self._times.copy()
             else:
-                if name is None:
-                    times = {}
-
-                    for k in self._times[-1]:
-                        times[k] = func([t[k] for t in self._times])
-
-                    return times
-                else:
-                    return func([t[name] for t in self._times])
+                if not (name in self._times):
+                    if self.logger:
+                        self.logger.warning('no measurement of time has been done for "{}"'.format(name))
+                    return {}
+                return self._times[name]
         else:
             if self.logger:
-                self.logger('No measurement of time has been done')
-            return self._times
+                self.logger.warning('no measurement of time has been done')
+            return {}
 
-    def get_sparsity(self, func=None, name=None, key=None):
+    def get_sparsity(self, name=None):
+        """
+        Get all sparsity info or for a specific system state.
+
+        Parameters
+        ----------
+        name : str, optional
+            A name for the system state.
+
+        Returns
+        -------
+        dict or int
+            A dict with all sparsity info or the measured time for the specific system state.
+
+        """
         if len(self._sparsity):
-            keys = []
-
-            for s in self._sparsity:
-                keys = keys + [k for k in s.keys()]
-
-            keys = set(keys)
-
-            if name is not None:
-                if not (name in keys):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(name))
-                    return None
-
-            if key is not None:
-                if not (key in self._default_sparsity()):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(key))
-                    return None
-
-            if func is None:
-                if name is None:
-                    if key is None:
-                        return self._sparsity[-1].copy()
-                    else:
-                        sparsity = {}
-
-                        for k in keys:
-                            sparsity[k] = self._sparsity[-1][k][key]
-
-                        return sparsity
-                else:
-                    if key is None:
-                        return self._sparsity[-1][name].copy()
-                    else:
-                        return self._sparsity[-1][name][key]
+            if name is None:
+                return self._sparsity.copy()
             else:
-                if name is None:
-                    if key is None:
-                        sparsity = {}
-
-                        for k1 in keys:
-                            sparsity[k1] = self._default_sparsity()
-
-                            for k2 in sparsity[k1]:
-                                sparsity[k1][k2] = func([s[k1][k2] for s in self._sparsity])
-
-                        return sparsity
-                    else:
-                        sparsity = {}
-
-                        for k in keys:
-                            sparsity[k] = func([s[k][key] for s in self._sparsity])
-
-                        return sparsity
-                else:
-                    if key is None:
-                        sparsity = self._default_sparsity()
-
-                        for k in sparsity:
-                            sparsity[name][k] = func([s[name][k] for s in self._sparsity])
-
-                        return sparsity
-                    else:
-                        return func([s[name][key] for s in self._sparsity])
+                if not (name in self._sparsity):
+                    if self.logger:
+                        self.logger.warning('no measurement of state sparsity has been done for "{}"'.format(name))
+                    return {}
+                return self._sparsity[name]
         else:
             if self.logger:
-                self.logger('No measurement of operators and state sparsities have been done')
-            return self._sparsity
+                self.logger.warning('no measurement of state sparsity have been done')
+            return {}
 
-    def get_rdd(self, func=None, name=None, key=None):
+    def get_rdd(self, name=None):
+        """
+        Get all RDD resources measurements or for a specific quantum walk element.
+
+        Parameters
+        ----------
+        name : str, optional
+            A name for the element.
+
+        Returns
+        -------
+        dict or int
+            A dict with all RDD resources measurements or the measured time for the specific quantum walk element.
+
+        """
         if len(self._rdd):
-            if name is not None:
-                if not (name in self._rdd[-1]):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(name))
-                    return None
-
-            if key is not None:
-                if not (key in self._default_rdd()):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(key))
-                    return None
-
-            if func is None:
-                if name is None:
-                    if key is None:
-                        return self._rdd[-1].copy()
-                    else:
-                        rdd = {}
-
-                        for k, v in self._rdd[-1].items():
-                            rdd[k] = v[key]
-
-                        return rdd
-                else:
-                    if key is None:
-                        return self._rdd[-1][name].copy()
-                    else:
-                        return self._rdd[-1][name][key]
+            if name is None:
+                return self._rdd.copy()
             else:
-                keys = []
-
-                for r in self._rdd:
-                    keys = keys + [k for k in r.keys()]
-
-                keys = set(keys)
-
-                if name is None:
-                    if key is None:
-                        rdd = {}
-
-                        for k1 in keys:
-                            rdd[k1] = {}
-                            for k2 in self._default_rdd():
-                                rdd[k1][k2] = func([r[k1][k2] for r in self._rdd])
-
-                        return rdd
-                    else:
-                        rdd = {}
-
-                        for k in keys:
-                            rdd[k] = func([r[k][key] for r in self._rdd])
-
-                        return rdd
-                else:
-                    if key is None:
-                        rdd = {}
-
-                        for k in self._default_rdd():
-                            rdd[k] = func([r[name][k] for r in self._rdd])
-
-                        return rdd
-                    else:
-                        return func([r[name][key] for r in self._rdd])
+                if not (name in self._rdd):
+                    if self.logger:
+                        self.logger.warning('no measurement of RDD resources has been done for "{}"'.format(name))
+                    return {}
+                return self._rdd[name]
         else:
             if self.logger:
-                self.logger('No measurement of RDD has been done')
-            return self._rdd
+                self.logger.warning('no measurement of RDD resources has been done')
+            return {}
 
-    def get_resources(self, func=None, key=None):
+    def get_resources(self, key=None):
+        """
+        Get all or a specific resource measurement.
+
+        Parameters
+        ----------
+        key : str, optional
+            The key representing a resource.
+
+        Returns
+        -------
+        dict or int
+            A dict with all resource measurements or the specific one.
+
+        """
         if len(self._resources):
-            if key is not None:
+            if key is None:
+                return self._resources.copy()
+            else:
                 if not (key in self._default_resources()):
                     if self.logger:
-                        self.logger.warning('key "{}" not present'.format(key))
-                    return None
-
-            if func is None:
-                if key is None:
-                    resources = self._default_resources()
-
-                    for k in resources:
-                        resources[k] = self._resources[-1][k][-1]
-
-                    return resources
-                else:
-                    return self._resources[-1][key][-1]
-            else:
-                size = len([v for v in self._resources[-1].values()][0])
-
-                if key is None:
-                    resources = self._default_resources()
-
-                    for k in resources:
-                        for i in range(size):
-                            resources[k].append(func([r[k][i] for r in self._resources]))
-
-                    return resources
-                else:
-                    resources = []
-
-                    for i in range(size):
-                        resources.append(func([r[key][i] for r in self._resources]))
-
-                    return resources
+                        self.logger.warning('no measurement of resources has been done for "{}"'.format(key))
+                    return {}
+                return self._resources[key]
         else:
             if self.logger:
-                self.logger('No measurement of general resources has been done')
-            return self._resources
+                self.logger.warning('no measurement of resources has been done')
+            return {}
 
-    def get_executors(self, func=None, exec_id=None, key=None):
+    def get_executors(self, exec_id=None):
+        """
+        Get all executors' resources measurements or for a specific executor.
+
+        Parameters
+        ----------
+        exec_id : int, optional
+            An executor id.
+
+        Returns
+        -------
+        dict or float
+            A dict with all executors' resources or the specific executor's.
+
+        """
         if len(self._executors):
-            keys = []
-
-            for e in self._executors:
-                keys = keys + [k for k in e.keys()]
-
-            keys = set(keys)
-
-            if exec_id is not None:
-                if not (exec_id in keys):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(exec_id))
-                    return None
-
-            if key is not None:
-                if not (key in self._default_executor()):
-                    if self.logger:
-                        self.logger.warning('key "{}" not present'.format(key))
-                    return None
-
-            if func is None:
-                if exec_id is None:
-                    if key is None:
-                        executors = {}
-
-                        for k1 in keys:
-                            executors[k1] = self._default_resources()
-
-                            for e in self._executors[::-1]:
-                                if k1 in e:
-                                    for k2 in executors[k1]:
-                                        executors[k1][k2] = e[k1][k2][-1]
-                                    break
-
-                        return executors
-                    else:
-                        executors = {}
-
-                        for k in keys:
-                            executors[k] = self._default_resources()
-
-                            for e in self._executors[::-1]:
-                                if k in e:
-                                    executors[k] = e[k][key][-1]
-                                    break
-
-                        return executors
-                else:
-                    if key is None:
-                        executor = self._default_executor()
-
-                        for e in self._executors[::-1]:
-                            if exec_id in e:
-                                for k in executor:
-                                    executor[k] = e[exec_id][k][-1]
-                                break
-
-                        return executor
-                    else:
-                        for e in self._executors[::-1]:
-                            if exec_id in e:
-                                return e[exec_id][key][-1]
+            if exec_id is None:
+                return self._executors.copy()
             else:
-                if exec_id is None:
-                    if key is None:
-                        executors = {}
-
-                        for k1 in keys:
-                            executors[k1] = self._default_resources()
-
-                            for e1 in self._executors[::-1]:
-                                if k1 in e1:
-                                    for k2 in executors[k1]:
-                                        max_size = 0
-                                        for e2 in self._executors[::-1]:
-                                            if k1 in e2:
-                                                max_size = max(len(e2[k1][k2]), max_size)
-
-                                        for i in range(max_size):
-                                            tmp = []
-                                            for e2 in self._executors[::-1]:
-                                                if k1 in e2 and i < len(e2[k1][k2]):
-                                                    tmp.append(e2[k1][k2][i])
-                                            executors[k1][k2].append(func(tmp))
-                                    break
-
-                        return executors
-                    else:
-                        executors = {}
-
-                        for k in keys:
-                            executors[k] = self._default_resources()
-
-                            for e1 in self._executors[::-1]:
-                                if k in e1:
-                                    max_size = 0
-                                    for e2 in self._executors[::-1]:
-                                        if k in e2:
-                                            max_size = max(len(e2[k][key]), max_size)
-
-                                    for i in range(max_size):
-                                        tmp = []
-                                        for e2 in self._executors[::-1]:
-                                            if k in e2 and i < len(e2[k][key]):
-                                                tmp.append(e2[k][key][i])
-                                        executors[k][key].append(func(tmp))
-                                break
-
-                        return executors
-                else:
-                    if key is None:
-                        executors = self._default_resources()
-
-                        for e1 in self._executors[::-1]:
-                            if exec_id in e1:
-                                for k in executors:
-                                    max_size = 0
-                                    for e2 in self._executors[::-1]:
-                                        if exec_id in e2:
-                                            max_size = max(len(e2[exec_id][k]), max_size)
-
-                                    for i in range(max_size):
-                                        tmp = []
-                                        for e2 in self._executors[::-1]:
-                                            if exec_id in e2 and i < len(e2[exec_id][k]):
-                                                tmp.append(e2[exec_id][k][i])
-                                        executors[exec_id][k].append(func(tmp))
-                                break
-
-                        return executors
-                    else:
-                        executors = []
-
-                        for e1 in self._executors[::-1]:
-                            if exec_id in e1:
-                                max_size = 0
-                                for e2 in self._executors[::-1]:
-                                    if exec_id in e2:
-                                        max_size = max(len(e2[exec_id][key]), max_size)
-
-                                for i in range(max_size):
-                                    tmp = []
-                                    for e2 in self._executors[::-1]:
-                                        if exec_id in e2 and i < len(e2[exec_id][key]):
-                                            tmp.append(e2[exec_id][key][i])
-                                    executors[exec_id][key].append(func(tmp))
-                            break
-
-                        return executors
+                if not (exec_id in self._executors):
+                    if self.logger:
+                        self.logger.warning('no measurement of resources has been done for executor {}'.format(exec_id))
+                    return {}
+                return self._executors[exec_id]
         else:
             if self.logger:
-                self.logger('No measurement of executors resources has been done')
+                self.logger.warning('no measurement of executors resources has been done')
             return self._executors
 
-    def export_times(self, filename, func=None, extension='csv'):
+    def export_times(self, path, extension='csv'):
+        """
+        Export all stored times.
+
+        Parameters
+        ----------
+        path: str
+            The location of the files.
+        extension: str, optional
+            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info("exporting times in {} format...".format(extension))
 
         if len(self._times):
-            if func is None:
-                times = self._times
-            else:
-                times = [self.get_times(func)]
-
-            self._export_values(times, times[-1].keys(), filename, extension)
+            self._export_values([self._times], self._times.keys(), path + 'times', extension)
 
             if self.logger:
                 self.logger.info("times successfully exported")
         else:
             if self.logger:
-                self.logger('No measurement of time has been done')
+                self.logger.warning('no measurement of time has been done')
 
-    def export_sparsity(self, filename, extension='csv'):
+    def export_sparsity(self, path, extension='csv'):
+        """
+        Export all stored sparsity informations.
+
+        Parameters
+        ----------
+        path: str
+            The location of the files.
+        extension: str, optional
+            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info("exporting sparsities in {} format...".format(extension))
 
         if len(self._sparsity):
             sparsity = []
 
-            for k, v in self.get_sparsity(st.mean).items():
+            for k, v in self._sparsity.items():
                 tmp = v.copy()
-                tmp['rdd'] = k
+                tmp['state'] = k
                 sparsity.append(tmp)
 
-            self._export_values(sparsity, sparsity[-1].keys(), filename, extension)
+            self._export_values(sparsity, sparsity[-1].keys(), path + 'sparsity', extension)
 
             if self.logger:
-                self.logger.info("sparsities successfully exported")
+                self.logger.info("state sparsities successfully exported")
         else:
             if self.logger:
-                self.logger('No measurement of sparsity has been done')
+                self.logger.warning('no measurement of sparsity has been done')
 
-    def export_rdd(self, filename, func, extension='csv'):
+    def export_rdd(self, path, extension='csv'):
+        """
+        Export all stored RDD resources informations.
+
+        Parameters
+        ----------
+        path: str
+            The location of the files.
+        extension: str, optional
+            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
-            self.logger.info("exporting RDD in {} format...".format(extension))
+            self.logger.info("exporting RDD resources in {} format...".format(extension))
 
         if len(self._rdd):
             rdd = []
 
-            for k, v in self.get_rdd(func).items():
+            for k, v in self._rdd.items():
                 tmp = v.copy()
                 tmp['rdd'] = k
                 rdd.append(tmp)
 
-            self._export_values(rdd, rdd[-1].keys(), filename, extension)
+            self._export_values(rdd, rdd[-1].keys(), path + 'rdd', extension)
 
             if self.logger:
-                self.logger.info("RDD successfully exported")
+                self.logger.info("RDD resources successfully exported")
         else:
             if self.logger:
-                self.logger('No measurement of RDD has been done')
+                self.logger.warning('no measurement of RDD resources has been done')
 
-    def export_resources(self, filename, func, extension='csv'):
+    def export_resources(self, path, extension='csv'):
+        """
+        Export all stored resources informations.
+
+        Parameters
+        ----------
+        path: str
+            The location of the files.
+        extension: str, optional
+            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
-            self.logger.info("exporting general resources in {} format...".format(extension))
+            self.logger.info("exporting resources in {} format...".format(extension))
 
         if len(self._resources):
             resources = []
-            rsrc = self.get_resources(func)
             size = 0
 
-            for k, v in rsrc.items():
+            for k, v in self._resources.items():
                 size = len(v)
                 break
 
@@ -707,24 +820,39 @@ class Profiler:
                 tmp = self._default_resources()
 
                 for k in tmp:
-                    tmp[k] = rsrc[k][i]
+                    tmp[k] = self._resources[k][i]
 
                 resources.append(tmp)
 
-            self._export_values(resources, resources[-1].keys(), filename, extension)
+            self._export_values(resources, resources[-1].keys(), path + 'resources', extension)
 
             if self.logger:
-                self.logger.info("general resources successfully exported")
+                self.logger.info("resources successfully exported")
         else:
             if self.logger:
-                self.logger('No measurement of general resources has been done')
+                self.logger.warning('no measurement of resources has been done')
 
-    def export_executors(self, filename, func, extension='csv'):
+    def export_executors(self, path, extension='csv'):
+        """
+        Export all stored executors' resources informations.
+
+        Parameters
+        ----------
+        path: str
+            The location of the files.
+        extension: str, optional
+            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
+
+        Returns
+        -------
+        None
+
+        """
         if self.logger:
             self.logger.info("exporting executors resources in {} format...".format(extension))
 
         if len(self._executors):
-            for k1, v1 in self.get_executors(func).items():
+            for k1, v1 in self._executors.items():
                 executors = []
                 size = 0
 
@@ -740,137 +868,50 @@ class Profiler:
 
                     executors.append(tmp)
 
-                self._export_values(executors, executors[-1].keys(), "{}_{}".format(filename, k1), extension)
+                self._export_values(executors, executors[-1].keys(), "{}executor_{}".format(path, k1), extension)
 
             if self.logger:
                 self.logger.info("executors resources successfully exported")
         else:
             if self.logger:
-                self.logger('No measurement of executors resources has been done')
+                self.logger.warning('no measurement of executors resources has been done')
 
-    def plot_times(self, title, filename, func=None, **kwargs):
-        if self.logger:
-            self.logger.info("plotting times...")
+    def export(self, path, extension='csv'):
+        """
+        Export all stored profiling information.
 
-        if len(self._times):
-            keys = self._times[-1].keys()
-            index = np.arange(len(keys))
-            width = 0.35
+        Parameters
+        ----------
+        path: str
+            The location of the files.
+        extension: str, optional
+            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
 
-            plt.cla()
-            plt.clf()
+        Returns
+        -------
+        None
 
-            fig, ax = plt.subplots()
-
-            if func is None:
-                if len(self._times) == 1:
-                    times = []
-
-                    for k in keys:
-                        times.append(self._times[-1][k])
-
-                    plt.bar(index, times, width, color='b')
-                else:
-                    mean_times = []
-                    pstdev_times = []
-
-                    for k, v in self.get_times(st.mean).items():
-                        mean_times.append(v)
-
-                    for k, v in self.get_times(st.pstdev).items():
-                        pstdev_times.append(v)
-
-                    plt.bar(index, mean_times, width, color='b', yerr=pstdev_times)
-            else:
-                times = []
-
-                for k, v in self.get_times(func).items():
-                    times.append(v)
-
-                plt.bar(index, times, 0.35, color='b')
-
-            plt.xlabel('Operations')
-            plt.ylabel('Time (s)')
-            plt.xticks(index, keys, rotation='vertical')
-            plt.title(title)
-
-            plt.tight_layout()
-            plt.savefig(filename, kwargs=kwargs)
-            plt.cla()
-            plt.clf()
-
-            if self.logger:
-                self.logger.info("times successfully plotted")
-        else:
-            if self.logger:
-                self.logger('No measurement of time has been done')
-
-    def plot_resources(self, title, filename, func=None, **kwargs):
-        if self.logger:
-            self.logger.info("plotting general resources...")
-
-        if len(self._resources):
-            keys = self._default_resources().keys()
-
-            for k in keys:
-                x = range(1, len(self._resources[-1][k]) + 1)
-                break
-
-            plt.cla()
-            plt.clf()
-
-            fig, ax = plt.subplots()
-
-            # max_bytes = 0
-            # for r in self._resources:
-            #     for m in r.values():
-            #         max_bytes = max(max(m), max_bytes)
-
-            magnitude = 9  # round(math.log10(max_bytes) / 3)
-
-            if func is None:
-                if len(self._resources) == 1:
-                    for k, v in self._resources[-1].items():
-                        plt.plot(x, [m / 10 ** magnitude for m in v], marker=self._plot_markers[k], label=k)
-                else:
-                    resources = {}
-
-                    for k, v in self.get_resources(st.mean).items():
-                        resources[k] = {}
-                        resources[k]['mean'] = v.copy()
-
-                    for k, v in self.get_resources(st.pstdev).items():
-                        resources[k]['pstdev'] = v.copy()
-
-                    for k, v in resources.items():
-                        plt.errorbar(
-                            x,
-                            [m / 10 ** magnitude for m in v['mean']],
-                            yerr=[m / 10 ** magnitude for m in v['pstdev']],
-                            marker=self._plot_markers[k],
-                            label=k
-                        )
-            else:
-                for k, v in self.get_resources(func).items():
-                    plt.plot(x, [m / 10 ** magnitude for m in v], marker=self._plot_markers[k], label=k)
-
-            plt.xlabel('Measurements')
-            plt.ylabel('Resources (GB)')
-            plt.xticks(x)
-            plt.title(title)
-            plt.legend(bbox_to_anchor= (1.02, 0.5), loc='center left', borderaxespad=0)
-
-            plt.tight_layout()
-            plt.savefig(filename, bbox_inches='tight',kwargs=kwargs)
-            plt.cla()
-            plt.clf()
-
-            if self.logger:
-                self.logger.info("general resources successfully exported")
-        else:
-            if self.logger:
-                self.logger('No measurement of general resources has been done')
+        """
+        self.export_times(path, extension)
+        self.export_sparsity(path, extension)
+        self.export_rdd(path, extension)
+        self.export_resources(path, extension)
+        self.export_executors(path, extension)
 
 
 def is_profiler(obj):
+    """
+    Check whether argument is a Profiler object.
+
+    Parameters
+    ----------
+    obj
+        Any Python object.
+
+    Returns
+    -------
+    bool
+        True if argument is a Profiler object, False otherwise.
+
+    """
     return isinstance(obj, Profiler)
