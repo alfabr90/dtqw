@@ -76,6 +76,8 @@ class PDF(Matrix):
 
         Returns
         -------
+        float
+            The sum of the probabilities.
 
         """
         n = self.data.filter(

@@ -1,4 +1,3 @@
-from dtqw.utils.utils import get_tmp_path
 from dtqw.linalg.state import State, is_state
 from dtqw.linalg.matrix import Matrix
 
@@ -22,39 +21,6 @@ class Operator(Matrix):
             The shape of this operator object. Must be a 2-dimensional tuple.
         """
         super().__init__(spark_context, rdd, shape)
-
-    def dump(self):
-        """
-        Dump all this object's RDD to disk.
-
-        Returns
-        ------
-        :obj:Operator
-            A reference to this object.
-
-        """
-        path = get_tmp_path()
-
-        self.data.map(
-            lambda m: "{} {} {}".format(m[0], m[1], m[2])
-        ).saveAsTextFile(path)
-
-        if self._logger:
-            self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
-
-        self.data.unpersist()
-
-        def __map(m):
-            m = m.split()
-            return int(m[0]), int(m[1]), complex(m[2])
-
-        self.data = self._spark_context.textFile(
-            path
-        ).map(
-            __map
-        )
-
-        return self
 
     def _multiply_operator(self, other, coord_format):
         if self._shape[1] != other.shape[0]:

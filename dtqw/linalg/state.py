@@ -395,7 +395,23 @@ class State(Matrix):
 
         return pdf
 
-    def _partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
+        """
+        Perform the partial measurement of a particle of the system state.
+
+        Parameters
+        ----------
+        particle : int
+            The desired particle to be measured. The particle number starts by 0.
+        storage_level : StorageLevel
+            The desired storage level when materializing the RDD.
+
+        Returns
+        -------
+        :obj:PDF
+            The PDF of each particle.
+
+        """
         if self._logger:
             self._logger.info("measuring the state of the system for particle {}...".format(particle + 1))
 
@@ -516,7 +532,7 @@ class State(Matrix):
             A tuple containing the PDF of each particle.
 
         """
-        return [self._partial_measurement(p, storage_level) for p in range(self._num_particles)]
+        return [self.partial_measurement(p, storage_level) for p in range(self._num_particles)]
 
     def measure(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """

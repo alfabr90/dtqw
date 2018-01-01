@@ -1,6 +1,6 @@
 import math
 from pyspark import RDD, StorageLevel
-from dtqw.utils.utils import is_shape
+from dtqw.utils.utils import is_shape, get_tmp_path
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
 
@@ -139,12 +139,34 @@ class Matrix:
         """
         Dump all this object's RDD to disk.
 
-        Raises
+        Returns
         ------
-        NotImplementedError
+        :obj:Matrix
+            A reference to this object.
 
         """
-        raise NotImplementedError
+        path = get_tmp_path()
+
+        self.data.map(
+            lambda m: "{} {} {}".format(m[0], m[1], m[2])
+        ).saveAsTextFile(path)
+
+        if self._logger:
+            self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
+
+        self.data.unpersist()
+
+        def __map(m):
+            m = m.split()
+            return int(m[0]), int(m[1]), complex(m[2])
+
+        self.data = self._spark_context.textFile(
+            path
+        ).map(
+            __map
+        )
+
+        return self
 
     def sparsity(self):
         """
