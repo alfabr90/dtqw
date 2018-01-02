@@ -1,14 +1,8 @@
 import csv
 import json
-import math
-import numpy as np
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-import statistics as st
 from datetime import datetime
 from urllib import request, error
-from mpl_toolkits.mplot3d import Axes3D
+
 from dtqw.utils.logger import is_logger
 
 __all__ = ['Profiler']

@@ -1,5 +1,6 @@
 import math
 import numpy as np
+
 from dtqw.coin.coin1d.coin1d import Coin1D
 
 __all__ = ['Hadamard1D']

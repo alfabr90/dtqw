@@ -1,8 +1,10 @@
 from datetime import datetime
+
 from pyspark import StorageLevel
+
+from dtqw.utils.utils import CoordinateDefault
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
-from dtqw.linalg.matrix import Matrix
 
 __all__ = ['Coin', 'is_coin']
 
@@ -133,7 +135,7 @@ class Coin:
         raise NotImplementedError
 
     def create_operator(self, mesh, num_partitions,
-                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the coin operator.
 

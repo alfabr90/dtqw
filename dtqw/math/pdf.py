@@ -1,16 +1,16 @@
-import numpy as np
 import matplotlib as mpl
+import numpy as np
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
-from mpl_toolkits.mplot3d import Axes3D
+
 from dtqw.mesh.mesh import is_mesh
-from dtqw.linalg.matrix import Matrix
+from dtqw.math.base import Base
 
 __all__ = ['PDF', 'is_pdf']
 
 
-class PDF(Matrix):
+class PDF(Base):
     """Class for probability density function of the system."""
 
     def __init__(self, spark_context, rdd, shape, mesh, num_particles):
@@ -44,25 +44,6 @@ class PDF(Matrix):
     def mesh(self):
         return self._mesh
 
-    def dump(self):
-        raise NotImplementedError
-
-    def multiply(self, other):
-        """
-        Multiply this matrix with another one.
-
-        Parameters
-        ----------
-        other :obj:Operator or :obj:State
-            An operator if multiplying another operator, State otherwise.
-
-        Raises
-        -------
-        NotImplementedError
-
-        """
-        raise NotImplementedError
-
     def sum(self, ind, round_precision=10):
         """
         Sum the probabilities of this PDF.
@@ -87,6 +68,25 @@ class PDF(Matrix):
         ).reduce(
             lambda a, b: a + b
         )
+
+        return round(n, round_precision)
+
+    def expected_value(self, ind, round_precision=10):
+        def _map(m):
+            v = 1
+
+            for i in range(ind):
+                v *= m[i]
+
+            return m[ind] * v
+
+        n = self.data.filter(
+            lambda m: m[ind] != float()
+        ).map(
+            _map
+        ).reduce(
+            lambda a, b: a + b
+        ) / self._shape[0]
 
         return round(n, round_precision)
 

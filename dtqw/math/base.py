@@ -1,36 +1,18 @@
-import math
 from pyspark import RDD, StorageLevel
-from dtqw.utils.utils import is_shape, get_tmp_path
+
+from dtqw.utils.utils import is_shape
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
 
-__all__ = ['Matrix']
+__all__ = ['Base']
 
 
-class Matrix:
-    """Top level class for operators and system states."""
-
-    CoordinateDefault = 0
-    """
-    CoordinateDefault : int
-        Indicate that the Operator object must have its entries stored as (i,j,value) coordinates.
-    """
-    CoordinateMultiplier = 1
-    """
-    CoordinateMultiplier : int
-        Indicate that the Operator object must have its entries stored as (j,(i,value)) coordinates. This is mandatory
-        when the object is the multiplier operand.
-    """
-    CoordinateMultiplicand = 2
-    """
-    CoordinateMultiplicand : int
-        Indicate that the Operator object must have its entries stored as (i,(j,value)) coordinates. This is mandatory
-        when the object is the multiplicand operand.
-    """
+class Base:
+    """Top level class for some mathematical elements."""
 
     def __init__(self, spark_context, rdd, shape):
         """
-        Build a top level object for operators and system states.
+        Build a top level object for some mathematical elements.
 
         Parameters
         ----------
@@ -134,39 +116,6 @@ class Matrix:
 
     def to_string(self):
         return self.__str__()
-
-    def dump(self):
-        """
-        Dump all this object's RDD to disk.
-
-        Returns
-        ------
-        :obj:Matrix
-            A reference to this object.
-
-        """
-        path = get_tmp_path()
-
-        self.data.map(
-            lambda m: "{} {} {}".format(m[0], m[1], m[2])
-        ).saveAsTextFile(path)
-
-        if self._logger:
-            self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
-
-        self.data.unpersist()
-
-        def __map(m):
-            m = m.split()
-            return int(m[0]), int(m[1]), complex(m[2])
-
-        self.data = self._spark_context.textFile(
-            path
-        ).map(
-            __map
-        )
-
-        return self
 
     def sparsity(self):
         """
@@ -297,27 +246,7 @@ class Matrix:
 
         return self
 
-    def norm(self):
-        """
-        Calculate the norm of this matrix.
-
-        Returns
-        -------
-        float
-            The norm of this matrix.
-
-        """
-        n = self.data.filter(
-            lambda m: m[2] != complex()
-        ).map(
-            lambda m: m[2].real ** 2 + m[2].imag ** 2
-        ).reduce(
-            lambda a, b: a + b
-        )
-
-        return math.sqrt(n)
-
-    def is_unitary(self, round_precision=10):
+    def is_unitary(self, round_precision=None):
         """
         Check if this matrix is unitary by calculating its norm.
 
@@ -332,20 +261,5 @@ class Matrix:
             True if the norm of this matrix is 1.0, False otherwise.
 
         """
+
         return round(self.norm(), round_precision) == 1.0
-
-    def multiply(self, other):
-        """
-        Multiply this matrix with another one.
-
-        Parameters
-        ----------
-        other :obj:Operator or :obj:State
-            An operator if multiplying another operator, State otherwise.
-
-        Raises
-        -------
-        NotImplementedError
-
-        """
-        raise NotImplementedError

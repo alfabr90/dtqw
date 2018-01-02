@@ -1,4 +1,5 @@
 import numpy as np
+
 from dtqw.coin.coin2d.coin2d import Coin2D
 
 __all__ = ['Fourier2D']

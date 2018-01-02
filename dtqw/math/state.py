@@ -1,15 +1,16 @@
 import math
 from datetime import datetime
+
 from pyspark import StorageLevel
-from dtqw.utils.utils import get_tmp_path
-from dtqw.linalg.pdf import PDF, is_pdf
+
+from dtqw.math.base import Base
 from dtqw.mesh.mesh import is_mesh
-from dtqw.linalg.matrix import Matrix
+from dtqw.math.pdf import PDF, is_pdf
 
 __all__ = ['State', 'is_state']
 
 
-class State(Matrix):
+class State(Base):
     """Class for the system state."""
 
     def __init__(self, spark_context, rdd, shape, mesh, num_particles):
@@ -47,47 +48,14 @@ class State(Matrix):
     def num_particles(self):
         return self._num_particles
 
-    def dump(self):
-        """
-        Dump all this object's RDD to disk.
-
-        Returns
-        ------
-        State
-            A reference to this object.
-
-        """
-        path = get_tmp_path()
-
-        self.data.map(
-            lambda m: "{} {}".format(m[0], m[1])
-        ).saveAsTextFile(path)
-
-        if self._logger:
-            self._logger.info("RDD {} was dumped to disk in {}".format(self.data.id(), path))
-
-        self.data.unpersist()
-
-        def __map(m):
-            m = m.split()
-            return int(m[0]), complex(m[2])
-
-        self.data = self._spark_context.textFile(
-            path
-        ).map(
-            __map
-        )
-
-        return self
-
     def norm(self):
         """
-        Calculate the norm of this state.
+        Calculate the norm of this quantum state.
 
         Returns
         -------
         float
-            The norm of this state.
+            The norm of this quantum state.
 
         """
         n = self.data.filter(
@@ -99,64 +67,6 @@ class State(Matrix):
         )
 
         return math.sqrt(n)
-
-    def multiply(self, other):
-        """
-        Multiply this state with another one.
-
-        Parameters
-        ----------
-        other : State
-            An operator if multiplying another operator, State otherwise.
-
-        Returns
-        -------
-        :obj:State
-            The resulting state.
-
-        Raises
-        ------
-        TypeError
-            If other is neither an operator nor a state.
-        NotImplementedError
-
-        """
-        if is_state(other):
-            raise NotImplementedError
-        else:
-            if self._logger:
-                self._logger.error('State instance expected, not "{}"'.format(type(other)))
-            raise TypeError('State instance expected, not "{}"'.format(type(other)))
-
-    def kron(self, other_broadcast, other_shape):
-        """
-        Perform the tensor product between this object and another operator.
-
-        Parameters
-        ----------
-        other_broadcast : Broadcast
-            A Spark's broadcast variable containing a collection of the other
-            operator's entries in (i,j,value) coordinate.
-        other_shape : tuple
-            The shape of the other operator. Must be a 2-dimensional tuple.
-
-        Returns
-        -------
-        Operator
-            The resulting operator.
-
-        """
-        shape = (self._shape[0] * other_shape[0], 1)
-
-        def __map(m):
-            for i in other_broadcast.value:
-                yield (m[0] * other_shape[0] + i[0], m[1] * i[1])
-
-        rdd = self.data.flatMap(
-            __map
-        )
-
-        return State(self._spark_context, rdd, shape, self._mesh, self._num_particles)
 
     def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """

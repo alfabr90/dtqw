@@ -1,10 +1,13 @@
-from dtqw.linalg.state import State, is_state
-from dtqw.linalg.matrix import Matrix
+import math
+
+from dtqw.math.base import Base
+from dtqw.math.state import State, is_state
+from dtqw.utils.utils import CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
 
 __all__ = ['Operator', 'is_operator']
 
 
-class Operator(Matrix):
+class Operator(Base):
     """Class for the operators of quantum walks."""
 
     def __init__(self, spark_context, rdd, shape):
@@ -21,6 +24,26 @@ class Operator(Matrix):
             The shape of this operator object. Must be a 2-dimensional tuple.
         """
         super().__init__(spark_context, rdd, shape)
+
+    def norm(self):
+        """
+        Calculate the norm of this operator.
+
+        Returns
+        -------
+        float
+            The norm of this operator.
+
+        """
+        n = self.data.filter(
+            lambda m: m[2] != complex()
+        ).map(
+            lambda m: m[2].real ** 2 + m[2].imag ** 2
+        ).reduce(
+            lambda a, b: a + b
+        )
+
+        return math.sqrt(n)
 
     def _multiply_operator(self, other, coord_format):
         if self._shape[1] != other.shape[0]:
@@ -40,15 +63,15 @@ class Operator(Matrix):
             lambda a, b: a + b, numPartitions=num_partitions
         )
 
-        if coord_format == Matrix.CoordinateMultiplier:
+        if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[0][1], (m[0][0], m[1]))
             )
-        elif coord_format == Matrix.CoordinateMultiplicand:
+        elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0][0], (m[0][1], m[1]))
             )
-        else:  # Matrix.CoordinateDefault
+        else:  # Operator.CoordinateDefault
             rdd = rdd.map(
                 lambda m: (m[0][0], m[0][1], m[1])
             )
@@ -75,9 +98,9 @@ class Operator(Matrix):
 
         return State(self._spark_context, rdd, shape, other.mesh, other.num_particles)
 
-    def multiply(self, other, coord_format=Matrix.CoordinateDefault):
+    def multiply(self, other, coord_format=CoordinateDefault):
         """
-        Multiply this operator with another one or a system state.
+        Multiply this operator with another one or with a system state.
 
         Parameters
         ----------
@@ -85,7 +108,7 @@ class Operator(Matrix):
             An operator if multiplying another operator, State otherwise.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Matrix.CoordinateDefault. Not applicable when multiplying a State.
+            Default value is Operator.CoordinateDefault. Not applicable when multiplying a State.
 
         Returns
         -------
@@ -106,36 +129,6 @@ class Operator(Matrix):
             if self._logger:
                 self._logger.error('State or Operator instance expected, not "{}"'.format(type(other)))
             raise TypeError('State or Operator instance expected, not "{}"'.format(type(other)))
-
-    def kron(self, other_broadcast, other_shape):
-        """
-        Perform the tensor product between this object and another operator.
-
-        Parameters
-        ----------
-        other_broadcast : Broadcast
-            A Spark's broadcast variable containing a collection of the other
-            operator's entries in (i,j,value) coordinate.
-        other_shape : tuple
-            The shape of the other operator. Must be a 2-dimensional tuple.
-
-        Returns
-        -------
-        :obj:Operator
-            The resulting operator.
-
-        """
-        shape = (self._shape[0] * other_shape[0], self._shape[1] * other_shape[1])
-
-        def __map(m):
-            for i in other_broadcast.value:
-                yield (m[0] * other_shape[0] + i[0], m[1] * other_shape[1] + i[1], m[2] * i[2])
-
-        rdd = self.data.flatMap(
-            __map
-        )
-
-        return Operator(self._spark_context, rdd, shape)
 
 
 def is_operator(obj):

@@ -1,12 +1,13 @@
 import cmath
+
 from datetime import datetime
+
 from pyspark import StorageLevel
-from dtqw.utils.utils import broadcast
+from dtqw.math.operator import Operator, is_operator
+from dtqw.math.state import State
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiler import is_profiler
-from dtqw.linalg.matrix import Matrix
-from dtqw.linalg.operator import *
-from dtqw.linalg.state import *
+from dtqw.utils.utils import broadcast, CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
 
 __all__ = ['DiscreteTimeQuantumWalk']
 
@@ -221,7 +222,7 @@ class DiscreteTimeQuantumWalk:
         return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
 
     def create_interaction_operator(self, phase,
-                                    coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                                    coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the particles' interaction operator for the walk.
 
@@ -230,7 +231,7 @@ class DiscreteTimeQuantumWalk:
         phase : float
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Matrix.CoordinateDefault.
+            Default value is Operator.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -300,11 +301,11 @@ class DiscreteTimeQuantumWalk:
             __map
         )
 
-        if coord_format == Matrix.CoordinateMultiplier:
+        if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
             )
-        elif coord_format == Matrix.CoordinateMultiplicand:
+        elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
             )
@@ -337,7 +338,7 @@ class DiscreteTimeQuantumWalk:
                     )
                 )
 
-    def create_walk_operator(self, coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_walk_operator(self, coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the walk operator for the walk.
 
@@ -356,7 +357,7 @@ class DiscreteTimeQuantumWalk:
         ----------
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Matrix.CoordinateDefault.
+            Default value is Operator.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -367,14 +368,14 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("no coin operator has been set. A new one will be built")
             self._coin_operator = self._coin.create_operator(
-                self._mesh, self._num_partitions, Matrix.CoordinateMultiplicand, storage_level
+                self._mesh, self._num_partitions, CoordinateMultiplicand, storage_level
             )
 
         if self._shift_operator is None:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
             self._shift_operator = self._mesh.create_operator(
-                self._num_partitions, Matrix.CoordinateMultiplier, storage_level
+                self._num_partitions, CoordinateMultiplier, storage_level
             )
 
         t1 = datetime.now()
@@ -491,11 +492,11 @@ class DiscreteTimeQuantumWalk:
 
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
-                if coord_format == Matrix.CoordinateMultiplier:
+                if coord_format == CoordinateMultiplier:
                     rdd = rdd.map(
                         lambda m: (m[1], (m[0], m[2]))
                     )
-                elif coord_format == Matrix.CoordinateMultiplicand:
+                elif coord_format == CoordinateMultiplicand:
                     rdd = rdd.map(
                         lambda m: (m[0], (m[1], m[2]))
                     )
@@ -662,12 +663,12 @@ class DiscreteTimeQuantumWalk:
                 if self._walk_operator is None:
                     if self._logger:
                         self._logger.info("no walk operator has been set. A new one will be built")
-                    self.create_walk_operator(Matrix.CoordinateMultiplier, storage_level)
+                    self.create_walk_operator(CoordinateMultiplier, storage_level)
 
                 if self._num_particles > 1 and phase and self._interaction_operator is None:
                     if self._logger:
                         self._logger.info("no interaction operator has been set. A new one will be built")
-                    self.create_interaction_operator(phase, Matrix.CoordinateMultiplier, storage_level)
+                    self.create_interaction_operator(phase, CoordinateMultiplier, storage_level)
 
             t1 = datetime.now()
 
@@ -678,7 +679,7 @@ class DiscreteTimeQuantumWalk:
                 if self._mesh.broken_links_probability:
                     self.destroy_shift_operator()
                     self.destroy_walk_operator()
-                    self.create_walk_operator(Matrix.CoordinateMultiplier, storage_level)
+                    self.create_walk_operator(CoordinateMultiplier, storage_level)
 
                 t_tmp = datetime.now()
 

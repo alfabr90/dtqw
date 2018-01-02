@@ -2,10 +2,29 @@ import os
 import tempfile as tf
 
 __all__ = ['ROUND_PRECISION', 'is_shape', 'broadcast',
-           'filename', 'create_dir', 'get_tmp_path', 'remove_path', 'clear_path', 'size_of_path']
+           'filename', 'create_dir', 'get_tmp_path', 'remove_path', 'clear_path', 'size_of_path',
+           'CoordinateDefault', 'CoordinateMultiplier', 'CoordinateMultiplicand']
 
 
 ROUND_PRECISION = 10
+
+CoordinateDefault = 0
+"""
+CoordinateDefault : int
+    Indicate that the Operator object must have its entries stored as (i,j,value) coordinates.
+"""
+CoordinateMultiplier = 1
+"""
+CoordinateMultiplier : int
+    Indicate that the Operator object must have its entries stored as (j,(i,value)) coordinates. This is mandatory
+    when the object is the multiplier operand.
+"""
+CoordinateMultiplicand = 2
+"""
+CoordinateMultiplicand : int
+    Indicate that the Operator object must have its entries stored as (i,(j,value)) coordinates. This is mandatory
+    when the object is the multiplicand operand.
+"""
 
 
 def is_shape(shape):

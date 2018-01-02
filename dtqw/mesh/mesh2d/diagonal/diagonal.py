@@ -1,8 +1,9 @@
 import random
+
 from pyspark import StorageLevel
-from dtqw.utils.utils import broadcast
+
 from dtqw.mesh.mesh2d.mesh2d import Mesh2D
-from dtqw.linalg.matrix import Matrix
+from dtqw.utils.utils import broadcast, CoordinateDefault
 
 __all__ = ['Diagonal']
 
@@ -41,7 +42,7 @@ class Diagonal(Mesh2D):
         raise NotImplementedError
 
     def create_operator(self, num_partitions,
-                        coord_format=Matrix.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the mesh operator.
 
@@ -51,7 +52,7 @@ class Diagonal(Mesh2D):
             The desired number of partitions for the RDD.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Matrix.CoordinateDefault.
+            Default value is Operator.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
