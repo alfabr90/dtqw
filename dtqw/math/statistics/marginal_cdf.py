@@ -64,12 +64,41 @@ class MarginalCDF(CDF):
 
         return round(n, round_precision)
 
-    def expected_value(self, ind, round_precision=10):
+    def expected_value(self, round_precision=10):
+        """
+        Calculate the expected value of this CDF.
+
+        Parameters
+        ----------
+        round_precision : int, optional
+            The precision used to round the value. Default is 10 decimal digits.
+
+        Returns
+        -------
+        float
+            The expected value.
+
+        Raises
+        ------
+        NotImplementedError
+
+        """
+        if self._mesh.is_1d():
+            ind = 1
+            mesh_size = (self._mesh.base_size, 1)
+        elif self._mesh.is_2d():
+            ind = 2
+            mesh_size = self._mesh.base_size
+        else:
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
+
         def _map(m):
             v = 1
 
             for i in range(ind):
-                v *= m[i]
+                v *= m[i] - mesh_size[i]
 
             return m[ind] * v
 
@@ -79,6 +108,59 @@ class MarginalCDF(CDF):
             _map
         ).reduce(
             lambda a, b: a + b
-        ) / self._shape[0]
+        )
+
+        return round(n, round_precision)
+
+    def variance(self, mean=None, round_precision=10):
+        """
+        Calculate the variance of this CDF.
+
+        Parameters
+        ----------
+        mean : float, optional
+            The mean of this CDF. When None is passed as argument, the mean is calculated.
+        round_precision : int, optional
+            The precision used to round the value. Default is 10 decimal digits.
+
+        Returns
+        -------
+        float
+            The variance.
+
+        Raises
+        ------
+        NotImplementedError
+
+        """
+        if self._mesh.is_1d():
+            ind = 1
+            mesh_size = (self._mesh.base_size, 1)
+        elif self._mesh.is_2d():
+            ind = 2
+            mesh_size = self._mesh.base_size
+        else:
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
+
+        if mean is None:
+            mean = self.expected_value(round_precision)
+
+        def _map(m):
+            v = 1
+
+            for i in range(ind):
+                v *= m[i] - mesh_size[i]
+
+            return m[ind] * v ** 2
+
+        n = self.data.filter(
+            lambda m: m[ind] != float()
+        ).map(
+            _map
+        ).reduce(
+            lambda a, b: a + b
+        ) - mean
 
         return round(n, round_precision)

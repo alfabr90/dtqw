@@ -9,17 +9,17 @@ __all__ = ['Natural']
 
 
 class Natural(Mesh2D):
-    """Top level class for Natural Meshes."""
+    """Top-level class for Natural Meshes."""
 
     def __init__(self, spark_context, size, bl_prob=None):
         """
-        Build a top level Natural Mesh object.
+        Build a top-level Natural Mesh object.
 
         Parameters
         ----------
         spark_context : SparkContext
             The SparkContext object.
-        size : int
+        size : tuple
             Size of the mesh.
         bl_prob : float, optional
             Probability of the occurences of broken links in the mesh.

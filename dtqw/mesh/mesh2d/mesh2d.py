@@ -9,17 +9,17 @@ __all__ = ['Mesh2D']
 
 
 class Mesh2D(Mesh):
-    """Top level class for 2-dimensional Meshes."""
+    """Top-level class for 2-dimensional Meshes."""
 
     def __init__(self, spark_context, size, bl_prob=None):
         """
-        Build a top level 2-dimensional Mesh object.
+        Build a top-level 2-dimensional Mesh object.
 
         Parameters
         ----------
         spark_context : SparkContext
             The SparkContext object.
-        size : int
+        size : tuple
             Size of the mesh.
         bl_prob : float, optional
             Probability of the occurences of broken links in the mesh.

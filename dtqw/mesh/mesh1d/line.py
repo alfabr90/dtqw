@@ -26,6 +26,7 @@ class Line(Mesh1D):
             Probability of the occurences of broken links in the mesh.
         """
         super().__init__(spark_context, size, bl_prob)
+
         self._size = self._define_size(size)
 
     def _define_size(self, size):

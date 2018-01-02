@@ -8,11 +8,11 @@ __all__ = ['Base']
 
 
 class Base:
-    """Top level class for some mathematical elements."""
+    """Top-level class for some mathematical elements."""
 
     def __init__(self, spark_context, rdd, shape):
         """
-        Build a top level object for some mathematical elements.
+        Build a top-level object for some mathematical elements.
 
         Parameters
         ----------

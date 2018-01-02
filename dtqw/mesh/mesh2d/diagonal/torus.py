@@ -10,8 +10,23 @@ __all__ = ['TorusDiagonal']
 
 
 class TorusDiagonal(Diagonal):
+    """Class for Diagonal Torus mesh."""
+
     def __init__(self, spark_context, size, bl_prob=None):
+        """
+        Build a Diagonal Torus mesh object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        size : tuple
+            Size of the mesh.
+        bl_prob : float, optional
+            Probability of the occurences of broken links in the mesh.
+        """
         super().__init__(spark_context, size, bl_prob)
+
         self._size = self._define_size(size)
 
     def title(self):

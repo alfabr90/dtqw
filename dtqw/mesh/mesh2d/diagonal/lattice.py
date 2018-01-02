@@ -11,9 +11,24 @@ __all__ = ['LatticeDiagonal']
 
 
 class LatticeDiagonal(Diagonal):
+    """Class for Diagonal Lattice mesh."""
+
     def __init__(self, spark_context, size, bl_prob=None):
+        """
+        Build a Diagonal Lattice mesh object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        size : tuple
+            Size of the mesh.
+        bl_prob : float, optional
+            Probability of the occurences of broken links in the mesh.
+        """
         super().__init__(spark_context, size, bl_prob)
-        self.__size = self._define_size(size)
+
+        self._size = self._define_size(size)
 
     def _define_size(self, size):
         if not self._validate(size):
@@ -45,7 +60,7 @@ class LatticeDiagonal(Diagonal):
         bool
 
         """
-        return steps <= int((self.__size[0] - 1) / 2) and steps <= int((self.__size[1] - 1) / 2)
+        return steps <= int((self._size[0] - 1) / 2) and steps <= int((self._size[1] - 1) / 2)
 
     def create_operator(self, num_partitions,
                         coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):

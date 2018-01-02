@@ -9,11 +9,11 @@ __all__ = ['Mesh1D']
 
 
 class Mesh1D(Mesh):
-    """Top level class for 1-dimensional Meshes."""
+    """Top-level class for 1-dimensional Meshes."""
 
     def __init__(self, spark_context, size, bl_prob=None):
         """
-        Build a top level 1-dimensional Mesh object.
+        Build a top-level 1-dimensional Mesh object.
 
         Parameters
         ----------

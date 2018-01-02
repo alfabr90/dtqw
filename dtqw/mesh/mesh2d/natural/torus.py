@@ -10,9 +10,24 @@ __all__ = ['TorusNatural']
 
 
 class TorusNatural(Natural):
+    """Class for Natural Torus mesh."""
+
     def __init__(self, spark_context, size, bl_prob=None):
+        """
+        Build a Natural Torus mesh object.
+
+        Parameters
+        ----------
+        spark_context : SparkContext
+            The SparkContext object.
+        size : tuple
+            Size of the mesh.
+        bl_prob : float, optional
+            Probability of the occurences of broken links in the mesh.
+        """
         super().__init__(spark_context, size, bl_prob)
-        self.__size = self._define_size(size)
+
+        self._size = self._define_size(size)
 
     def title(self):
         return 'Natural Torus'
@@ -58,7 +73,7 @@ class TorusNatural(Natural):
         initial_time = datetime.now()
 
         coin_size = 2
-        size = self.__size
+        size = self._size
         size_xy = size[0] * size[1]
         shape = (coin_size * coin_size * size_xy, coin_size * coin_size * size_xy)
 

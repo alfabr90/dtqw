@@ -10,22 +10,23 @@ __all__ = ['Mesh', 'is_mesh']
 
 
 class Mesh:
-    """Top level class for Meshes."""
+    """Top-level class for Meshes."""
 
     def __init__(self, spark_context, size, bl_prob=None):
         """
-        Build a top level Mesh object.
+        Build a top-level Mesh object.
 
         Parameters
         ----------
         spark_context : SparkContext
             The SparkContext object.
-        size : int
+        size : int or tuple
             Size of the mesh.
         bl_prob : float, optional
             Probability of the occurences of broken links in the mesh.
         """
         self._spark_context = spark_context
+        self._base_size = size
         self._size = self._define_size(size)
         self._broken_links_probability = bl_prob
 
@@ -35,6 +36,10 @@ class Mesh:
     @property
     def spark_context(self):
         return self._spark_context
+
+    @property
+    def base_size(self):
+        return self._base_size
 
     @property
     def size(self):

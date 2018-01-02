@@ -64,21 +64,36 @@ class FilteredCDF(CDF):
 
         return round(n, round_precision)
 
-    def expected_value(self, ind, round_precision=10):
-        def _map(m):
-            v = 1
+    def expected_value(self, round_precision=10):
+        """
+        Calculate the expected value of this CDF.
 
-            for i in range(ind):
-                v *= m[i]
+        Parameters
+        ----------
+        round_precision : int, optional
+            The precision used to round the value. Default is 10 decimal digits.
 
-            return m[ind] * v
+        Raises
+        -------
+        NotImplementedError
 
-        n = self.data.filter(
-            lambda m: m[ind] != float()
-        ).map(
-            _map
-        ).reduce(
-            lambda a, b: a + b
-        ) / self._shape[0]
+        """
+        raise NotImplementedError
 
-        return round(n, round_precision)
+    def variance(self, mean=None, round_precision=10):
+        """
+        Calculate the variance of this CDF.
+
+        Parameters
+        ----------
+        mean : float, optional
+            The mean of this CDF. When None is passed as argument, the mean is calculated.
+        round_precision : int, optional
+            The precision used to round the value. Default is 10 decimal digits.
+
+        Raises
+        ------
+        NotImplementedError
+
+        """
+        raise NotImplementedError
