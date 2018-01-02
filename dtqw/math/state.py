@@ -4,8 +4,11 @@ from datetime import datetime
 from pyspark import StorageLevel
 
 from dtqw.math.base import Base
+from dtqw.math.statistics.cdf import is_cdf
+from dtqw.math.statistics.joint_cdf import JointCDF
+from dtqw.math.statistics.filtered_cdf import FilteredCDF
+from dtqw.math.statistics.marginal_cdf import MarginalCDF
 from dtqw.mesh.mesh import is_mesh
-from dtqw.math.pdf import PDF, is_pdf
 
 __all__ = ['State', 'is_state']
 
@@ -48,6 +51,37 @@ class State(Base):
     def num_particles(self):
         return self._num_particles
 
+    def kron(self, other):
+        """
+        Perform a tensor (Kronecker) product with another system state.
+
+        Parameters
+        ----------
+        other : :obj:State
+            The other system state.
+
+        Returns
+        -------
+        :obj:State
+            The resulting state.
+
+        """
+        if not is_state(other):
+            if self._logger:
+                self._logger.error('State instance expected, not "{}"'.format(type(other)))
+            raise TypeError('State instance expected, not "{}"'.format(type(other)))
+
+        other_shape = other.shape
+        new_shape = (self._shape[0] * other_shape[0], 1)
+
+        rdd = self.data.cartesian(
+            other.data
+        ).map(
+            lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * m[1][1])
+        )
+
+        return State(self._spark_context, rdd, new_shape, self._mesh, self._num_particles)
+
     def norm(self):
         """
         Calculate the norm of this quantum state.
@@ -79,8 +113,8 @@ class State(Base):
 
         Returns
         -------
-        :obj:PDF
-            The PDF of the entire system.
+        :obj:JointCDF
+            The CDF of the entire system.
 
         """
         if self._logger:
@@ -175,12 +209,12 @@ class State(Base):
             __unmap
         )
 
-        pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        pdf = JointCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        if pdf.sum(ind) != 1.0:
+        if pdf.sum() != 1.0:
             if self._logger:
                 self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
@@ -199,7 +233,7 @@ class State(Base):
                     "full measurement was done in {}s".format(self._profiler.get_times(name='fullMeasurement'))
                 )
                 self._logger.info(
-                    "PDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
+                    "CDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
                         self._profiler.get_rdd(name='fullMeasurement')['memoryUsed'],
                         self._profiler.get_rdd(name='fullMeasurement')['diskUsed']
                     )
@@ -216,15 +250,15 @@ class State(Base):
 
         Parameters
         ----------
-        full_measurement : :obj:PDF
+        full_measurement : :obj:CDF
             The measurement of the entire system.
         storage_level : StorageLevel
             The desired storage level when materializing the RDD.
 
         Returns
         -------
-        :obj:PDF
-            The PDF of the system when all particles are located at the same site.
+        :obj:FilteredCDF
+            The CDF of the system when all particles are located at the same site.
 
         """
         if self._logger:
@@ -232,10 +266,10 @@ class State(Base):
 
         t1 = datetime.now()
 
-        if not is_pdf(full_measurement):
+        if not is_cdf(full_measurement):
             if self._logger:
-                self._logger.error('PDF instance expected, not "{}"'.format(type(full_measurement)))
-            raise TypeError('PDF instance expected, not "{}"'.format(type(full_measurement)))
+                self._logger.error('CDF instance expected, not "{}"'.format(type(full_measurement)))
+            raise TypeError('CDF instance expected, not "{}"'.format(type(full_measurement)))
 
         if self._mesh.is_1d():
             ndim = 1
@@ -279,7 +313,7 @@ class State(Base):
             __map
         )
 
-        pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        pdf = FilteredCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
         rdd_id = pdf.data.id()
@@ -295,7 +329,7 @@ class State(Base):
                     "filtered measurement was done in {}s".format(self._profiler.get_times(name='filteredMeasurement'))
                 )
                 self._logger.info(
-                    "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
+                    "CDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
                         self._profiler.get_rdd(name='filteredMeasurement')['memoryUsed'],
                         self._profiler.get_rdd(name='filteredMeasurement')['diskUsed']
                     )
@@ -318,8 +352,8 @@ class State(Base):
 
         Returns
         -------
-        :obj:PDF
-            The PDF of each particle.
+        :obj:MarginalCDF
+            The CDF of each particle.
 
         """
         if self._logger:
@@ -330,7 +364,6 @@ class State(Base):
         coin_size = 2
 
         if self._mesh.is_1d():
-            ind = 1
             num_particles = self._num_particles
             size = self._mesh.size
             cs_size = coin_size * size
@@ -347,7 +380,6 @@ class State(Base):
             def __unmap(m):
                 return m
         elif self._mesh.is_2d():
-            ind = 2
             num_particles = self._num_particles
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
@@ -386,12 +418,12 @@ class State(Base):
             __unmap
         )
 
-        pdf = PDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        pdf = MarginalCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        if pdf.sum(ind) != 1.0:
+        if pdf.sum() != 1.0:
             if self._logger:
                 self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
@@ -415,7 +447,7 @@ class State(Base):
                     )
                 )
                 self._logger.info(
-                    "PDF with partial measurements for particle {} "
+                    "CDF with partial measurements for particle {} "
                     "are consuming {} bytes in memory and {} bytes in disk".format(
                         particle + 1,
                         self._profiler.get_rdd(name='partialMeasurementParticle{}'.format(particle + 1))['memoryUsed'],
@@ -439,7 +471,7 @@ class State(Base):
         Returns
         -------
         tuple
-            A tuple containing the PDF of each particle.
+            A tuple containing the CDF of each particle.
 
         """
         return [self.partial_measurement(p, storage_level) for p in range(self._num_particles)]
@@ -460,8 +492,8 @@ class State(Base):
 
         Returns
         -------
-        :obj:PDF or tuple
-            PDF if the system is composed by only one particle, tuple otherwise.
+        :obj:CDF or tuple
+            CDF if the system is composed by only one particle, tuple otherwise.
 
         """
         if self._num_particles == 1:

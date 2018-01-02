@@ -25,6 +25,37 @@ class Operator(Base):
         """
         super().__init__(spark_context, rdd, shape)
 
+    def kron(self, other):
+        """
+        Perform a tensor (Kronecker) product with another operator.
+
+        Parameters
+        ----------
+        other : :obj:Operator
+            The other operator.
+
+        Returns
+        -------
+        :obj:Operator
+            The resulting operator.
+
+        """
+        if not is_operator(other):
+            if self._logger:
+                self._logger.error('Operator instance expected, not "{}"'.format(type(other)))
+            raise TypeError('Operator instance expected, not "{}"'.format(type(other)))
+
+        other_shape = other.shape
+        new_shape = (self._shape[0] * other_shape[0], self._shape[1] * other_shape[1])
+
+        rdd = self.data.cartesian(
+            other.data
+        ).map(
+            lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2])
+        )
+
+        return Operator(self._spark_context, rdd, new_shape)
+
     def norm(self):
         """
         Calculate the norm of this operator.

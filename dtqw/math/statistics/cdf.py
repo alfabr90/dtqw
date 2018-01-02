@@ -2,20 +2,21 @@ import matplotlib as mpl
 import numpy as np
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from datetime import datetime
 
-from dtqw.mesh.mesh import is_mesh
 from dtqw.math.base import Base
+from dtqw.mesh.mesh import is_mesh
 
-__all__ = ['PDF', 'is_pdf']
+__all__ = ['CDF', 'is_cdf']
 
 
-class PDF(Base):
-    """Class for probability density function of the system."""
+class CDF(Base):
+    """Top level class for cumulative density functions."""
 
     def __init__(self, spark_context, rdd, shape, mesh, num_particles):
         """
-        Build a top level object for operators and system states.
+        Build a top level object for cumulative density functions.
 
         Parameters
         ----------
@@ -44,32 +45,21 @@ class PDF(Base):
     def mesh(self):
         return self._mesh
 
-    def sum(self, ind, round_precision=10):
+    def sum(self, round_precision=10):
         """
-        Sum the probabilities of this PDF.
+        Sum the values of this CDF.
 
         Parameters
         ----------
-        ind : int
-            The index to get the probability value. Depends on the dimension of the mesh and the number of particles.
         round_precision : int, optional
             The precision used to round the value. Default is 10 decimal digits.
 
-        Returns
+        Raises
         -------
-        float
-            The sum of the probabilities.
+        NotImplementedError
 
         """
-        n = self.data.filter(
-            lambda m: m[ind] != float()
-        ).map(
-            lambda m: m[ind]
-        ).reduce(
-            lambda a, b: a + b
-        )
-
-        return round(n, round_precision)
+        raise NotImplementedError
 
     def expected_value(self, ind, round_precision=10):
         def _map(m):
@@ -193,9 +183,9 @@ class PDF(Base):
             self._logger.info("plot in {}s".format((datetime.now() - t1).total_seconds()))
 
 
-def is_pdf(obj):
+def is_cdf(obj):
     """
-    Check whether argument is a PDF object.
+    Check whether argument is a CDF object.
 
     Parameters
     ----------
@@ -205,7 +195,7 @@ def is_pdf(obj):
     Returns
     -------
     bool
-        True if argument is a PDF object, False otherwise.
+        True if argument is a CDF object, False otherwise.
 
     """
-    return isinstance(obj, PDF)
+    return isinstance(obj, CDF)
