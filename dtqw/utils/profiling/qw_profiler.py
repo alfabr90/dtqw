@@ -139,6 +139,8 @@ class QWProfiler(Profiler):
                     self._states[name][-1][k] = v
 
         self._states[name][-1]['buildingTime'] = time
+        self._states[name][-1]['numElements'] = state.num_elements
+        self._states[name][-1]['numNonzeroElements'] = state.num_nonzero_elements
 
         return self._states[name][-1]
 
@@ -188,6 +190,8 @@ class QWProfiler(Profiler):
                     self._cdfs[name][-1][k] = v
 
         self._cdfs[name][-1]['buildingTime'] = time
+        self._cdfs[name][-1]['numElements'] = cdf.num_elements
+        self._cdfs[name][-1]['numNonzeroElements'] = cdf.num_nonzero_elements
 
         return self._cdfs[name][-1]
 
