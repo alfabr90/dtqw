@@ -1,8 +1,9 @@
+import numpy as np
 from pyspark import RDD, StorageLevel
 
-from dtqw.utils.utils import is_shape
 from dtqw.utils.logger import is_logger
-from dtqw.utils.profiler import is_profiler
+from dtqw.utils.profiling.profiler import is_profiler
+from dtqw.utils.utils import is_shape
 
 __all__ = ['Base']
 
@@ -140,7 +141,7 @@ class Base:
 
         Returns
         -------
-        Matrix
+        :obj
             A reference to this object.
 
         """
@@ -164,7 +165,7 @@ class Base:
 
         Returns
         -------
-        Matrix
+        :obj
             A reference to this object.
 
         """
@@ -188,7 +189,7 @@ class Base:
 
         Returns
         -------
-        Matrix
+        :obj
             A reference to this object.
 
         """
@@ -208,7 +209,7 @@ class Base:
 
         Returns
         -------
-        :obj:Matrix or :obj:Operator or :obj:State
+        :obj
             A reference to this object.
 
         """
@@ -226,7 +227,7 @@ class Base:
 
         Returns
         -------
-        Matrix
+        :obj
             A reference to this object.
 
         """
@@ -245,6 +246,44 @@ class Base:
             self._logger.info("RDD {} was checkpointed in {}".format(self.data.id(), self.data.getCheckpointFile()))
 
         return self
+
+    def dump(self, path):
+        """
+        Dump this object's RDD into disk.
+
+        Parameters
+        ----------
+        path : str
+            The path where the dumped RDD will be located at
+
+        Returns
+        -------
+        None
+
+        """
+        self.data.map(
+            lambda m: " ".join([str(e) for e in m])
+        ).saveAsTextFile(path)
+
+    def numpy_array(self):
+        """
+        Create a numpy array containing this object's RDD data.
+
+        Returns
+        -------
+        :obj:ndarray
+            The numpy array
+
+        """
+        data = self.data.collect()
+        data_type = type(data[0][-1])
+        ind = len(data[0]) - 1
+        result = np.zeros(self._shape, dtype=data_type)
+
+        for e in data:
+            result[e[0:ind]] = e[ind]
+
+        return result
 
     def is_unitary(self, round_precision=None):
         """

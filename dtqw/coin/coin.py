@@ -2,9 +2,9 @@ from datetime import datetime
 
 from pyspark import StorageLevel
 
-from dtqw.utils.utils import CoordinateDefault
 from dtqw.utils.logger import is_logger
-from dtqw.utils.profiler import is_profiler
+from dtqw.utils.profiling.profiler import is_profiler
+from dtqw.utils.utils import CoordinateDefault
 
 __all__ = ['Coin', 'is_coin']
 
@@ -91,21 +91,19 @@ class Coin:
     def _profile(self, operator, initial_time):
         if self._profiler is not None:
             app_id = self._spark_context.applicationId
-            rdd_id = operator.data.id()
 
-            self._profiler.profile_times('coinOperator', (datetime.now() - initial_time).total_seconds())
-            self._profiler.profile_rdd('coinOperator', app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
+            info = self._profiler.profile_operator(
+                'coinOperator', operator, (datetime.now() - initial_time).total_seconds()
+            )
+
             if self._logger:
-                self._logger.info(
-                    "coin operator was built in {}s".format(self._profiler.get_times(name='coinOperator'))
-                )
+                self._logger.info("coin operator was built in {}s".format(info['buildingTime']))
                 self._logger.info(
                     "coin operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='coinOperator')['memoryUsed'],
-                        self._profiler.get_rdd(name='coinOperator')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 

@@ -1,12 +1,12 @@
 import cmath
-
 from datetime import datetime
 
 from pyspark import StorageLevel
+
 from dtqw.math.operator import Operator, is_operator
 from dtqw.math.state import State
 from dtqw.utils.logger import is_logger
-from dtqw.utils.profiler import is_profiler
+from dtqw.utils.profiling.profiler import is_profiler
 from dtqw.utils.utils import broadcast, CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
 
 __all__ = ['DiscreteTimeQuantumWalk']
@@ -319,22 +319,20 @@ class DiscreteTimeQuantumWalk:
         ).persist(storage_level).checkpoint().materialize(storage_level)
 
         app_id = self._spark_context.applicationId
-        rdd_id = self._interaction_operator.data.id()
 
         if self._profiler:
-            self._profiler.profile_times('interactionOperator', (datetime.now() - t1).total_seconds())
-            self._profiler.profile_rdd('interactionOperator', app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
+            info = self._profiler.profile_operator(
+                'interactionOperator', self._interaction_operator, (datetime.now() - t1).total_seconds()
+            )
+
             if self._logger:
-                self._logger.info(
-                    "interaction operator was built in {}s".format(self._profiler.get_times(name='interactionOperator'))
-                )
+                self._logger.info("interaction operator was built in {}s".format(info['buildingTime']))
                 self._logger.info(
                     "interaction operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='interactionOperator')['memoryUsed'],
-                        self._profiler.get_rdd(name='interactionOperator')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 
@@ -397,22 +395,19 @@ class DiscreteTimeQuantumWalk:
             self._coin_operator.unpersist()
             self._shift_operator.unpersist()
 
-            rdd_id = self._walk_operator.data.id()
-
             if self._profiler:
-                self._profiler.profile_times('walkOperator', (datetime.now() - t1).total_seconds())
-                self._profiler.profile_rdd('walkOperator', app_id, rdd_id)
                 self._profiler.profile_resources(app_id)
                 self._profiler.profile_executors(app_id)
 
+                info = self._profiler.profile_operator(
+                    'walkOperator', self._walk_operator, (datetime.now() - t1).total_seconds()
+                )
+
                 if self._logger:
-                    self._logger.info(
-                        "walk operator was built in {}s".format(self._profiler.get_times(name='walkOperator'))
-                    )
+                    self._logger.info("walk operator was built in {}s".format(info['buildingTime']))
                     self._logger.info(
                         "walk operator is consuming {} bytes in memory and {} bytes in disk".format(
-                            self._profiler.get_rdd(name='walkOperator')['memoryUsed'],
-                            self._profiler.get_rdd(name='walkOperator')['diskUsed']
+                            info['memoryUsed'], info['diskUsed']
                         )
                     )
         else:
@@ -512,33 +507,26 @@ class DiscreteTimeQuantumWalk:
                 )
 
                 if self._profiler:
-                    self._profiler.profile_times(
-                        'walkOperatorParticle{}'.format(p + 1), (datetime.now() - t_tmp).total_seconds()
-                    )
-                    self._profiler.profile_rdd(
-                        'walkOperatorParticle{}'.format(p + 1), app_id, self._walk_operator[p].data.id()
+                    self._profiler.profile_resources(app_id)
+                    self._profiler.profile_executors(app_id)
+
+                    info = self._profiler.profile_operator(
+                        'walkOperatorParticle{}'.format(p + 1),
+                        self._walk_operator[-1], (datetime.now() - t_tmp).total_seconds()
                     )
 
                     if self._logger:
                         self._logger.info(
-                            "walk operator for particle {} was built in {}s".format(
-                                p + 1, self._profiler.get_times(name='walkOperatorParticle{}'.format(p + 1))
-                            )
+                            "walk operator for particle {} was built in {}s".format(p + 1, info['buildingTime'])
                         )
                         self._logger.info(
                             "walk operator for particle {} is consuming {} bytes in memory and {} bytes in disk".format(
-                                p + 1,
-                                self._profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1))['memoryUsed'],
-                                self._profiler.get_rdd(name='walkOperatorParticle{}'.format(p + 1))['diskUsed']
+                                p + 1, info['memoryUsed'], info['diskUsed']
                             )
                         )
 
             eo.unpersist()
             evolution_operator.unpersist()
-
-            if self._profiler:
-                self._profiler.profile_resources(app_id)
-                self._profiler.profile_executors(app_id)
 
     def destroy_coin_operator(self):
         """Call the Operator's method destroy."""
@@ -569,7 +557,7 @@ class DiscreteTimeQuantumWalk:
             self._walk_operator = None
 
     def destroy_operators(self):
-        """Release all operators from memory."""
+        """Release all operators from memory and/or disk."""
         if self._logger:
             self._logger.info('destroying operators...')
 
@@ -595,6 +583,10 @@ class DiscreteTimeQuantumWalk:
         -------
         State
             The final state of the system after performing the walk.
+
+        Raises
+        ------
+        ValueError
 
         """
         if not self._mesh.check_steps(steps):
@@ -640,35 +632,36 @@ class DiscreteTimeQuantumWalk:
             raise ValueError("the initial state is not unitary")
 
         app_id = self._spark_context.applicationId
-        rdd_id = result.data.id()
 
         if self._profiler:
-            self._profiler.profile_rdd('initialState', app_id, rdd_id)
-            self._profiler.profile_sparsity('initialState', result)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
+
+            info = self._profiler.profile_state('initialState', result, 0.0)
 
             if self._logger:
                 self._logger.info(
                     "initial state is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='initialState')['memoryUsed'],
-                        self._profiler.get_rdd(name='initialState')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 
+        if self._logger:
+            self._profiler.log_rdd(app_id=app_id)
+
         if steps > 0:
-            # Building operators once if not simulating decoherence with broken links
-            # When there is a broken links probability, the operators will be built in each step of the walk
+            # Building walk operators once if not simulating decoherence with broken links
+            # When there is a broken links probability, the walk operators will be built in each step of the walk
             if not self._mesh.broken_links_probability:
                 if self._walk_operator is None:
                     if self._logger:
                         self._logger.info("no walk operator has been set. A new one will be built")
                     self.create_walk_operator(CoordinateMultiplier, storage_level)
 
-                if self._num_particles > 1 and phase and self._interaction_operator is None:
-                    if self._logger:
-                        self._logger.info("no interaction operator has been set. A new one will be built")
-                    self.create_interaction_operator(phase, CoordinateMultiplier, storage_level)
+            if self._num_particles > 1 and phase and self._interaction_operator is None:
+                if self._logger:
+                    self._logger.info("no interaction operator has been set. A new one will be built")
+                self.create_interaction_operator(phase, CoordinateMultiplier, storage_level)
 
             t1 = datetime.now()
 
@@ -699,32 +692,27 @@ class DiscreteTimeQuantumWalk:
 
                 result = result_tmp
 
-                if self._logger:
-                    self._logger.debug(
-                        "step {} was done in {}s".format(i, (datetime.now() - t_tmp).total_seconds()))
-
-                rdd_id = result.data.id()
-
                 if self._profiler:
-                    self._profiler.profile_rdd('systemStateStep{}'.format(i), app_id, rdd_id)
-                    self._profiler.profile_sparsity('systemStateStep{}'.format(i), result)
                     self._profiler.profile_resources(app_id)
                     self._profiler.profile_executors(app_id)
 
+                    info = self._profiler.profile_state(
+                        'systemState{}'.format(i), result, (datetime.now() - t_tmp).total_seconds()
+                    )
+
                     if self._logger:
+                        self._logger.info("step was done in {}s".format(info['buildingTime']))
                         self._logger.info(
-                            "system state after {} step(s) is consuming {} bytes in memory and {} bytes in disk".format(
-                                i,
-                                self._profiler.get_rdd(name='systemStateStep{}'.format(i))['memoryUsed'],
-                                self._profiler.get_rdd(name='systemStateStep{}'.format(i))['diskUsed']
+                            "system state of step {} is consuming {} bytes in memory and {} bytes in disk".format(
+                                i, info['memoryUsed'], info['diskUsed']
                             )
                         )
 
-            if self._profiler:
-                self._profiler.profile_times('walk', (datetime.now() - t1).total_seconds())
-
                 if self._logger:
-                    self._logger.info("walk was done in {}s".format(self._profiler.get_times(name='walk')))
+                    self._profiler.log_rdd(app_id=app_id)
+
+            if self._logger:
+                self._logger.info("walk was done in {}s".format((datetime.now() - t1).total_seconds()))
 
             t1 = datetime.now()
 
@@ -739,19 +727,16 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.debug("unitarity check was done in {}s".format((datetime.now() - t1).total_seconds()))
 
-        rdd_id = result.data.id()
-
         if self._profiler:
-            self._profiler.profile_rdd('finalState', app_id, rdd_id)
-            self._profiler.profile_sparsity('finalState', result)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
+
+            info = self._profiler.profile_state('finalState', result, 0.0)
 
             if self._logger:
                 self._logger.info(
                     "final state is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='finalState')['memoryUsed'],
-                        self._profiler.get_rdd(name='finalState')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 

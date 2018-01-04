@@ -2,9 +2,9 @@ from datetime import datetime
 
 from pyspark import StorageLevel
 
-from dtqw.utils.utils import CoordinateDefault
 from dtqw.utils.logger import is_logger
-from dtqw.utils.profiler import is_profiler
+from dtqw.utils.profiling.profiler import is_profiler
+from dtqw.utils.utils import CoordinateDefault
 
 __all__ = ['Mesh', 'is_mesh']
 
@@ -105,21 +105,19 @@ class Mesh:
     def _profile(self, operator, initial_time):
         if self._profiler is not None:
             app_id = self._spark_context.applicationId
-            rdd_id = operator.data.id()
 
-            self._profiler.profile_times('shiftOperator', (datetime.now() - initial_time).total_seconds())
-            self._profiler.profile_rdd('shiftOperator', app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
+            info = self._profiler.profile_operator(
+                'shiftOperator', operator, (datetime.now() - initial_time).total_seconds()
+            )
+
             if self._logger:
-                self._logger.info(
-                    "shift operator was built in {}s".format(self._profiler.get_times(name='shiftOperator'))
-                )
+                self._logger.info("shift operator was built in {}s".format(info['buildingTime']))
                 self._logger.info(
                     "shift operator is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='shiftOperator')['memoryUsed'],
-                        self._profiler.get_rdd(name='shiftOperator')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 

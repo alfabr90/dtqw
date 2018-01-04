@@ -23,7 +23,6 @@ class Profiler:
         self._base_url = base_url
 
         self._times = None
-        self._sparsity = None
         self._rdd = None
         self._resources = None
         self._executors = None
@@ -67,10 +66,6 @@ class Profiler:
             self._logger = logger
         else:
             raise TypeError('logger instance expected, not "{}"'.format(type(logger)))
-
-    @staticmethod
-    def _default_sparsity():
-        return {'numElements': 0, 'numNonzeroElements': 0}
 
     @staticmethod
     def _default_rdd():
@@ -304,9 +299,8 @@ class Profiler:
             return self._request('/{}/storage/rdd/{}'.format(app_id, rdd_id))
 
     def start(self):
-        """Reset the profiler attributes to get info for a new profile round."""
+        """Reset the profiler attributes to get info for a new profiling round."""
         self._times = {}
-        self._sparsity = {}
         self._rdd = {}
         self._resources = self._default_resources()
         self._executors = {}
@@ -393,14 +387,14 @@ class Profiler:
 
     def profile_times(self, name, value):
         """
-        Store the execution time for a named quantum walk element.
+        Store the execution or building time for a named quantum walk element.
 
         Parameters
         ----------
         name : str
             A name for the element.
         value : float
-            The measured execution time of the element.
+            The measured execution or building time of the element.
 
         Returns
         -------
@@ -411,29 +405,6 @@ class Profiler:
             self.logger.info('profiling time for "{}"...'.format(name))
 
         self._times[name] = value
-
-    def profile_sparsity(self, name, elem):
-        """
-        Store info about the number of elements for a named system state.
-
-        Parameters
-        ----------
-        name : str
-            A name for the element.
-        elem : :obj: State
-            The system state.
-
-        Returns
-        -------
-        None
-
-        """
-        if self.logger:
-            self.logger.info('profiling sparsity for "{}"...'.format(name))
-
-        self._sparsity[name] = self._default_sparsity()
-        self._sparsity[name]['numElements'] = elem.shape[0] * elem.shape[1]
-        self._sparsity[name]['numNonzeroElements'] = elem.num_nonzero_elements
 
     def profile_rdd(self, name, app_id, rdd_id):
         """
@@ -456,7 +427,7 @@ class Profiler:
         if self.logger:
             self.logger.info('profiling RDD for "{}"...'.format(name))
 
-        if not (name in self._rdd):
+        if name not in self._rdd:
             self._rdd[name] = self._default_rdd()
 
         data = self.request_rdd(app_id, rdd_id)
@@ -523,7 +494,7 @@ class Profiler:
         if data is not None:
             if exec_id is None:
                 for d in data:
-                    if not (d['id'] in self._executors):
+                    if d['id'] not in self._executors:
                         self._executors[d['id']] = self._default_executor()
 
                     for k, v in d.items():
@@ -532,7 +503,7 @@ class Profiler:
             else:
                 for d in data:
                     if d['id'] == exec_id:
-                        if not (d['id'] in self._executors):
+                        if d['id'] not in self._executors:
                             self._executors[d['id']] = self._default_executor()
 
                         for k, v in d.items():
@@ -559,7 +530,7 @@ class Profiler:
             if name is None:
                 return self._times.copy()
             else:
-                if not (name in self._times):
+                if name not in self._times:
                     if self.logger:
                         self.logger.warning('no measurement of time has been done for "{}"'.format(name))
                     return {}
@@ -567,35 +538,6 @@ class Profiler:
         else:
             if self.logger:
                 self.logger.warning('no measurement of time has been done')
-            return {}
-
-    def get_sparsity(self, name=None):
-        """
-        Get all sparsity info or for a specific system state.
-
-        Parameters
-        ----------
-        name : str, optional
-            A name for the system state.
-
-        Returns
-        -------
-        dict or int
-            A dict with all sparsity info or the measured time for the specific system state.
-
-        """
-        if len(self._sparsity):
-            if name is None:
-                return self._sparsity.copy()
-            else:
-                if not (name in self._sparsity):
-                    if self.logger:
-                        self.logger.warning('no measurement of state sparsity has been done for "{}"'.format(name))
-                    return {}
-                return self._sparsity[name]
-        else:
-            if self.logger:
-                self.logger.warning('no measurement of state sparsity have been done')
             return {}
 
     def get_rdd(self, name=None):
@@ -609,7 +551,7 @@ class Profiler:
 
         Returns
         -------
-        dict or int
+        dict
             A dict with all RDD resources measurements or the measured time for the specific quantum walk element.
 
         """
@@ -617,7 +559,7 @@ class Profiler:
             if name is None:
                 return self._rdd.copy()
             else:
-                if not (name in self._rdd):
+                if name not in self._rdd:
                     if self.logger:
                         self.logger.warning('no measurement of RDD resources has been done for "{}"'.format(name))
                     return {}
@@ -638,7 +580,7 @@ class Profiler:
 
         Returns
         -------
-        dict or int
+        dict
             A dict with all resource measurements or the specific one.
 
         """
@@ -646,7 +588,7 @@ class Profiler:
             if key is None:
                 return self._resources.copy()
             else:
-                if not (key in self._default_resources()):
+                if key not in self._default_resources():
                     if self.logger:
                         self.logger.warning('no measurement of resources has been done for "{}"'.format(key))
                     return {}
@@ -667,7 +609,7 @@ class Profiler:
 
         Returns
         -------
-        dict or float
+        dict
             A dict with all executors' resources or the specific executor's.
 
         """
@@ -675,7 +617,7 @@ class Profiler:
             if exec_id is None:
                 return self._executors.copy()
             else:
-                if not (exec_id in self._executors):
+                if exec_id not in self._executors:
                     if self.logger:
                         self.logger.warning('no measurement of resources has been done for executor {}'.format(exec_id))
                     return {}
@@ -687,7 +629,7 @@ class Profiler:
 
     def export_times(self, path, extension='csv'):
         """
-        Export all stored times.
+        Export all stored execution and/or building times.
 
         Parameters
         ----------
@@ -712,41 +654,6 @@ class Profiler:
         else:
             if self.logger:
                 self.logger.warning('no measurement of time has been done')
-
-    def export_sparsity(self, path, extension='csv'):
-        """
-        Export all stored sparsity informations.
-
-        Parameters
-        ----------
-        path: str
-            The location of the files.
-        extension: str, optional
-            The extension of the files. Default value is 'csv', as only CSV files are supported for now.
-
-        Returns
-        -------
-        None
-
-        """
-        if self.logger:
-            self.logger.info("exporting sparsities in {} format...".format(extension))
-
-        if len(self._sparsity):
-            sparsity = []
-
-            for k, v in self._sparsity.items():
-                tmp = v.copy()
-                tmp['state'] = k
-                sparsity.append(tmp)
-
-            self._export_values(sparsity, sparsity[-1].keys(), path + 'sparsity', extension)
-
-            if self.logger:
-                self.logger.info("state sparsities successfully exported")
-        else:
-            if self.logger:
-                self.logger.warning('no measurement of sparsity has been done')
 
     def export_rdd(self, path, extension='csv'):
         """
@@ -887,7 +794,6 @@ class Profiler:
 
         """
         self.export_times(path, extension)
-        self.export_sparsity(path, extension)
         self.export_rdd(path, extension)
         self.export_resources(path, extension)
         self.export_executors(path, extension)

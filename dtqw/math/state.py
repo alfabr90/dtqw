@@ -116,6 +116,11 @@ class State(Base):
         :obj:JointCDF
             The CDF of the entire system.
 
+        Raises
+        ------
+        NotImplementedError
+        ValueError
+
         """
         if self._logger:
             self._logger.info("measuring the state of the system...")
@@ -220,22 +225,18 @@ class State(Base):
             raise ValueError("PDFs must sum one")
 
         app_id = self._spark_context.applicationId
-        rdd_id = pdf.data.id()
 
         if self._profiler:
-            self._profiler.profile_times('fullMeasurement', (datetime.now() - t1).total_seconds())
-            self._profiler.profile_rdd('fullMeasurement', app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
+            info = self._profiler.profile_cdf('fullMeasurement', pdf, (datetime.now() - t1).total_seconds())
+
             if self._logger:
-                self._logger.info(
-                    "full measurement was done in {}s".format(self._profiler.get_times(name='fullMeasurement'))
-                )
+                self._logger.info("full measurement was done in {}s".format(info['buildingTime']))
                 self._logger.info(
                     "CDF with full measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='fullMeasurement')['memoryUsed'],
-                        self._profiler.get_rdd(name='fullMeasurement')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 
@@ -259,6 +260,10 @@ class State(Base):
         -------
         :obj:FilteredCDF
             The CDF of the system when all particles are located at the same site.
+
+        Raises
+        ------
+        NotImplementedError
 
         """
         if self._logger:
@@ -316,22 +321,18 @@ class State(Base):
         pdf = FilteredCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
-        rdd_id = pdf.data.id()
 
         if self._profiler:
-            self._profiler.profile_times('filteredMeasurement', (datetime.now() - t1).total_seconds())
-            self._profiler.profile_rdd('filteredMeasurement', app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
+            info = self._profiler.profile_cdf('filteredMeasurement', pdf, (datetime.now() - t1).total_seconds())
+
             if self._logger:
-                self._logger.info(
-                    "filtered measurement was done in {}s".format(self._profiler.get_times(name='filteredMeasurement'))
-                )
+                self._logger.info("filtered measurement was done in {}s".format(info['buildingTime']))
                 self._logger.info(
                     "CDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
-                        self._profiler.get_rdd(name='filteredMeasurement')['memoryUsed'],
-                        self._profiler.get_rdd(name='filteredMeasurement')['diskUsed']
+                        info['memoryUsed'], info['diskUsed']
                     )
                 )
 
@@ -354,6 +355,11 @@ class State(Base):
         -------
         :obj:MarginalCDF
             The CDF of each particle.
+
+        Raises
+        ------
+        NotImplementedError
+        ValueError
 
         """
         if self._logger:
@@ -429,29 +435,23 @@ class State(Base):
             raise ValueError("PDFs must sum one")
 
         app_id = self._spark_context.applicationId
-        rdd_id = pdf.data.id()
 
         if self._profiler:
-            self._profiler.profile_times('partialMeasurementParticle{}'.format(
-                particle + 1), (datetime.now() - t1).total_seconds()
-            )
-            self._profiler.profile_rdd('partialMeasurementParticle{}'.format(particle + 1), app_id, rdd_id)
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
+            info = self._profiler.profile_cdf(
+                'partialMeasurementParticle{}'.format(particle + 1), pdf, (datetime.now() - t1).total_seconds()
+            )
+
             if self._logger:
-                self._logger.info(
-                    "partial measurement for particle {} was done in {}s".format(
-                        particle + 1,
-                        self._profiler.get_times(name='partialMeasurementParticle{}'.format(particle + 1))
-                    )
+                self._logger.info("partial measurement for particle {} was done in {}s".format(
+                        particle + 1, info['buildingTime'])
                 )
                 self._logger.info(
                     "CDF with partial measurements for particle {} "
                     "are consuming {} bytes in memory and {} bytes in disk".format(
-                        particle + 1,
-                        self._profiler.get_rdd(name='partialMeasurementParticle{}'.format(particle + 1))['memoryUsed'],
-                        self._profiler.get_rdd(name='partialMeasurementParticle{}'.format(particle + 1))['diskUsed']
+                        particle + 1, info['memoryUsed'], info['diskUsed']
                     )
                 )
 
