@@ -75,41 +75,58 @@ class BoxNatural(Natural):
         coin_size = 2
         size = self._size
         size_xy = size[0] * size[1]
+        size_bl = size[0] * size[1] + size[0] * size[1]
         shape = (coin_size * coin_size * size_xy, coin_size * coin_size * size_xy)
 
         if self._broken_links_probability:
-            bl_broad = self.broken_links()
+            broken_links = self.generate_broken_links(num_partitions).persist(storage_level)
 
-            def __map(xy):
-                x = xy % size[0]
-                y = int(xy / size[0])
-
+            def __map(e):
+                """e = (edge, (edge, broken or not))"""
                 for i in range(coin_size):
                     l = (-1) ** i
-                    for j in range(coin_size):
+
+                    # Finding the correspondent x,y coordinates of the vertex from the edge number
+                    if e[1][0] >= size[0] * size[1]:
+                        j = i
                         delta = int(not (i ^ j))
+                        x = int((e[1][0] - size[0] * size[1]) / size[0])
+                        y = ((e[1][0] - size[0] * size[1]) % size[1] - i - l) % size[1]
+                    else:
+                        j = int(not i)
+                        delta = int(not (i ^ j))
+                        x = (e[1][0] % size[0] - i - l) % size[0]
+                        y = int(e[1][0] / size[0])
 
-                        # Finding the correspondent edge number from the x,y coordinate of the vertex
-                        e = delta * (((size[0] + 1) * size[1]) + x * (size[1] + 1) + y + (1 - i)) + \
-                            (1 - delta) * (y * (size[0] + 1) + x + (1 - i))
+                    pos1 = x + l * (1 - delta)
+                    pos2 = y + l * delta
 
-                        pos1 = x + l * (1 - delta)
-                        pos2 = y + l * delta
-
-                        if e in bl_broad.value:
+                    if e[1][1]:
+                        bl = 0
+                    else:
+                        # The border edges are considered broken so that they become reflexive
+                        if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
                             bl = 0
                         else:
-                            # The border edges are considered broken so that they become reflexive
-                            if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
-                                bl = 0
-                            else:
-                                bl = l
+                            bl = l
 
-                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
-                            (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
-                        n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
+                    m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
+                        (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
+                    n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
-                        yield (m, n, 1)
+                    yield m, n, 1
+
+            rdd = self._spark_context.range(
+                size_bl
+            ).map(
+                lambda m: (m, m)
+            ).partitionBy(
+                numPartitions=num_partitions
+            ).leftOuterJoin(
+                broken_links
+            ).flatMap(
+                __map
+            )
         else:
             def __map(xy):
                 x = xy % size[0]
@@ -133,31 +150,31 @@ class BoxNatural(Natural):
                             (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
-                        yield (m, n, 1)
+                        yield m, n, 1
 
-        rdd = self._spark_context.range(
-            size_xy
-        ).flatMap(
-            __map
-        )
+            rdd = self._spark_context.range(
+                size_xy
+            ).flatMap(
+                __map
+            )
 
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
         elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
-
-        rdd = rdd.partitionBy(
-            numPartitions=num_partitions
-        )
 
         operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
 
         if self._broken_links_probability:
-            bl_broad.unpersist()
+            broken_links.unpersist()
 
         self._profile(operator, initial_time)
 

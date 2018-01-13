@@ -26,7 +26,6 @@ class Mesh:
             Probability of the occurences of broken links in the mesh.
         """
         self._spark_context = spark_context
-        self._base_size = size
         self._size = self._define_size(size)
         self._broken_links_probability = bl_prob
 
@@ -36,10 +35,6 @@ class Mesh:
     @property
     def spark_context(self):
         return self._spark_context
-
-    @property
-    def base_size(self):
-        return self._base_size
 
     @property
     def size(self):
@@ -165,6 +160,22 @@ class Mesh:
 
         Raises
         -------
+        NotImplementedError
+
+        """
+        raise NotImplementedError
+
+    def generate_broken_links(self, num_partitions):
+        """
+        Yield broken edges for the mesh based on its probability to have a broken link.
+
+        Parameters
+        ----------
+        num_partitions : int
+            The desired number of partitions for the RDD.
+
+        Raises
+        ------
         NotImplementedError
 
         """

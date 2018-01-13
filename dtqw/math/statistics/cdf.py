@@ -93,7 +93,7 @@ class CDF(Base):
         """
         raise NotImplementedError
 
-    def plot(self, filename, title, labels=None, **kwargs):
+    def plot(self, filename, title=None, labels=None, **kwargs):
         """
         Plot the probabilities over the mesh.
 
@@ -101,7 +101,7 @@ class CDF(Base):
         ----------
         filename: str
             The filename to save the plot.
-        title: str
+        title: str, optional
             The title of the plot.
         labels: tuple or list, optional
             The labels of each axis.
@@ -118,7 +118,7 @@ class CDF(Base):
 
         if len(self._shape) > 2:
             if self._logger:
-                self._logger.warning('it is only possible to plot one and two dimensional meshes')
+                self._logger.warning('it is only possible to plot one and two-dimensional meshes')
             return None
 
         t1 = datetime.now()
@@ -149,7 +149,8 @@ class CDF(Base):
                 plt.xlabel('Position')
                 plt.ylabel('Probability')
 
-            plt.title(title)
+            if title:
+                plt.title(title)
         elif self._mesh.is_2d():
             pdf = np.zeros(self._shape, dtype=float)
 
@@ -179,7 +180,8 @@ class CDF(Base):
                 axes.set_ylabel('Position y')
                 axes.set_zlabel('Probability')
 
-            axes.set_title(title)
+            if title:
+                axes.set_title(title)
             axes.view_init(elev=50)
 
             # figure.set_size_inches(12.8, 12.8)
@@ -194,6 +196,77 @@ class CDF(Base):
 
         if self._logger:
             self._logger.info("plot in {}s".format((datetime.now() - t1).total_seconds()))
+
+    def plot_contour(self, filename=None, title=None, labels=None, **kwargs):
+        """
+        Plot the contour function of the probabilities over the mesh.
+
+        Parameters
+        ----------
+        filename: str
+            The filename to save the plot.
+        title: str, optional
+            The title of the plot.
+        labels: tuple or list, optional
+            The labels of each axis.
+        kwargs
+            Keyword arguments being passed to matplotlib.
+
+        Returns
+        -------
+        None
+
+        """
+        if self._logger:
+            self._logger.info("starting contour plot of probabilities...")
+
+        if len(self._shape) > 2:
+            if self._logger:
+                self._logger.warning('it is only possible to plot the contour function of two-dimensional meshes')
+            return None
+
+        t1 = datetime.now()
+
+        plt.cla()
+        plt.clf()
+
+        axis = self._mesh.axis()
+
+        if self._mesh.is_1d():
+            if self._logger:
+                self._logger.error("mesh dimension not implemented to contour plots")
+            raise NotImplementedError("mesh dimension not implemented to contour plots")
+        elif self._mesh.is_2d():
+            pdf = np.zeros(self._shape, dtype=float)
+
+            for i in self.data.collect():
+                pdf[i[0], i[1]] = i[2]
+
+            plt.contourf(axis[0], axis[1], pdf)
+            plt.colorbar()
+
+            if labels:
+                plt.xlabel(labels[0])
+                plt.ylabel(labels[1])
+            else:
+                plt.xlabel('Position x')
+                plt.ylabel('Position y')
+
+            if title:
+                plt.title(title)
+
+            # figure.set_size_inches(12.8, 12.8)
+        else:
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
+
+        plt.savefig(filename, kwargs=kwargs)
+        plt.cla()
+        plt.clf()
+
+        if self._logger:
+            self._logger.info("contour plot in {}s".format((datetime.now() - t1).total_seconds()))
 
 
 def is_cdf(obj):

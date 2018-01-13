@@ -105,15 +105,15 @@ class Coin2D(Coin):
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
         elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
-
-        rdd = rdd.partitionBy(
-            numPartitions=num_partitions
-        )
 
         operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
 

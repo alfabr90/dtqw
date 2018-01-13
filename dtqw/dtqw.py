@@ -376,21 +376,15 @@ class DiscreteTimeQuantumWalk:
                 self._num_partitions, CoordinateMultiplier, storage_level
             )
 
-        t1 = datetime.now()
-
         if self._num_particles == 1:
             if self._logger:
                 self._logger.info("with just one particle, the walk operator is the evolution operator")
 
-            evolution_operator = self._shift_operator.multiply(self._coin_operator, coord_format)
+            t1 = datetime.now()
 
-            rdd = evolution_operator.data.partitionBy(
-                numPartitions=self._num_partitions
-            )
+            evolution_operator = self._shift_operator.multiply(self._coin_operator, CoordinateMultiplier)
 
-            self._walk_operator = Operator(
-                self._spark_context, rdd, evolution_operator.shape
-            ).persist(storage_level).checkpoint().materialize(storage_level)
+            self._walk_operator = evolution_operator.persist(storage_level).checkpoint().materialize(storage_level)
 
             self._coin_operator.unpersist()
             self._shift_operator.unpersist()
@@ -414,17 +408,17 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("building walk operator...")
 
-            evolution_operator = self._shift_operator.multiply(self._coin_operator).materialize(storage_level)
+            t_tmp = datetime.now()
+
+            evolution_operator = self._shift_operator.multiply(
+                self._coin_operator, CoordinateDefault
+            ).persist(storage_level).materialize(storage_level)
 
             self._coin_operator.unpersist()
             self._shift_operator.unpersist()
 
             shape = evolution_operator.shape
             shape_tmp = shape
-
-            t_tmp = datetime.now()
-
-            eo = broadcast(self._spark_context, evolution_operator.data.collect())
 
             self._walk_operator = []
 
@@ -435,76 +429,85 @@ class DiscreteTimeQuantumWalk:
                 shape = shape_tmp
 
                 if p == 0:
-                    rdd = evolution_operator.data
-
                     # The first particle's walk operator consists in applying the tensor product between the
                     # evolution operator and the other particles' corresponding identity matrices
                     #
-                    # W1 = W (X) I2 (X) ... (X) In
-                    for p2 in range(self._num_particles - 1 - p):
-                        def __map(m):
-                            for i in range(shape_tmp[0]):
-                                yield (m[0] * shape_tmp[0] + i, m[1] * shape_tmp[1] + i, m[2])
-
-                        rdd = rdd.flatMap(
-                            __map
-                        )
-
+                    # W1 = U (X) I2 (X) ... (X) In
+                    for p2 in range(self._num_particles - 2 - p):
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                    
+                    rdd = self._spark_context.range(
+                        shape[0]
+                    ).map(
+                        lambda m: (m, m, 1)
+                    )
+                    
+                    identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+
+                    self._walk_operator.append(
+                        evolution_operator.kron(
+                            identity, coord_format
+                        ).persist(storage_level).checkpoint().materialize(storage_level)
+                    )
+
+                    identity.destroy()
                 else:
                     t_tmp = datetime.now()
 
                     # For the other particles, each one has its operator built by applying the
                     # tensor product between its previous particles' identity matrices and its evolution operator.
                     #
-                    # Wi = I1 (X) ... (X) Ii-1 (X) Wi ...
+                    # Wi = I1 (X) ... (X) Ii-1 (X) U ...
                     for p2 in range(p - 1):
                         shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
-
-                    def __map(m):
-                        for i in eo.value:
-                            yield (m * shape_tmp[0] + i[0], m * shape_tmp[1] + i[1], i[2])
-
+                    
                     rdd = self._spark_context.range(
                         shape[0]
-                    ).flatMap(
-                        __map
+                    ).map(
+                        lambda m: (m, m, 1)
                     )
-
-                    shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
-
+                    
+                    pre_identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+                    
                     # Then, the tensor product is applied between the following particles' identity matrices.
                     #
                     # ... (X) Ii+1 (X) ... In
-                    for p2 in range(self._num_particles - 1 - p):
-                        def __map(m):
-                            for i in range(shape_tmp[0]):
-                                yield (m[0] * shape_tmp[0] + i, m[1] * shape_tmp[1] + i, m[2])
+                    #
+                    # If it is the last particle, the tensor product is applied between
+                    # the pre-identity and evolution operators
+                    #
+                    # ... (X) Ii-1 (X) U
+                    if p == self._num_particles - 1:
+                        self._walk_operator.append(
+                            pre_identity.kron(
+                                evolution_operator, coord_format
+                            ).persist(storage_level).checkpoint().materialize(storage_level)
+                        )
+                    else:
+                        shape = shape_tmp
 
-                        rdd = rdd.flatMap(
-                            __map
+                        for p2 in range(self._num_particles - 2 - p):
+                            shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+
+                        rdd = self._spark_context.range(
+                            shape[0]
+                        ).map(
+                            lambda m: (m, m, 1)
                         )
 
-                        shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        post_identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
 
-                if coord_format == CoordinateMultiplier:
-                    rdd = rdd.map(
-                        lambda m: (m[1], (m[0], m[2]))
-                    )
-                elif coord_format == CoordinateMultiplicand:
-                    rdd = rdd.map(
-                        lambda m: (m[0], (m[1], m[2]))
-                    )
+                        self._walk_operator.append(
+                            pre_identity.kron(
+                                evolution_operator, CoordinateDefault
+                            ).kron(
+                                post_identity, coord_format
+                            ).persist(storage_level).checkpoint().materialize(storage_level)
+                        )
 
-                rdd = rdd.partitionBy(
-                    numPartitions=self._num_partitions
-                )
+                        post_identity.destroy()
 
-                self._walk_operator.append(
-                    Operator(
-                        self._spark_context, rdd, shape
-                    ).persist(storage_level).checkpoint().materialize(storage_level)
-                )
+                    pre_identity.destroy()
 
                 if self._profiler:
                     self._profiler.profile_resources(app_id)
@@ -525,7 +528,6 @@ class DiscreteTimeQuantumWalk:
                             )
                         )
 
-            eo.unpersist()
             evolution_operator.unpersist()
 
     def destroy_coin_operator(self):

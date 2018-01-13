@@ -25,7 +25,7 @@ class Operator(Base):
         """
         super().__init__(spark_context, rdd, shape)
 
-    def kron(self, other):
+    def kron(self, other, coord_format=CoordinateDefault):
         """
         Perform a tensor (Kronecker) product with another operator.
 
@@ -33,6 +33,9 @@ class Operator(Base):
         ----------
         other : :obj:Operator
             The other operator.
+        coord_format : int, optional
+            Indicate if the operator must be returned in an apropriate format for multiplications.
+            Default value is Operator.CoordinateDefault.
 
         Returns
         -------
@@ -48,11 +51,28 @@ class Operator(Base):
         other_shape = other.shape
         new_shape = (self._shape[0] * other_shape[0], self._shape[1] * other_shape[1])
 
+        num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
+
         rdd = self.data.cartesian(
             other.data
-        ).map(
-            lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2])
         )
+
+        if coord_format == CoordinateMultiplier:
+            rdd = rdd.map(
+                lambda m: (m[0][1] * other_shape[1] + m[1][1], (m[0][0] * other_shape[0] + m[1][0], m[0][2] * m[1][2]))
+            ).partitionBy(
+                numPartitions=num_partitions
+            )
+        elif coord_format == CoordinateMultiplicand:
+            rdd = rdd.map(
+                lambda m: (m[0][0] * other_shape[0] + m[1][0], (m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2]))
+            ).partitionBy(
+                numPartitions=num_partitions
+            )
+        else:  # Operator.CoordinateDefault
+            rdd = rdd.map(
+                lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2])
+            )
 
         return Operator(self._spark_context, rdd, new_shape)
 
@@ -97,10 +117,14 @@ class Operator(Base):
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[0][1], (m[0][0], m[1]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
         elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0][0], (m[0][1], m[1]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
         else:  # Operator.CoordinateDefault
             rdd = rdd.map(
@@ -125,6 +149,8 @@ class Operator(Base):
             lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
+        ).partitionBy(
+            numPartitions=num_partitions
         )
 
         return State(self._spark_context, rdd, shape, other.mesh, other.num_particles)

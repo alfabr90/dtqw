@@ -63,49 +63,54 @@ class Diagonal(Mesh2D):
         """
         raise NotImplementedError
 
-    def broken_links(self):
+    def generate_broken_links(self, num_partitions):
         """
         Yield broken edges for the mesh based on its probability to have a broken link.
 
+        Parameters
+        ----------
+        num_partitions : int
+            The desired number of partitions for the RDD.
+
         Returns
         -------
-        Broadcast
-            A Spark's broadcast variable containing a dict which keys are the numbered edges that are broken.
+        RDD
+            The RDD which keys are the numbered edges that are broken.
 
         """
         size = self._size
-        size_bl = (size[0] + 1) * (size[1] + 1)
+        size_bl = size[0] * size[1]
 
         bl_prop = self._broken_links_probability
 
         if not bl_prop:
-            return broadcast(self._spark_context, {})
+            return self._spark_context.emptyRDD()
 
-        # An example of topology with a 5x5 diagonal mesh:
+        # An example of a 5x5 diagonal mesh:
         #
-        # 30 31 32 33 34 35 |
+        # 00 01 01 03 04 00 |
         #   O  O  O  O  O   |
-        # 24 25 26 27 28 29 |
+        # 20 21 22 23 24 20 |
         #   O  O  O  O  O   |
-        # 18 19 20 21 22 23 |
+        # 15 16 17 18 19 20 |
         #   O  O  O  O  O   | y
-        # 12 13 14 15 16 17 |
+        # 10 11 12 13 14 10 |
         #   O  O  O  O  O   |
-        # 06 07 08 09 10 11 |
+        # 05 06 07 08 09 05 |
         #   O  O  O  O  O   |
-        # 00 01 02 03 04 05 |
+        # 00 01 02 03 04 00 |
         # -----------------
         #         x
         def __map(e):
             random.seed()
             return e, random.random() < bl_prop
 
-        rdd = self._spark_context.range(
+        return self._spark_context.range(
             size_bl
         ).map(
             __map
         ).filter(
             lambda m: m[1] is True
-        ).collectAsMap()
-
-        return broadcast(self._spark_context, rdd)
+        ).partitionBy(
+            numPartitions=num_partitions
+        )

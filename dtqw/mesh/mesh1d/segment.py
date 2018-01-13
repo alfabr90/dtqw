@@ -74,16 +74,17 @@ class Segment(Mesh1D):
         shape = (coin_size * size, coin_size * size)
 
         if self._broken_links_probability:
-            bl_broad = self.broken_links()
+            broken_links = self.generate_broken_links(num_partitions).persist(storage_level)
 
-            def __map(x):
+            def __map(e):
+                """e = (edge, (edge, broken or not))"""
                 for i in range(coin_size):
                     l = (-1) ** i
 
-                    # Finding the correspondent edge number from the x coordinate of the vertex
-                    e = x + i + l
+                    # Finding the correspondent x coordinate of the vertex from the edge number
+                    x = (e[1][0] - i - l) % size
 
-                    if e in bl_broad.value:
+                    if e[1][1]:
                         bl = 0
                     else:
                         if x + l >= size or x + l < 0:
@@ -91,7 +92,19 @@ class Segment(Mesh1D):
                         else:
                             bl = l
 
-                    yield ((i + bl) * size + x + bl, (1 - i) * size + x, 1)
+                    yield (i + bl) * size + x + bl, (1 - i) * size + x, 1
+
+            rdd = self._spark_context.range(
+                size
+            ).map(
+                lambda m: (m, m)
+            ).partitionBy(
+                numPartitions=num_partitions
+            ).leftOuterJoin(
+                broken_links
+            ).flatMap(
+                __map
+            )
         else:
             def __map(x):
                 for i in range(coin_size):
@@ -102,31 +115,31 @@ class Segment(Mesh1D):
                     else:
                         bl = l
 
-                    yield ((i + bl) * size + x + bl, (1 - i) * size + x, 1)
+                    yield (i + bl) * size + x + bl, (1 - i) * size + x, 1
 
-        rdd = self._spark_context.range(
-            size
-        ).flatMap(
-            __map
-        )
+            rdd = self._spark_context.range(
+                size
+            ).flatMap(
+                __map
+            )
 
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
         elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
-
-        rdd = rdd.partitionBy(
-            numPartitions=num_partitions
-        )
 
         operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
 
         if self._broken_links_probability:
-            bl_broad.unpersist()
+            broken_links.unpersist()
 
         self._profile(operator, initial_time)
 

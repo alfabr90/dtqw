@@ -93,21 +93,20 @@ class LatticeDiagonal(Diagonal):
         shape = (coin_size * coin_size * size_xy, coin_size * coin_size * size_xy)
 
         if self._broken_links_probability:
-            bl_broad = self.broken_links()
+            broken_links = self.generate_broken_links(num_partitions).persist(storage_level)
 
-            def __map(xy):
-                x = xy % size[0]
-                y = int(xy / size[0])
-
+            def __map(e):
+                """e = (edge, (edge, broken or not))"""
                 for i in range(coin_size):
                     l1 = (-1) ** i
                     for j in range(coin_size):
                         l2 = (-1) ** j
 
-                        # Finding the correspondent edge number from the x,y coordinate of the vertex
-                        e = (y + 1 - j) * (size[0] + 1) + x + 1 - i
+                        # Finding the correspondent x,y coordinates of the vertex from the edge number
+                        x = (e[1][0] % size[0] - i - l1) % size[0]
+                        y = (int(e[1][0] / size[0]) - j - l2) % size[1]
 
-                        if e in bl_broad.value:
+                        if e[1][1]:
                             bl1, bl2 = 0, 0
                         else:
                             bl1, bl2 = l1, l2
@@ -116,7 +115,19 @@ class LatticeDiagonal(Diagonal):
                             ((x + bl1) % size[0]) * size[1] + ((y + bl2) % size[1])
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
-                        yield (m, n, 1)
+                        yield m, n, 1
+
+            rdd = self._spark_context.range(
+                size_xy
+            ).map(
+                lambda m: (m, m)
+            ).partitionBy(
+                numPartitions=num_partitions
+            ).leftOuterJoin(
+                broken_links
+            ).flatMap(
+                __map
+            )
         else:
             def __map(xy):
                 x = xy % size[0]
@@ -130,31 +141,31 @@ class LatticeDiagonal(Diagonal):
                         m = (i * coin_size + j) * size_xy + ((x + l1) % size[0]) * size[1] + ((y + l2) % size[1])
                         n = (i * coin_size + j) * size_xy + x * size[1] + y
 
-                        yield (m, n, 1)
+                        yield m, n, 1
 
-        rdd = self._spark_context.range(
-            size_xy
-        ).flatMap(
-            __map
-        )
+            rdd = self._spark_context.range(
+                size_xy
+            ).flatMap(
+                __map
+            )
 
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
         elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
+            ).partitionBy(
+                numPartitions=num_partitions
             )
-
-        rdd = rdd.partitionBy(
-            numPartitions=num_partitions
-        )
 
         operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
 
         if self._broken_links_probability:
-            bl_broad.unpersist()
+            broken_links.unpersist()
 
         self._profile(operator, initial_time)
 

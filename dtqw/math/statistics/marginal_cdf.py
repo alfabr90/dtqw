@@ -85,10 +85,10 @@ class MarginalCDF(CDF):
         """
         if self._mesh.is_1d():
             ind = 1
-            mesh_size = (self._mesh.base_size, 1)
+            mesh_size = (int(self._mesh.size / 2), 1)
         elif self._mesh.is_2d():
             ind = 2
-            mesh_size = self._mesh.base_size
+            mesh_size = (int(self._mesh.size[0] / 2), int(self._mesh.size[1] / 2))
         else:
             if self._logger:
                 self._logger.error("mesh dimension not implemented")
@@ -135,10 +135,10 @@ class MarginalCDF(CDF):
         """
         if self._mesh.is_1d():
             ind = 1
-            mesh_size = (self._mesh.base_size, 1)
+            mesh_size = (int(self._mesh.size / 2), 1)
         elif self._mesh.is_2d():
             ind = 2
-            mesh_size = self._mesh.base_size
+            mesh_size = (int(self._mesh.size[0] / 2), int(self._mesh.size[1] / 2))
         else:
             if self._logger:
                 self._logger.error("mesh dimension not implemented")

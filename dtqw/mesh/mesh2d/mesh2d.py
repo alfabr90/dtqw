@@ -86,6 +86,22 @@ class Mesh2D(Mesh):
         """
         raise NotImplementedError
 
+    def generate_broken_links(self, num_partitions):
+        """
+        Yield broken edges for the mesh based on its probability to have a broken link.
+
+        Parameters
+        ----------
+        num_partitions : int
+            The desired number of partitions for the RDD.
+
+        Raises
+        ------
+        NotImplementedError
+
+        """
+        raise NotImplementedError
+
     def create_operator(self, num_partitions,
                         coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
