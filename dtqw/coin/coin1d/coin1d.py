@@ -115,7 +115,7 @@ class Coin1D(Coin):
                 numPartitions=num_partitions
             )
 
-        operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+        operator = Operator(self._spark_context, rdd, shape, coord_format).materialize(storage_level)
 
         self._profile(operator, initial_time)
 

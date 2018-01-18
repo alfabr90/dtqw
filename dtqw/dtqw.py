@@ -304,18 +304,18 @@ class DiscreteTimeQuantumWalk:
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[1], (m[0], m[2]))
+            ).partitionBy(
+                numPartitions=self._num_partitions
             )
         elif coord_format == CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0], (m[1], m[2]))
+            ).partitionBy(
+                numPartitions=self._num_partitions
             )
 
-        rdd = rdd.partitionBy(
-            numPartitions=self._num_partitions
-        )
-
         self._interaction_operator = Operator(
-            self._spark_context, rdd, shape
+            self._spark_context, rdd, shape, coord_format
         ).persist(storage_level).checkpoint().materialize(storage_level)
 
         app_id = self._spark_context.applicationId
@@ -442,7 +442,7 @@ class DiscreteTimeQuantumWalk:
                         lambda m: (m, m, 1)
                     )
                     
-                    identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+                    identity = Operator(self._spark_context, rdd, shape)
 
                     self._walk_operator.append(
                         evolution_operator.kron(
@@ -467,7 +467,7 @@ class DiscreteTimeQuantumWalk:
                         lambda m: (m, m, 1)
                     )
                     
-                    pre_identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+                    pre_identity = Operator(self._spark_context, rdd, shape)
                     
                     # Then, the tensor product is applied between the following particles' identity matrices.
                     #
@@ -495,7 +495,7 @@ class DiscreteTimeQuantumWalk:
                             lambda m: (m, m, 1)
                         )
 
-                        post_identity = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+                        post_identity = Operator(self._spark_context, rdd, shape)
 
                         self._walk_operator.append(
                             pre_identity.kron(
@@ -618,15 +618,17 @@ class DiscreteTimeQuantumWalk:
                 self._logger.info("broken links probability: {}".format(self._mesh.broken_links_probability))
 
         # Partitioning the initial state of the system in order to reduce some shuffling operations
-        rdd = initial_state.data.partitionBy(
-            numPartitions=self._num_partitions
-        )
+        # rdd = initial_state.data.partitionBy(
+        #     numPartitions=self._num_partitions
+        # )
+        #
+        # result = State(
+        #     self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles
+        # ).materialize(storage_level)
+        #
+        # initial_state.unpersist()
 
-        result = State(
-            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles
-        ).materialize(storage_level)
-
-        initial_state.unpersist()
+        result = initial_state.materialize(storage_level)
 
         if not result.is_unitary():
             if self._logger:

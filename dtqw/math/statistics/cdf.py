@@ -43,15 +43,10 @@ class CDF(Base):
     def mesh(self):
         return self._mesh
 
-    def sum(self, round_precision=10):
+    def sum(self):
         """
         Sum the values of this CDF.
 
-        Parameters
-        ----------
-        round_precision : int, optional
-            The precision used to round the value. Default is 10 decimal digits.
-
         Raises
         -------
         NotImplementedError
@@ -59,15 +54,21 @@ class CDF(Base):
         """
         raise NotImplementedError
 
-    def expected_value(self, round_precision=10):
+    def norm(self):
+        """
+        Calculate the norm of this operator.
+
+        Raises
+        ------
+        NotImplementedError
+
+        """
+        raise NotImplementedError
+
+    def expected_value(self):
         """
         Calculate the expected value of this CDF.
 
-        Parameters
-        ----------
-        round_precision : int, optional
-            The precision used to round the value. Default is 10 decimal digits.
-
         Raises
         -------
         NotImplementedError
@@ -75,7 +76,7 @@ class CDF(Base):
         """
         raise NotImplementedError
 
-    def variance(self, mean=None, round_precision=10):
+    def variance(self, mean=None):
         """
         Calculate the variance of this CDF.
 
@@ -83,8 +84,6 @@ class CDF(Base):
         ----------
         mean : float, optional
             The mean of this CDF. When None is passed as argument, the mean is calculated.
-        round_precision : int, optional
-            The precision used to round the value. Default is 10 decimal digits.
 
         Raises
         ------
@@ -129,14 +128,14 @@ class CDF(Base):
         axis = self._mesh.axis()
 
         if self._mesh.is_1d():
-            pdf = np.zeros(self._shape, dtype=float)
+            cdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
-                pdf[i[0]] = i[1]
+                cdf[i[0]] = i[1]
 
             plt.plot(
                 axis,
-                pdf,
+                cdf,
                 color='b',
                 linestyle='-',
                 linewidth=1.0
@@ -152,10 +151,10 @@ class CDF(Base):
             if title:
                 plt.title(title)
         elif self._mesh.is_2d():
-            pdf = np.zeros(self._shape, dtype=float)
+            cdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
-                pdf[i[0], i[1]] = i[2]
+                cdf[i[0], i[1]] = i[2]
 
             figure = plt.figure()
             axes = figure.add_subplot(111, projection='3d')
@@ -163,7 +162,7 @@ class CDF(Base):
             axes.plot_surface(
                 axis[0],
                 axis[1],
-                pdf,
+                cdf,
                 rstride=1,
                 cstride=1,
                 cmap=plt.cm.YlGnBu_r,
@@ -190,7 +189,7 @@ class CDF(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        plt.savefig(filename, kwargs=kwargs)
+        plt.savefig(filename, **kwargs)
         plt.cla()
         plt.clf()
 
@@ -237,12 +236,12 @@ class CDF(Base):
                 self._logger.error("mesh dimension not implemented to contour plots")
             raise NotImplementedError("mesh dimension not implemented to contour plots")
         elif self._mesh.is_2d():
-            pdf = np.zeros(self._shape, dtype=float)
+            cdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
-                pdf[i[0], i[1]] = i[2]
+                cdf[i[0], i[1]] = i[2]
 
-            plt.contourf(axis[0], axis[1], pdf)
+            plt.contourf(axis[0], axis[1], cdf)
             plt.colorbar()
 
             if labels:
@@ -261,7 +260,7 @@ class CDF(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        plt.savefig(filename, kwargs=kwargs)
+        plt.savefig(filename, **kwargs)
         plt.cla()
         plt.clf()
 

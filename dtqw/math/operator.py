@@ -10,7 +10,7 @@ __all__ = ['Operator', 'is_operator']
 class Operator(Base):
     """Class for the operators of quantum walks."""
 
-    def __init__(self, spark_context, rdd, shape):
+    def __init__(self, spark_context, rdd, shape, coord_format=CoordinateDefault):
         """
         Build an Operator object.
 
@@ -24,6 +24,8 @@ class Operator(Base):
             The shape of this operator object. Must be a 2-dimensional tuple.
         """
         super().__init__(spark_context, rdd, shape)
+
+        self.coordinate_format = coord_format
 
     def kron(self, other, coord_format=CoordinateDefault):
         """
@@ -74,7 +76,7 @@ class Operator(Base):
                 lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2])
             )
 
-        return Operator(self._spark_context, rdd, new_shape)
+        return Operator(self._spark_context, rdd, new_shape, coord_format)
 
     def norm(self):
         """
@@ -131,7 +133,7 @@ class Operator(Base):
                 lambda m: (m[0][0], m[0][1], m[1])
             )
 
-        return Operator(self._spark_context, rdd, shape)
+        return Operator(self._spark_context, rdd, shape, coord_format)
 
     def _multiply_state(self, other):
         if self._shape[1] != other.shape[0]:

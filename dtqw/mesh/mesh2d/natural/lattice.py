@@ -94,7 +94,7 @@ class LatticeNatural(Natural):
         shape = (coin_size * coin_size * size_xy, coin_size * coin_size * size_xy)
 
         if self._broken_links_probability:
-            broken_links = self.generate_broken_links(num_partitions).persist(storage_level)
+            broken_links = self.generate_broken_links()
 
             def __map(e):
                 """e = (edge, (edge, broken or not))"""
@@ -170,7 +170,7 @@ class LatticeNatural(Natural):
                 numPartitions=num_partitions
             )
 
-        operator = Operator(self._spark_context, rdd, shape).materialize(storage_level)
+        operator = Operator(self._spark_context, rdd, shape, coord_format).materialize(storage_level)
 
         if self._broken_links_probability:
             broken_links.unpersist()

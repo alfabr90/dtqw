@@ -214,15 +214,15 @@ class State(Base):
             __unmap
         )
 
-        pdf = JointCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        cdf = JointCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        if pdf.sum() != 1.0:
+        if round(cdf.sum(), 10) != 1.0:
             if self._logger:
-                self._logger.error("PDFs must sum one")
-            raise ValueError("PDFs must sum one")
+                self._logger.error("CDFs must sum one")
+            raise ValueError("CDFs must sum one")
 
         app_id = self._spark_context.applicationId
 
@@ -230,7 +230,7 @@ class State(Base):
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
-            info = self._profiler.profile_cdf('fullMeasurement', pdf, (datetime.now() - t1).total_seconds())
+            info = self._profiler.profile_cdf('fullMeasurement', cdf, (datetime.now() - t1).total_seconds())
 
             if self._logger:
                 self._logger.info("full measurement was done in {}s".format(info['buildingTime']))
@@ -242,7 +242,7 @@ class State(Base):
 
             self._profiler.log_rdd(app_id=app_id)
 
-        return pdf
+        return cdf
 
     def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
@@ -318,7 +318,7 @@ class State(Base):
             __map
         )
 
-        pdf = FilteredCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        cdf = FilteredCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
 
@@ -326,7 +326,7 @@ class State(Base):
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
-            info = self._profiler.profile_cdf('filteredMeasurement', pdf, (datetime.now() - t1).total_seconds())
+            info = self._profiler.profile_cdf('filteredMeasurement', cdf, (datetime.now() - t1).total_seconds())
 
             if self._logger:
                 self._logger.info("filtered measurement was done in {}s".format(info['buildingTime']))
@@ -338,7 +338,7 @@ class State(Base):
 
             self._profiler.log_rdd(app_id=app_id)
 
-        return pdf
+        return cdf
 
     def partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
@@ -424,15 +424,15 @@ class State(Base):
             __unmap
         )
 
-        pdf = MarginalCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        cdf = MarginalCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        if pdf.sum() != 1.0:
+        if round(cdf.sum(), 10) != 1.0:
             if self._logger:
-                self._logger.error("PDFs must sum one")
-            raise ValueError("PDFs must sum one")
+                self._logger.error("CDFs must sum one")
+            raise ValueError("CDFs must sum one")
 
         app_id = self._spark_context.applicationId
 
@@ -441,7 +441,7 @@ class State(Base):
             self._profiler.profile_executors(app_id)
 
             info = self._profiler.profile_cdf(
-                'partialMeasurementParticle{}'.format(particle + 1), pdf, (datetime.now() - t1).total_seconds()
+                'partialMeasurementParticle{}'.format(particle + 1), cdf, (datetime.now() - t1).total_seconds()
             )
 
             if self._logger:
@@ -457,7 +457,7 @@ class State(Base):
 
             self._profiler.log_rdd(app_id=app_id)
 
-        return pdf
+        return cdf
 
     def partial_measurements(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """

@@ -63,14 +63,9 @@ class Natural(Mesh2D):
         """
         raise NotImplementedError
 
-    def generate_broken_links(self, num_partitions):
+    def generate_broken_links(self):
         """
         Yield broken edges for the mesh based on its probability to have a broken link.
-
-        Parameters
-        ----------
-        num_partitions : int
-            The desired number of partitions for the RDD.
 
         Returns
         -------
@@ -111,6 +106,4 @@ class Natural(Mesh2D):
             __map
         ).filter(
             lambda m: m[1] is True
-        ).partitionBy(
-            numPartitions=num_partitions
         )

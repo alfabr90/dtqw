@@ -107,14 +107,9 @@ class Mesh1D(Mesh):
         """
         raise NotImplementedError
 
-    def generate_broken_links(self, num_partitions):
+    def generate_broken_links(self):
         """
-        Yield broken edges for the mesh based on its probability to have a broken link.
-
-        Parameters
-        ----------
-        num_partitions : int
-            The desired number of partitions for the RDD.
+        Yield broken links for the mesh based on its probability to have a broken link.
 
         Returns
         -------
@@ -123,9 +118,9 @@ class Mesh1D(Mesh):
 
         """
         size = self._size
-        bl_prop = self._broken_links_probability
+        bl_prob = self._broken_links_probability
 
-        if not bl_prop:
+        if not bl_prob:
             return self._spark_context.emptyRDD()
 
         # An example of a 5x1 mesh:
@@ -135,7 +130,7 @@ class Mesh1D(Mesh):
         #              x
         def __map(e):
             random.seed()
-            return e, random.random() < bl_prop
+            return e, random.random() < bl_prob
 
         return self._spark_context.range(
             size
@@ -143,6 +138,4 @@ class Mesh1D(Mesh):
             __map
         ).filter(
             lambda m: m[1] is True
-        ).partitionBy(
-            numPartitions=num_partitions
         )

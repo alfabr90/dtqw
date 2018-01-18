@@ -285,7 +285,7 @@ class Base:
 
         return result
 
-    def is_unitary(self, round_precision=None):
+    def is_unitary(self, round_precision=10):
         """
         Check if this matrix is unitary by calculating its norm.
 
@@ -300,5 +300,4 @@ class Base:
             True if the norm of this matrix is 1.0, False otherwise.
 
         """
-
         return round(self.norm(), round_precision) == 1.0

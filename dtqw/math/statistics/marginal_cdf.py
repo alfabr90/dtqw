@@ -1,3 +1,5 @@
+import math
+
 from dtqw.math.statistics.cdf import CDF
 
 __all__ = ['MarginalCDF']
@@ -26,14 +28,9 @@ class MarginalCDF(CDF):
         """
         super().__init__(spark_context, rdd, shape, mesh, num_particles)
 
-    def sum(self, round_precision=10):
+    def sum(self):
         """
         Sum the values of this CDF.
-
-        Parameters
-        ----------
-        round_precision : int, optional
-            The precision used to round the value. Default is 10 decimal digits.
 
         Returns
         -------
@@ -54,7 +51,7 @@ class MarginalCDF(CDF):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        n = self.data.filter(
+        return self.data.filter(
             lambda m: m[ind] != float()
         ).map(
             lambda m: m[ind]
@@ -62,16 +59,38 @@ class MarginalCDF(CDF):
             lambda a, b: a + b
         )
 
-        return round(n, round_precision)
+    def norm(self):
+        """
+        Calculate the norm of this CDF.
 
-    def expected_value(self, round_precision=10):
+        Returns
+        -------
+        float
+            The norm of this CDF.
+
+        """
+        if self._mesh.is_1d():
+            ind = 1
+        elif self._mesh.is_2d():
+            ind = 2
+        else:
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
+
+        n = self.data.filter(
+            lambda m: m[ind] != float()
+        ).map(
+            lambda m: m[ind].real ** 2
+        ).reduce(
+            lambda a, b: a + b
+        )
+
+        return math.sqrt(n)
+
+    def expected_value(self):
         """
         Calculate the expected value of this CDF.
-
-        Parameters
-        ----------
-        round_precision : int, optional
-            The precision used to round the value. Default is 10 decimal digits.
 
         Returns
         -------
@@ -102,7 +121,7 @@ class MarginalCDF(CDF):
 
             return m[ind] * v
 
-        n = self.data.filter(
+        return self.data.filter(
             lambda m: m[ind] != float()
         ).map(
             _map
@@ -110,9 +129,7 @@ class MarginalCDF(CDF):
             lambda a, b: a + b
         )
 
-        return round(n, round_precision)
-
-    def variance(self, mean=None, round_precision=10):
+    def variance(self, mean=None):
         """
         Calculate the variance of this CDF.
 
@@ -120,8 +137,6 @@ class MarginalCDF(CDF):
         ----------
         mean : float, optional
             The mean of this CDF. When None is passed as argument, the mean is calculated.
-        round_precision : int, optional
-            The precision used to round the value. Default is 10 decimal digits.
 
         Returns
         -------
@@ -145,7 +160,7 @@ class MarginalCDF(CDF):
             raise NotImplementedError("mesh dimension not implemented")
 
         if mean is None:
-            mean = self.expected_value(round_precision)
+            mean = self.expected_value()
 
         def _map(m):
             v = 1
@@ -155,12 +170,10 @@ class MarginalCDF(CDF):
 
             return m[ind] * v ** 2
 
-        n = self.data.filter(
+        return self.data.filter(
             lambda m: m[ind] != float()
         ).map(
             _map
         ).reduce(
             lambda a, b: a + b
         ) - mean
-
-        return round(n, round_precision)
