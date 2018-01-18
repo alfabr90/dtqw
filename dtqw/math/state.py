@@ -74,9 +74,24 @@ class State(Base):
         other_shape = other.shape
         new_shape = (self._shape[0] * other_shape[0], 1)
 
-        rdd = self.data.cartesian(
-            other.data
+        num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
+
+        rdd = self.data.map(
+            lambda m: (0, m)
+        ).join(
+            other.data.map(
+                lambda m: (0, m)
+            ),
+            numPartitions=num_partitions
         ).map(
+            lambda m: (m[1][0], m[1][1])
+        )
+
+        # rdd = self.data.cartesian(
+        #     other.data
+        # )
+
+        rdd = rdd.map(
             lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * m[1][1])
         )
 

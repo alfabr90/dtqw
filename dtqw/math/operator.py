@@ -55,9 +55,20 @@ class Operator(Base):
 
         num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
 
-        rdd = self.data.cartesian(
-            other.data
+        rdd = self.data.map(
+            lambda m: (0, m)
+        ).join(
+            other.data.map(
+                lambda m: (0, m)
+            ),
+            numPartitions=num_partitions
+        ).map(
+            lambda m: (m[1][0], m[1][1])
         )
+
+        # rdd = self.data.cartesian(
+        #     other.data
+        # )
 
         if coord_format == CoordinateMultiplier:
             rdd = rdd.map(
