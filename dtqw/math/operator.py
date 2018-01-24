@@ -25,7 +25,40 @@ class Operator(Base):
         """
         super().__init__(spark_context, rdd, shape)
 
-        self.coordinate_format = coord_format
+        self._coordinate_format = coord_format
+
+    @property
+    def coordinate_format(self):
+        return self._coordinate_format
+
+    def dump(self, path):
+        """
+        Dump this object's RDD into disk. This method automatically converts the coordinate format to the default.
+
+        Parameters
+        ----------
+        path : str
+            The path where the dumped RDD will be located at
+
+        Returns
+        -------
+        None
+
+        """
+        if self._coordinate_format == CoordinateMultiplier:
+            rdd = self.data.map(
+                lambda m: "{}, {}, {}".format(m[1][0], m[0], m[1][1])
+            )
+        elif self._coordinate_format == CoordinateMultiplicand:
+            rdd = self.data.map(
+                lambda m: "{}, {}, {}".format(m[0], m[1][0], m[1][1])
+            )
+        else:
+            rdd = self.data.map(
+                lambda m: " ".join([str(e) for e in m])
+            )
+
+        rdd.saveAsTextFile(path)
 
     def kron(self, other, coord_format=CoordinateDefault):
         """
@@ -162,8 +195,6 @@ class Operator(Base):
             lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
         ).reduceByKey(
             lambda a, b: a + b, numPartitions=num_partitions
-        ).partitionBy(
-            numPartitions=num_partitions
         )
 
         return State(self._spark_context, rdd, shape, other.mesh, other.num_particles)
