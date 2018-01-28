@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile as tf
 
 __all__ = ['ROUND_PRECISION', 'is_shape', 'broadcast',
@@ -37,6 +38,20 @@ def broadcast(sc, data):
 
 def filename(mesh_filename, steps, num_particles, num_partitions):
     return "{}_{}_{}_{}".format(mesh_filename, steps, num_particles, num_partitions)
+
+
+def priority_type(type1, type2):
+    if type1 == complex or type2 == complex:
+        return complex
+
+    if type1 == float or type2 == float:
+        return float
+
+    return int
+
+
+def get_size_type(data_type):
+    return sys.getsizeof(data_type())
 
 
 def create_dir(path):

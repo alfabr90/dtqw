@@ -192,7 +192,7 @@ class Mesh:
             The desired number of partitions for the RDD.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 

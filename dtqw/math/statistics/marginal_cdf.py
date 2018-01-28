@@ -8,14 +8,12 @@ __all__ = ['MarginalCDF']
 class MarginalCDF(CDF):
     """Class for cumulative density function of a particle in the quantum system."""
 
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+    def __init__(self, rdd, shape, mesh, num_particles):
         """
         Build an object for cumulative density function of a particle in the quantum system.
 
         Parameters
         ----------
-        spark_context : SparkContext
-            The SparkContext object.
         rdd : RDD
             The base RDD of this object.
         shape : tuple
@@ -26,7 +24,7 @@ class MarginalCDF(CDF):
             The number of particles present in the walk.
 
         """
-        super().__init__(spark_context, rdd, shape, mesh, num_particles)
+        super().__init__(rdd, shape, mesh, num_particles)
 
     def sum(self):
         """
@@ -51,8 +49,10 @@ class MarginalCDF(CDF):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        data_type = self._data_type()
+
         return self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             lambda m: m[ind]
         ).reduce(
@@ -78,8 +78,10 @@ class MarginalCDF(CDF):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        data_type = self._data_type()
+
         n = self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             lambda m: m[ind].real ** 2
         ).reduce(
@@ -121,8 +123,10 @@ class MarginalCDF(CDF):
 
             return m[ind] * v
 
+        data_type = self._data_type()
+
         return self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             _map
         ).reduce(
@@ -170,8 +174,10 @@ class MarginalCDF(CDF):
 
             return m[ind] * v ** 2
 
+        data_type = self._data_type()
+
         return self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             _map
         ).reduce(

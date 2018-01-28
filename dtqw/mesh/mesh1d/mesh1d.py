@@ -24,7 +24,7 @@ class Mesh1D(Mesh):
         bl_prob : float, optional
             Probability of the occurences of broken links in the mesh.
         """
-        super().__init__(spark_context, size, bl_prob)
+        super().__init__(spark_context, size, bl_prob=bl_prob)
 
     def _validate(self, size):
         if type(size) != int:
@@ -96,7 +96,7 @@ class Mesh1D(Mesh):
             The desired number of partitions for the RDD.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 

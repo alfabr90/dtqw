@@ -16,14 +16,12 @@ __all__ = ['State', 'is_state']
 class State(Base):
     """Class for the system state."""
 
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+    def __init__(self, rdd, shape, mesh, num_particles):
         """
         Build a State object.
 
         Parameters
         ----------
-        spark_context : SparkContext
-            The SparkContext object.
         rdd : RDD
             The base RDD of this object.
         shape : tuple
@@ -38,7 +36,7 @@ class State(Base):
             # self.logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
             raise TypeError('mesh instance expected, not "{}"'.format(type(mesh)))
 
-        super().__init__(spark_context, rdd, shape)
+        super().__init__(rdd, shape, data_type=complex)
 
         self._mesh = mesh
         self._num_particles = num_particles
@@ -73,7 +71,6 @@ class State(Base):
 
         other_shape = other.shape
         new_shape = (self._shape[0] * other_shape[0], 1)
-
         num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
 
         rdd = self.data.map(
@@ -87,15 +84,11 @@ class State(Base):
             lambda m: (m[1][0], m[1][1])
         )
 
-        # rdd = self.data.cartesian(
-        #     other.data
-        # )
-
         rdd = rdd.map(
             lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * m[1][1])
         )
 
-        return State(self._spark_context, rdd, new_shape, self._mesh, self._num_particles)
+        return State(rdd, new_shape, self._mesh, self._num_particles)
 
     def norm(self):
         """
@@ -107,8 +100,10 @@ class State(Base):
             The norm of this quantum state.
 
         """
+        data_type = self._data_type()
+
         n = self.data.filter(
-            lambda m: m[1] != complex()
+            lambda m: m[1] != data_type
         ).map(
             lambda m: m[1].real ** 2 + m[1].imag ** 2
         ).reduce(
@@ -219,8 +214,10 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        data_type = self._data_type()
+
         rdd = self.data.filter(
-            lambda m: m[1] != complex()
+            lambda m: m[1] != data_type
         ).map(
             __map
         ).reduceByKey(
@@ -229,7 +226,7 @@ class State(Base):
             __unmap
         )
 
-        cdf = JointCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        cdf = JointCDF(rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
@@ -333,7 +330,7 @@ class State(Base):
             __map
         )
 
-        cdf = FilteredCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        cdf = FilteredCDF(rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
 
@@ -429,8 +426,10 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        data_type = self._data_type()
+
         rdd = self.data.filter(
-            lambda m: m[1] != complex()
+            lambda m: m[1] != data_type
         ).map(
             __map
         ).reduceByKey(
@@ -439,7 +438,7 @@ class State(Base):
             __unmap
         )
 
-        cdf = MarginalCDF(self._spark_context, rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        cdf = MarginalCDF(rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")

@@ -8,14 +8,12 @@ __all__ = ['JointCDF']
 class JointCDF(CDF):
     """Class for cumulative density function of the entire quantum system."""
 
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+    def __init__(self, rdd, shape, mesh, num_particles):
         """
         Build an object for cumulative density function of the entire quantum system.
 
         Parameters
         ----------
-        spark_context : SparkContext
-            The SparkContext object.
         rdd : RDD
             The base RDD of this object.
         shape : tuple
@@ -26,7 +24,7 @@ class JointCDF(CDF):
             The number of particles present in the walk.
 
         """
-        super().__init__(spark_context, rdd, shape, mesh, num_particles)
+        super().__init__(rdd, shape, mesh, num_particles)
 
     def sum(self):
         """
@@ -50,8 +48,10 @@ class JointCDF(CDF):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        data_type = self._data_type()
+
         return self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             lambda m: m[ind]
         ).reduce(
@@ -77,8 +77,10 @@ class JointCDF(CDF):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        data_type = self._data_type()
+
         n = self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             lambda m: m[ind].real ** 2
         ).reduce(
@@ -123,8 +125,10 @@ class JointCDF(CDF):
 
             return m[ind] * v
 
+        data_type = self._data_type()
+
         return self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             _map
         ).reduce(
@@ -175,8 +179,10 @@ class JointCDF(CDF):
 
             return m[ind] * v ** 2
 
+        data_type = self._data_type()
+
         return self.data.filter(
-            lambda m: m[ind] != float()
+            lambda m: m[ind] != data_type
         ).map(
             _map
         ).reduce(

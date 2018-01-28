@@ -25,7 +25,7 @@ class TorusNatural(Natural):
         bl_prob : float, optional
             Probability of the occurences of broken links in the mesh.
         """
-        super().__init__(spark_context, size, bl_prob)
+        super().__init__(spark_context, size, bl_prob=bl_prob)
 
         self._size = self._define_size(size)
 
@@ -58,7 +58,7 @@ class TorusNatural(Natural):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -155,7 +155,7 @@ class TorusNatural(Natural):
                 numPartitions=num_partitions
             )
 
-        operator = Operator(self._spark_context, rdd, shape, coord_format).materialize(storage_level)
+        operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
         if self._broken_links_probability:
             broken_links.unpersist()

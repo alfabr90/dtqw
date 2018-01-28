@@ -24,6 +24,7 @@ class Coin1D(Coin):
 
         """
         super().__init__(spark_context)
+
         self._size = 2
 
     def is_1d(self):
@@ -61,7 +62,7 @@ class Coin1D(Coin):
             The desired number of partitions for the RDD.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -115,7 +116,7 @@ class Coin1D(Coin):
                 numPartitions=num_partitions
             )
 
-        operator = Operator(self._spark_context, rdd, shape, coord_format).materialize(storage_level)
+        operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
         self._profile(operator, initial_time)
 

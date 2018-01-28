@@ -12,14 +12,12 @@ __all__ = ['CDF', 'is_cdf']
 class CDF(Base):
     """Top-level class for cumulative density functions."""
 
-    def __init__(self, spark_context, rdd, shape, mesh, num_particles):
+    def __init__(self, rdd, shape, mesh, num_particles):
         """
         Build a top-level object for cumulative density functions.
 
         Parameters
         ----------
-        spark_context : SparkContext
-            The SparkContext object.
         rdd : RDD
             The base RDD of this object.
         shape : tuple
@@ -34,7 +32,7 @@ class CDF(Base):
             # self.logger.error('Mesh instance expected, not "{}"'.format(type(mesh)))
             raise TypeError('mesh instance expected, not "{}"'.format(type(mesh)))
 
-        super().__init__(spark_context, rdd, shape)
+        super().__init__(rdd, shape, data_type=float)
 
         self._mesh = mesh
         self._num_particles = num_particles

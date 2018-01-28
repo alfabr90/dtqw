@@ -11,18 +11,18 @@ __all__ = ['Base']
 class Base:
     """Top-level class for some mathematical elements."""
 
-    def __init__(self, spark_context, rdd, shape):
+    def __init__(self, rdd, shape, data_type=complex):
         """
         Build a top-level object for some mathematical elements.
 
         Parameters
         ----------
-        spark_context : SparkContext
-            The SparkContext object.
         rdd : RDD
             The base RDD of this object.
         shape : tuple
             The shape of this matrix object. Must be a 2-dimensional tuple.
+        data_type : type, optional
+            The Python type of all values in this object. Default is complex.
 
         """
         if not isinstance(rdd, RDD):
@@ -34,10 +34,11 @@ class Base:
                 # self.logger.error("Invalid shape")
                 raise ValueError("invalid shape")
 
-        self._spark_context = spark_context
+        self._spark_context = rdd.context
         self._shape = shape
         self._num_elements = self._shape[0] * self._shape[1]
         self._num_nonzero_elements = 0
+        self._data_type = data_type
 
         self.data = rdd
 
@@ -59,6 +60,10 @@ class Base:
     @property
     def num_nonzero_elements(self):
         return self._num_nonzero_elements
+
+    @property
+    def data_type(self):
+        return self._data_type
 
     @property
     def logger(self):
@@ -276,9 +281,8 @@ class Base:
 
         """
         data = self.data.collect()
-        data_type = type(data[0][-1])
         ind = len(data[0]) - 1
-        result = np.zeros(self._shape, dtype=data_type)
+        result = np.zeros(self._shape, dtype=self._data_type)
 
         for e in data:
             result[e[0:ind]] = e[ind]

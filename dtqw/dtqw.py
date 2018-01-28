@@ -234,7 +234,7 @@ class DiscreteTimeQuantumWalk:
         phase : float
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -318,7 +318,7 @@ class DiscreteTimeQuantumWalk:
             )
 
         self._interaction_operator = Operator(
-            self._spark_context, rdd, shape, coord_format
+            rdd, shape, coord_format=coord_format
         ).persist(storage_level).checkpoint().materialize(storage_level)
 
         app_id = self._spark_context.applicationId
@@ -358,7 +358,7 @@ class DiscreteTimeQuantumWalk:
         ----------
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is Operator.CoordinateDefault.
+            Default value is utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -369,14 +369,14 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("no coin operator has been set. A new one will be built")
             self._coin_operator = self._coin.create_operator(
-                self._mesh, self._num_partitions, CoordinateMultiplicand, storage_level
+                self._mesh, self._num_partitions, coord_format=CoordinateMultiplicand, storage_level=storage_level
             )
 
         if self._shift_operator is None:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
             self._shift_operator = self._mesh.create_operator(
-                self._num_partitions, CoordinateMultiplier, storage_level
+                self._num_partitions, coord_format=CoordinateMultiplier, storage_level=storage_level
             )
 
         if self._num_particles == 1:
@@ -385,7 +385,7 @@ class DiscreteTimeQuantumWalk:
 
             t1 = datetime.now()
 
-            evolution_operator = self._shift_operator.multiply(self._coin_operator, CoordinateMultiplier)
+            evolution_operator = self._shift_operator.multiply(self._coin_operator, coord_format=CoordinateMultiplier)
 
             self._walk_operator = evolution_operator.persist(storage_level).checkpoint().materialize(storage_level)
 
@@ -415,7 +415,7 @@ class DiscreteTimeQuantumWalk:
             t_tmp = datetime.now()
 
             evolution_operator = self._shift_operator.multiply(
-                self._coin_operator, CoordinateDefault
+                self._coin_operator, coord_format=CoordinateDefault
             ).persist(storage_level).materialize(storage_level)
 
             self._coin_operator.unpersist()
@@ -473,7 +473,7 @@ class DiscreteTimeQuantumWalk:
 
                         self._walk_operator.append(
                             Operator(
-                                self._spark_context, rdd, shape, coord_format
+                                rdd, shape, coord_format=coord_format
                             ).persist(storage_level).checkpoint().materialize(storage_level)
                         )
                     else:
@@ -522,7 +522,7 @@ class DiscreteTimeQuantumWalk:
 
                             self._walk_operator.append(
                                 Operator(
-                                    self._spark_context, rdd_pre, new_shape, coord_format
+                                    rdd_pre, new_shape, coord_format=coord_format
                                 ).persist(storage_level).checkpoint().materialize(storage_level)
                             )
                         else:
@@ -556,7 +556,7 @@ class DiscreteTimeQuantumWalk:
 
                             self._walk_operator.append(
                                 Operator(
-                                    self._spark_context, rdd_pos, new_shape, coord_format
+                                    rdd_pos, new_shape, coord_format=coord_format
                                 ).persist(storage_level).checkpoint().materialize(storage_level)
                             )
 
@@ -628,7 +628,7 @@ class DiscreteTimeQuantumWalk:
 
                         self._walk_operator.append(
                             Operator(
-                                self._spark_context, rdd, shape, coord_format
+                                rdd, shape, coord_format=coord_format
                             ).persist(storage_level).checkpoint().materialize(storage_level)
                         )
                     else:
@@ -679,7 +679,7 @@ class DiscreteTimeQuantumWalk:
 
                             self._walk_operator.append(
                                 Operator(
-                                    self._spark_context, rdd_pre, new_shape, coord_format
+                                    rdd_pre, new_shape, coord_format=coord_format
                                 ).persist(storage_level).checkpoint().materialize(storage_level)
                             )
                         else:
@@ -713,7 +713,7 @@ class DiscreteTimeQuantumWalk:
 
                             self._walk_operator.append(
                                 Operator(
-                                    self._spark_context, rdd_pos, new_shape, coord_format
+                                    rdd_pos, new_shape, coord_format=coord_format
                                 ).persist(storage_level).checkpoint().materialize(storage_level)
                             )
 
@@ -869,12 +869,12 @@ class DiscreteTimeQuantumWalk:
                 if self._walk_operator is None:
                     if self._logger:
                         self._logger.info("no walk operator has been set. A new one will be built")
-                    self.create_walk_operator(CoordinateMultiplier, storage_level)
+                    self.create_walk_operator(coord_format=CoordinateMultiplier, storage_level=storage_level)
 
             if self._num_particles > 1 and phase and self._interaction_operator is None:
                 if self._logger:
                     self._logger.info("no interaction operator has been set. A new one will be built")
-                self.create_interaction_operator(phase, CoordinateMultiplier, storage_level)
+                self.create_interaction_operator(phase, coord_format=CoordinateMultiplier, storage_level=storage_level)
 
             t1 = datetime.now()
 
@@ -885,7 +885,7 @@ class DiscreteTimeQuantumWalk:
                 if self._mesh.broken_links_probability:
                     self.destroy_shift_operator()
                     self.destroy_walk_operator()
-                    self.create_walk_operator(CoordinateMultiplier, storage_level)
+                    self.create_walk_operator(coord_format=CoordinateMultiplier, storage_level=storage_level)
 
                 t_tmp = datetime.now()
 
