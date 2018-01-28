@@ -80,10 +80,11 @@ class Line(Mesh1D):
 
         coin_size = 2
         size = self._size
+        num_edges = self._num_edges
         shape = (coin_size * size, coin_size * size)
 
         if self._broken_links:
-            broken_links = self._broken_links.generate(self._num_edges)
+            broken_links = self._broken_links.generate(num_edges)
 
             def __map(e):
                 """e = (edge, (edge, broken or not))"""
@@ -99,7 +100,7 @@ class Line(Mesh1D):
                     yield (i + l) * size + (x + l) % size, (1 - i) * size + x, 1
 
             rdd = self._spark_context.range(
-                size
+                num_edges
             ).map(
                 lambda m: (m, m)
             ).partitionBy(

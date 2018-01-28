@@ -72,11 +72,12 @@ class TorusDiagonal(Diagonal):
 
         coin_size = 2
         size = self._size
+        num_edges = self._num_edges
         size_xy = size[0] * size[1]
         shape = (coin_size * coin_size * size_xy, coin_size * coin_size * size_xy)
 
         if self._broken_links:
-            broken_links = self._broken_links.generate(self._num_edges)
+            broken_links = self._broken_links.generate(num_edges)
 
             def __map(e):
                 """e = (edge, (edge, broken or not))"""
@@ -101,7 +102,7 @@ class TorusDiagonal(Diagonal):
                         yield m, n, 1
 
             rdd = self._spark_context.range(
-                size_xy
+                num_edges
             ).map(
                 lambda m: (m, m)
             ).partitionBy(
