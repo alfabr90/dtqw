@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pyspark import StorageLevel
 
+from dtqw.mesh.broken_links.broken_links import is_broken_links
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiling.profiler import is_profiler
 from dtqw.utils.utils import CoordinateDefault
@@ -12,7 +13,7 @@ __all__ = ['Mesh', 'is_mesh']
 class Mesh:
     """Top-level class for Meshes."""
 
-    def __init__(self, spark_context, size, bl_prob=None):
+    def __init__(self, spark_context, size, broken_links=None):
         """
         Build a top-level Mesh object.
 
@@ -22,12 +23,19 @@ class Mesh:
             The SparkContext object.
         size : int or tuple
             Size of the mesh.
-        bl_prob : float, optional
-            Probability of the occurences of broken links in the mesh.
+        broken_links : BrokenLinks, optional
+            A BrokenLinks object.
         """
         self._spark_context = spark_context
         self._size = self._define_size(size)
-        self._broken_links_probability = bl_prob
+        self._num_edges = self._define_num_edges(size)
+
+        if broken_links:
+            if not is_broken_links(broken_links):
+                # self.logger.error('broken links instance expected, not "{}"'.format(type(broken_links)))
+                raise TypeError('broken links instance expected, not "{}"'.format(type(broken_links)))
+
+        self._broken_links = broken_links
 
         self._logger = None
         self._profiler = None
@@ -41,8 +49,12 @@ class Mesh:
         return self._size
 
     @property
-    def broken_links_probability(self):
-        return self._broken_links_probability
+    def num_edges(self):
+        return self._num_edges
+
+    @property
+    def broken_links(self):
+        return self._broken_links
 
     @property
     def logger(self):
@@ -95,6 +107,9 @@ class Mesh:
         raise NotImplementedError
 
     def _define_size(self, size):
+        raise NotImplementedError
+
+    def _define_num_edges(self, size):
         raise NotImplementedError
 
     def _profile(self, operator, initial_time):
@@ -160,22 +175,6 @@ class Mesh:
 
         Raises
         -------
-        NotImplementedError
-
-        """
-        raise NotImplementedError
-
-    def generate_broken_links(self, num_partitions):
-        """
-        Yield broken edges for the mesh based on its probability to have a broken link.
-
-        Parameters
-        ----------
-        num_partitions : int
-            The desired number of partitions for the RDD.
-
-        Raises
-        ------
         NotImplementedError
 
         """

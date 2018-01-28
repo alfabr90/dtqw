@@ -1,5 +1,3 @@
-import random
-
 from pyspark import StorageLevel
 
 from dtqw.mesh.mesh2d.mesh2d import Mesh2D
@@ -11,7 +9,7 @@ __all__ = ['Diagonal']
 class Diagonal(Mesh2D):
     """Top-level class for Diagonal Meshes."""
 
-    def __init__(self, spark_context, size, bl_prob=None):
+    def __init__(self, spark_context, size, broken_links=None):
         """
         Build a top-level Diagonal Mesh object.
 
@@ -21,10 +19,32 @@ class Diagonal(Mesh2D):
             The SparkContext object.
         size : tuple
             Size of the mesh.
-        bl_prob : float, optional
-            Probability of the occurences of broken links in the mesh.
+        broken_links : BrokenLinks, optional
+            A BrokenLinks object.
         """
-        super().__init__(spark_context, size, bl_prob=bl_prob)
+        super().__init__(spark_context, size, broken_links=broken_links)
+
+    def _define_num_edges(self, size):
+        # The number of edges is based on the size of the mesh.
+        # For the already implemented types of mesh, the border edges are the same.
+        #
+        # An example of a 5x5 diagonal mesh:
+        #
+        # 00 01 01 03 04 00 |
+        #   O  O  O  O  O   |
+        # 20 21 22 23 24 20 |
+        #   O  O  O  O  O   |
+        # 15 16 17 18 19 20 |
+        #   O  O  O  O  O   | y
+        # 10 11 12 13 14 10 |
+        #   O  O  O  O  O   |
+        # 05 06 07 08 09 05 |
+        #   O  O  O  O  O   |
+        # 00 01 02 03 04 00 |
+        # -----------------
+        #         x
+        size = self._define_size(size)
+        return size[0] * size[1]
 
     def check_steps(self, steps):
         """
@@ -62,48 +82,3 @@ class Diagonal(Mesh2D):
 
         """
         raise NotImplementedError
-
-    def generate_broken_links(self):
-        """
-        Yield broken edges for the mesh based on its probability to have a broken link.
-
-        Returns
-        -------
-        RDD
-            The RDD which keys are the numbered edges that are broken.
-
-        """
-        size = self._size
-        size_bl = size[0] * size[1]
-
-        bl_prop = self._broken_links_probability
-
-        if not bl_prop:
-            return self._spark_context.emptyRDD()
-
-        # An example of a 5x5 diagonal mesh:
-        #
-        # 00 01 01 03 04 00 |
-        #   O  O  O  O  O   |
-        # 20 21 22 23 24 20 |
-        #   O  O  O  O  O   |
-        # 15 16 17 18 19 20 |
-        #   O  O  O  O  O   | y
-        # 10 11 12 13 14 10 |
-        #   O  O  O  O  O   |
-        # 05 06 07 08 09 05 |
-        #   O  O  O  O  O   |
-        # 00 01 02 03 04 00 |
-        # -----------------
-        #         x
-        def __map(e):
-            random.seed()
-            return e, random.random() < bl_prop
-
-        return self._spark_context.range(
-            size_bl
-        ).map(
-            __map
-        ).filter(
-            lambda m: m[1] is True
-        )

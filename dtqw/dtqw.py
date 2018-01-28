@@ -819,12 +819,10 @@ class DiscreteTimeQuantumWalk:
                 else:
                     self._logger.info("collision phase: {}".format(phase))
 
-            if self._mesh.broken_links_probability is None:
-                self._logger.info("no broken links probability has been defined")
-            elif self._mesh.broken_links_probability == 0.0:
-                self._logger.info("a zeroed broken links probability was defined. No decoherence will be simulated")
+            if self._mesh.broken_links is None:
+                self._logger.info("no broken links has been defined")
             else:
-                self._logger.info("broken links probability: {}".format(self._mesh.broken_links_probability))
+                self._logger.info("broken links probability: {}".format(self._mesh.broken_links.probability))
 
         # Partitioning the initial state of the system in order to reduce some shuffling operations
         '''rdd = initial_state.data.partitionBy(
@@ -865,7 +863,7 @@ class DiscreteTimeQuantumWalk:
         if steps > 0:
             # Building walk operators once if not simulating decoherence with broken links
             # When there is a broken links probability, the walk operators will be built in each step of the walk
-            if not self._mesh.broken_links_probability:
+            if not self._mesh.broken_links:
                 if self._walk_operator is None:
                     if self._logger:
                         self._logger.info("no walk operator has been set. A new one will be built")
@@ -882,7 +880,7 @@ class DiscreteTimeQuantumWalk:
                 self._logger.info("starting the walk...")
 
             for i in range(1, steps + 1, 1):
-                if self._mesh.broken_links_probability:
+                if self._mesh.broken_links:
                     self.destroy_shift_operator()
                     self.destroy_walk_operator()
                     self.create_walk_operator(coord_format=CoordinateMultiplier, storage_level=storage_level)

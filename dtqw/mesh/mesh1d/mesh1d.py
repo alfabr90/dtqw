@@ -1,5 +1,3 @@
-import random
-
 from pyspark import StorageLevel
 
 from dtqw.mesh.mesh import Mesh
@@ -11,7 +9,7 @@ __all__ = ['Mesh1D']
 class Mesh1D(Mesh):
     """Top-level class for 1-dimensional Meshes."""
 
-    def __init__(self, spark_context, size, bl_prob=None):
+    def __init__(self, spark_context, size, broken_links=None):
         """
         Build a top-level 1-dimensional Mesh object.
 
@@ -21,10 +19,10 @@ class Mesh1D(Mesh):
             The SparkContext object.
         size : int
             Size of the mesh.
-        bl_prob : float, optional
-            Probability of the occurences of broken links in the mesh.
+        broken_links : BrokenLinks, optional
+            A BrokenLinks object.
         """
-        super().__init__(spark_context, size, bl_prob=bl_prob)
+        super().__init__(spark_context, size, broken_links=broken_links)
 
     def _validate(self, size):
         if type(size) != int:
@@ -42,8 +40,26 @@ class Mesh1D(Mesh):
 
         return size
 
+    def _define_num_edges(self, size):
+        # The number of edges is the same of the size of the mesh.
+        # For the already implemented types of mesh, the border edges are the same.
+        #
+        # An example of a 5x1 mesh:
+        #
+        # 00 O 01 O 02 O 03 O 04 O 00
+        # ---------------------------
+        #              x
+        return self._define_size(size)
+
     def filename(self):
-        return "{}_{}_{}".format(self.to_string(), self._size, self._broken_links_probability)
+        if self._broken_links:
+            probability = self._broken_links.probability
+        else:
+            probability = 0.0
+
+        return "{}_{}_{}".format(
+            self.to_string(), self._size, probability
+        )
 
     def axis(self):
         return range(self._size)
@@ -106,36 +122,3 @@ class Mesh1D(Mesh):
 
         """
         raise NotImplementedError
-
-    def generate_broken_links(self):
-        """
-        Yield broken links for the mesh based on its probability to have a broken link.
-
-        Returns
-        -------
-        RDD
-            The RDD which keys are the numbered edges that are broken.
-
-        """
-        size = self._size
-        bl_prob = self._broken_links_probability
-
-        if not bl_prob:
-            return self._spark_context.emptyRDD()
-
-        # An example of a 5x1 mesh:
-        #
-        # 00 O 01 O 02 O 03 O 04 O 00
-        # ---------------------------
-        #              x
-        def __map(e):
-            random.seed()
-            return e, random.random() < bl_prob
-
-        return self._spark_context.range(
-            size
-        ).map(
-            __map
-        ).filter(
-            lambda m: m[1] is True
-        )

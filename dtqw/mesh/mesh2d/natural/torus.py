@@ -12,7 +12,7 @@ __all__ = ['TorusNatural']
 class TorusNatural(Natural):
     """Class for Natural Torus mesh."""
 
-    def __init__(self, spark_context, size, bl_prob=None):
+    def __init__(self, spark_context, size, broken_links=None):
         """
         Build a Natural Torus mesh object.
 
@@ -22,12 +22,10 @@ class TorusNatural(Natural):
             The SparkContext object.
         size : tuple
             Size of the mesh.
-        bl_prob : float, optional
-            Probability of the occurences of broken links in the mesh.
+        broken_links : BrokenLinks, optional
+            A BrokenLinks object.
         """
-        super().__init__(spark_context, size, bl_prob=bl_prob)
-
-        self._size = self._define_size(size)
+        super().__init__(spark_context, size, broken_links=broken_links)
 
     def title(self):
         return 'Natural Torus'
@@ -78,8 +76,8 @@ class TorusNatural(Natural):
         size_bl = size[0] * size[1] + size[0] * size[1]
         shape = (coin_size * coin_size * size_xy, coin_size * coin_size * size_xy)
 
-        if self._broken_links_probability:
-            broken_links = self.generate_broken_links()
+        if self._broken_links:
+            broken_links = self._broken_links.generate(self._num_edges)
 
             def __map(e):
                 """e = (edge, (edge, broken or not))"""
@@ -157,7 +155,7 @@ class TorusNatural(Natural):
 
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
-        if self._broken_links_probability:
+        if self._broken_links:
             broken_links.unpersist()
 
         self._profile(operator, initial_time)

@@ -11,7 +11,7 @@ __all__ = ['Mesh2D']
 class Mesh2D(Mesh):
     """Top-level class for 2-dimensional Meshes."""
 
-    def __init__(self, spark_context, size, bl_prob=None):
+    def __init__(self, spark_context, size, broken_links=None):
         """
         Build a top-level 2-dimensional Mesh object.
 
@@ -21,10 +21,10 @@ class Mesh2D(Mesh):
             The SparkContext object.
         size : tuple
             Size of the mesh.
-        bl_prob : float, optional
-            Probability of the occurences of broken links in the mesh.
+        broken_links : BrokenLinks, optional
+            A BrokenLinks object.
         """
-        super().__init__(spark_context, size, bl_prob=bl_prob)
+        super().__init__(spark_context, size, broken_links=broken_links)
 
     def _validate(self, size):
         if isinstance(size, (list, tuple)):
@@ -43,8 +43,18 @@ class Mesh2D(Mesh):
 
         return size
 
+    def _define_num_edges(self, size):
+        raise NotImplementedError
+
     def filename(self):
-        return "{}_{}-{}_{}".format(self.to_string(), self._size[0], self._size[1], self._broken_links_probability)
+        if self._broken_links:
+            probability = self._broken_links.probability
+        else:
+            probability = 0.0
+
+        return "{}_{}-{}_{}".format(
+            self.to_string(), self._size[0], self._size[1], probability
+        )
 
     def axis(self):
         return np.meshgrid(range(self._size[0]), range(self._size[1]))
@@ -81,22 +91,6 @@ class Mesh2D(Mesh):
 
         Raises
         -------
-        NotImplementedError
-
-        """
-        raise NotImplementedError
-
-    def generate_broken_links(self, num_partitions):
-        """
-        Yield broken edges for the mesh based on its probability to have a broken link.
-
-        Parameters
-        ----------
-        num_partitions : int
-            The desired number of partitions for the RDD.
-
-        Raises
-        ------
         NotImplementedError
 
         """

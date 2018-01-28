@@ -12,7 +12,7 @@ __all__ = ['Segment']
 class Segment(Mesh1D):
     """Class for Segment mesh."""
 
-    def __init__(self, spark_context, size, bl_prob=None):
+    def __init__(self, spark_context, size, broken_links=None):
         """
         Build a Segment mesh object.
 
@@ -22,12 +22,10 @@ class Segment(Mesh1D):
             The SparkContext object.
         size : int
             Size of the mesh.
-        bl_prob : float, optional
-            Probability of the occurences of broken links in the mesh.
+        broken_links : BrokenLinks, optional
+            A BrokenLinks object.
         """
-        super().__init__(spark_context, size, bl_prob=bl_prob)
-
-        self._size = self._define_size(size)
+        super().__init__(spark_context, size, broken_links=broken_links)
 
     def check_steps(self, steps):
         """
@@ -73,8 +71,8 @@ class Segment(Mesh1D):
         size = self._size
         shape = (coin_size * size, coin_size * size)
 
-        if self._broken_links_probability:
-            broken_links = self.generate_broken_links()
+        if self._broken_links:
+            broken_links = self._broken_links.generate(self._num_edges)
 
             def __map(e):
                 """e = (edge, (edge, broken or not))"""
@@ -138,7 +136,7 @@ class Segment(Mesh1D):
 
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
-        if self._broken_links_probability:
+        if self._broken_links:
             broken_links.unpersist()
 
         self._profile(operator, initial_time)
