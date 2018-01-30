@@ -1,16 +1,16 @@
 import math
 
-from dtqw.math.statistics.cdf import CDF
+from dtqw.math.statistics.pdf import PDF
 
-__all__ = ['MarginalCDF']
+__all__ = ['JointPDF']
 
 
-class MarginalCDF(CDF):
-    """Class for cumulative density function of a particle in the quantum system."""
+class JointPDF(PDF):
+    """Class for probability distribution function of the entire quantum system."""
 
     def __init__(self, rdd, shape, mesh, num_particles):
         """
-        Build an object for cumulative density function of a particle in the quantum system.
+        Build an object for probability distribution function of the entire quantum system.
 
         Parameters
         ----------
@@ -28,8 +28,7 @@ class MarginalCDF(CDF):
 
     def sum(self):
         """
-        Sum the values of this CDF.
-
+        Sum the values of this PDF.
         Returns
         -------
         float
@@ -41,9 +40,9 @@ class MarginalCDF(CDF):
 
         """
         if self._mesh.is_1d():
-            ind = 1
+            ind = self._num_particles
         elif self._mesh.is_2d():
-            ind = 2
+            ind = self._num_particles * 2
         else:
             if self._logger:
                 self._logger.error("mesh dimension not implemented")
@@ -61,18 +60,18 @@ class MarginalCDF(CDF):
 
     def norm(self):
         """
-        Calculate the norm of this CDF.
+        Calculate the norm of this PDF.
 
         Returns
         -------
         float
-            The norm of this CDF.
+            The norm of this PDF.
 
         """
         if self._mesh.is_1d():
-            ind = 1
+            ind = self._num_particles
         elif self._mesh.is_2d():
-            ind = 2
+            ind = 2 * self._num_particles
         else:
             if self._logger:
                 self._logger.error("mesh dimension not implemented")
@@ -92,7 +91,7 @@ class MarginalCDF(CDF):
 
     def expected_value(self):
         """
-        Calculate the expected value of this CDF.
+        Calculate the expected value of this PDF.
 
         Returns
         -------
@@ -105,10 +104,12 @@ class MarginalCDF(CDF):
 
         """
         if self._mesh.is_1d():
-            ind = 1
+            ndim = 1
+            ind = ndim * self._num_particles
             mesh_size = (int(self._mesh.size / 2), 1)
         elif self._mesh.is_2d():
-            ind = 2
+            ndim = 2
+            ind = ndim * self._num_particles
             mesh_size = (int(self._mesh.size[0] / 2), int(self._mesh.size[1] / 2))
         else:
             if self._logger:
@@ -118,8 +119,9 @@ class MarginalCDF(CDF):
         def _map(m):
             v = 1
 
-            for i in range(ind):
-                v *= m[i] - mesh_size[i]
+            for i in range(0, ind, ndim):
+                for d in range(ndim):
+                    v *= m[i + d] - mesh_size[d]
 
             return m[ind] * v
 
@@ -135,12 +137,12 @@ class MarginalCDF(CDF):
 
     def variance(self, mean=None):
         """
-        Calculate the variance of this CDF.
+        Calculate the variance of this PDF.
 
         Parameters
         ----------
         mean : float, optional
-            The mean of this CDF. When None is passed as argument, the mean is calculated.
+            The mean of this PDF. When None is passed as argument, the mean is calculated.
 
         Returns
         -------
@@ -153,10 +155,12 @@ class MarginalCDF(CDF):
 
         """
         if self._mesh.is_1d():
-            ind = 1
+            ndim = 1
+            ind = ndim * self._num_particles
             mesh_size = (int(self._mesh.size / 2), 1)
         elif self._mesh.is_2d():
-            ind = 2
+            ndim = 2
+            ind = ndim * self._num_particles
             mesh_size = (int(self._mesh.size[0] / 2), int(self._mesh.size[1] / 2))
         else:
             if self._logger:
@@ -169,8 +173,9 @@ class MarginalCDF(CDF):
         def _map(m):
             v = 1
 
-            for i in range(ind):
-                v *= m[i] - mesh_size[i]
+            for i in range(0, ind, ndim):
+                for d in range(ndim):
+                    v *= m[i + d] - mesh_size[d]
 
             return m[ind] * v ** 2
 

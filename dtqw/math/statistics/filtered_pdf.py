@@ -2,17 +2,17 @@ import math
 
 from pyspark import StorageLevel
 
-from dtqw.math.statistics.cdf import CDF
+from dtqw.math.statistics.pdf import PDF
 
-__all__ = ['FilteredCDF']
+__all__ = ['FilteredPDF']
 
 
-class FilteredCDF(CDF):
-    """Class for cumulative density function of the quantum system when the particles are at the same sites."""
+class FilteredPDF(PDF):
+    """Class for probability distribution function of the quantum system when the particles are at the same sites."""
 
     def __init__(self, rdd, shape, mesh, num_particles):
         """
-        Build an object for cumulative density function of the quantum system when the particles are at the same sites.
+        Build an object for probability distribution function of the quantum system when the particles are at the same sites.
 
         Parameters
         ----------
@@ -30,7 +30,7 @@ class FilteredCDF(CDF):
 
     def sum(self):
         """
-        Sum the probabilities of this CDF.
+        Sum the probabilities of this PDF.
 
         Returns
         -------
@@ -63,12 +63,12 @@ class FilteredCDF(CDF):
 
     def norm(self):
         """
-        Calculate the norm of this CDF.
+        Calculate the norm of this PDF.
 
         Returns
         -------
         float
-            The norm of this CDF.
+            The norm of this PDF.
 
         """
         if self._mesh.is_1d():
@@ -94,7 +94,7 @@ class FilteredCDF(CDF):
 
     def normalize(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
-        Normalize this CDF.
+        Normalize this PDF.
 
         Parameters
         ----------
@@ -103,7 +103,7 @@ class FilteredCDF(CDF):
 
         Returns
         -------
-        :obj:FilteredCDF
+        :obj:FilteredPDF
 
         """
         norm = self.norm()
@@ -116,13 +116,13 @@ class FilteredCDF(CDF):
             __map
         )
 
-        return FilteredCDF(
+        return FilteredPDF(
             self._spark_context, rdd, self._shape, self._mesh, self._num_particles
         ).materialize(storage_level)
 
     def expected_value(self):
         """
-        Calculate the expected value of this CDF.
+        Calculate the expected value of this PDF.
 
         Raises
         -------
@@ -133,12 +133,12 @@ class FilteredCDF(CDF):
 
     def variance(self, mean=None):
         """
-        Calculate the variance of this CDF.
+        Calculate the variance of this PDF.
 
         Parameters
         ----------
         mean : float, optional
-            The mean of this CDF. When None is passed as argument, the mean is calculated.
+            The mean of this PDF. When None is passed as argument, the mean is calculated.
 
         Raises
         ------

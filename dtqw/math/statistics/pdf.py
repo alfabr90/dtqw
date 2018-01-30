@@ -6,15 +6,15 @@ from datetime import datetime
 from dtqw.math.base import Base
 from dtqw.mesh.mesh import is_mesh
 
-__all__ = ['CDF', 'is_cdf']
+__all__ = ['PDF', 'is_pdf']
 
 
-class CDF(Base):
-    """Top-level class for cumulative density functions."""
+class PDF(Base):
+    """Top-level class for probability distribution functions."""
 
     def __init__(self, rdd, shape, mesh, num_particles):
         """
-        Build a top-level object for cumulative density functions.
+        Build a top-level object for probability distribution functions.
 
         Parameters
         ----------
@@ -43,7 +43,7 @@ class CDF(Base):
 
     def sum(self):
         """
-        Sum the values of this CDF.
+        Sum the values of this PDF.
 
         Raises
         -------
@@ -65,7 +65,7 @@ class CDF(Base):
 
     def expected_value(self):
         """
-        Calculate the expected value of this CDF.
+        Calculate the expected value of this PDF.
 
         Raises
         -------
@@ -76,12 +76,12 @@ class CDF(Base):
 
     def variance(self, mean=None):
         """
-        Calculate the variance of this CDF.
+        Calculate the variance of this PDF.
 
         Parameters
         ----------
         mean : float, optional
-            The mean of this CDF. When None is passed as argument, the mean is calculated.
+            The mean of this PDF. When None is passed as argument, the mean is calculated.
 
         Raises
         ------
@@ -126,14 +126,14 @@ class CDF(Base):
         axis = self._mesh.axis()
 
         if self._mesh.is_1d():
-            cdf = np.zeros(self._shape, dtype=float)
+            pdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
-                cdf[i[0]] = i[1]
+                pdf[i[0]] = i[1]
 
             plt.plot(
                 axis,
-                cdf,
+                pdf,
                 color='b',
                 linestyle='-',
                 linewidth=1.0
@@ -149,10 +149,10 @@ class CDF(Base):
             if title:
                 plt.title(title)
         elif self._mesh.is_2d():
-            cdf = np.zeros(self._shape, dtype=float)
+            pdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
-                cdf[i[0], i[1]] = i[2]
+                pdf[i[0], i[1]] = i[2]
 
             figure = plt.figure()
             axes = figure.add_subplot(111, projection='3d')
@@ -160,7 +160,7 @@ class CDF(Base):
             axes.plot_surface(
                 axis[0],
                 axis[1],
-                cdf,
+                pdf,
                 rstride=1,
                 cstride=1,
                 cmap=plt.cm.YlGnBu_r,
@@ -234,12 +234,12 @@ class CDF(Base):
                 self._logger.error("mesh dimension not implemented to contour plots")
             raise NotImplementedError("mesh dimension not implemented to contour plots")
         elif self._mesh.is_2d():
-            cdf = np.zeros(self._shape, dtype=float)
+            pdf = np.zeros(self._shape, dtype=float)
 
             for i in self.data.collect():
-                cdf[i[0], i[1]] = i[2]
+                pdf[i[0], i[1]] = i[2]
 
-            plt.contourf(axis[0], axis[1], cdf)
+            plt.contourf(axis[0], axis[1], pdf)
             plt.colorbar()
 
             if labels:
@@ -266,9 +266,9 @@ class CDF(Base):
             self._logger.info("contour plot in {}s".format((datetime.now() - t1).total_seconds()))
 
 
-def is_cdf(obj):
+def is_pdf(obj):
     """
-    Check whether argument is a CDF object.
+    Check whether argument is a PDF object.
 
     Parameters
     ----------
@@ -278,7 +278,7 @@ def is_cdf(obj):
     Returns
     -------
     bool
-        True if argument is a CDF object, False otherwise.
+        True if argument is a PDF object, False otherwise.
 
     """
-    return isinstance(obj, CDF)
+    return isinstance(obj, PDF)

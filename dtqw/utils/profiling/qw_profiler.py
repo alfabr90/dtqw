@@ -1,7 +1,7 @@
 from dtqw.utils.profiling.profiler import Profiler
 from dtqw.math.operator import is_operator
 from dtqw.math.state import is_state
-from dtqw.math.statistics.cdf import is_cdf
+from dtqw.math.statistics.pdf import is_pdf
 
 __all__ = ['QWProfiler']
 
@@ -22,7 +22,7 @@ class QWProfiler(Profiler):
 
         self._operators = None
         self._states = None
-        self._cdfs = None
+        self._pdfs = None
 
     @staticmethod
     def _default_operator():
@@ -33,7 +33,7 @@ class QWProfiler(Profiler):
         return {'buildingTime': 0.0, 'diskUsed': 0, 'memoryUsed': 0, 'numElements': 0, 'numNonzeroElements': 0}
 
     @staticmethod
-    def _default_cdf():
+    def _default_pdf():
         return {'buildingTime': 0.0, 'diskUsed': 0, 'memoryUsed': 0, 'numElements': 0, 'numNonzeroElements': 0}
 
     def start(self):
@@ -42,7 +42,7 @@ class QWProfiler(Profiler):
 
         self._operators = {}
         self._states = {}
-        self._cdfs = {}
+        self._pdfs = {}
 
     def profile_operator(self, name, operator, time):
         """
@@ -144,23 +144,23 @@ class QWProfiler(Profiler):
 
         return self._states[name][-1]
 
-    def profile_cdf(self, name, cdf, time):
+    def profile_pdf(self, name, pdf, time):
         """
-        Store building time and resources information for a named measurement (CDF).
+        Store building time and resources information for a named measurement (PDF).
 
         Parameters
         ----------
         name : str
-            A name for the cdf.
-        cdf : :obj:CDF
-            The cdf object.
+            A name for the pdf.
+        pdf : :obj:PDF
+            The pdf object.
         time : float
-            The measured building time of the cdf.
+            The measured building time of the pdf.
 
         Returns
         -------
         dict
-            The resources information measured for the cdf.
+            The resources information measured for the pdf.
 
         Raises
         -----
@@ -168,32 +168,32 @@ class QWProfiler(Profiler):
 
         """
         if self._logger:
-            self._logger.info('profiling CDF data for "{}"...'.format(name))
+            self._logger.info('profiling PDF data for "{}"...'.format(name))
 
-        if not is_cdf(cdf):
+        if not is_pdf(pdf):
             if self._logger:
-                self._logger.error('CDF instance expected, not "{}"'.format(type(cdf)))
-            raise TypeError('CDF instance expected, not "{}"'.format(type(cdf)))
+                self._logger.error('PDF instance expected, not "{}"'.format(type(pdf)))
+            raise TypeError('PDF instance expected, not "{}"'.format(type(pdf)))
 
-        if name not in self._cdfs:
-            self._cdfs[name] = []
+        if name not in self._pdfs:
+            self._pdfs[name] = []
 
-        self._cdfs[name].append(self._default_cdf())
+        self._pdfs[name].append(self._default_pdf())
 
-        app_id = cdf.spark_context.applicationId
-        rdd_id = cdf.data.id()
+        app_id = pdf.spark_context.applicationId
+        rdd_id = pdf.data.id()
         data = self.request_rdd(app_id, rdd_id)
 
         if data is not None:
             for k, v in data.items():
-                if k in self._default_cdf():
-                    self._cdfs[name][-1][k] = v
+                if k in self._default_pdf():
+                    self._pdfs[name][-1][k] = v
 
-        self._cdfs[name][-1]['buildingTime'] = time
-        self._cdfs[name][-1]['numElements'] = cdf.num_elements
-        self._cdfs[name][-1]['numNonzeroElements'] = cdf.num_nonzero_elements
+        self._pdfs[name][-1]['buildingTime'] = time
+        self._pdfs[name][-1]['numElements'] = pdf.num_elements
+        self._pdfs[name][-1]['numNonzeroElements'] = pdf.num_nonzero_elements
 
-        return self._cdfs[name][-1]
+        return self._pdfs[name][-1]
 
     def get_operators(self, name=None):
         """
@@ -253,9 +253,9 @@ class QWProfiler(Profiler):
                 self.logger.warning('no resources information for states have been gotten')
             return {}
 
-    def get_cdfs(self, name=None):
+    def get_pdfs(self, name=None):
         """
-        Get all cdfs' resources information.
+        Get all pdfs' resources information.
 
         Parameters
         ----------
@@ -265,21 +265,21 @@ class QWProfiler(Profiler):
         Returns
         -------
         dict or list
-            A dict with all cdfs' resources information or a list of the provided cdf's resources information.
+            A dict with all pdfs' resources information or a list of the provided pdf's resources information.
 
         """
-        if len(self._cdfs):
+        if len(self._pdfs):
             if name is None:
-                return self._cdfs.copy()
+                return self._pdfs.copy()
             else:
-                if name not in self._cdfs:
+                if name not in self._pdfs:
                     if self.logger:
-                        self.logger.warning('no resources information for cdf "{}"'.format(name))
+                        self.logger.warning('no resources information for pdf "{}"'.format(name))
                     return {}
-                return self._cdfs[name]
+                return self._pdfs[name]
         else:
             if self.logger:
-                self.logger.warning('no resources information for cdfs have been gotten')
+                self.logger.warning('no resources information for pdfs have been gotten')
             return {}
 
     def export_operators(self, path, extension='csv'):
@@ -352,9 +352,9 @@ class QWProfiler(Profiler):
             if self.logger:
                 self.logger.warning("no measurement of states' resources has been done")
 
-    def export_cdfs(self, path, extension='csv'):
+    def export_pdfs(self, path, extension='csv'):
         """
-        Export all stored cdfs' resources.
+        Export all stored pdfs' resources.
 
         Parameters
         ----------
@@ -369,23 +369,23 @@ class QWProfiler(Profiler):
 
         """
         if self.logger:
-            self.logger.info("exporting cdfs' resources in {} format...".format(extension))
+            self.logger.info("exporting pdfs' resources in {} format...".format(extension))
 
         if len(self._operators):
-            cdfs = []
+            pdfs = []
 
-            for k, v in self._cdfs.items():
+            for k, v in self._pdfs.items():
                 for i in v:
-                    cdfs.append(i.copy())
-                    cdfs[-1]['name'] = k
+                    pdfs.append(i.copy())
+                    pdfs[-1]['name'] = k
 
-            self._export_values(cdfs, cdfs[-1].keys(), path + 'cdfs', extension)
+            self._export_values(pdfs, pdfs[-1].keys(), path + 'pdfs', extension)
 
             if self.logger:
-                self.logger.info("cdfs' resources successfully exported")
+                self.logger.info("pdfs' resources successfully exported")
         else:
             if self.logger:
-                self.logger.warning("no measurement of cdfs' resources has been done")
+                self.logger.warning("no measurement of pdfs' resources has been done")
 
     def export(self, path, extension='csv'):
         """
@@ -407,4 +407,4 @@ class QWProfiler(Profiler):
 
         self.export_operators(path, extension)
         self.export_states(path, extension)
-        self.export_cdfs(path, extension)
+        self.export_pdfs(path, extension)
