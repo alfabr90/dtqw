@@ -5,7 +5,7 @@ from pyspark import StorageLevel
 from dtqw.mesh.broken_links.broken_links import is_broken_links
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiling.profiler import is_profiler
-from dtqw.utils.utils import CoordinateDefault
+from dtqw.utils.utils import Utils
 
 __all__ = ['Mesh', 'is_mesh']
 
@@ -181,7 +181,7 @@ class Mesh:
         raise NotImplementedError
 
     def create_operator(self, num_partitions,
-                        coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the mesh operator.
 
@@ -191,7 +191,7 @@ class Mesh:
             The desired number of partitions for the RDD.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is Utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 

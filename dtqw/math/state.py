@@ -9,6 +9,7 @@ from dtqw.math.statistics.joint_pdf import JointPDF
 from dtqw.math.statistics.filtered_pdf import FilteredPDF
 from dtqw.math.statistics.marginal_pdf import MarginalPDF
 from dtqw.mesh.mesh import is_mesh
+from dtqw.utils.utils import Utils
 
 __all__ = ['State', 'is_state']
 
@@ -231,7 +232,9 @@ class State(Base):
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        if round(pdf.sum(), 10) != 1.0:
+        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+
+        if round(pdf.sum(), round_precision) != 1.0:
             if self._logger:
                 self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
@@ -443,7 +446,9 @@ class State(Base):
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        if round(pdf.sum(), 10) != 1.0:
+        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+
+        if round(pdf.sum(), round_precision) != 1.0:
             if self._logger:
                 self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")

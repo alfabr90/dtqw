@@ -4,7 +4,7 @@ from pyspark import StorageLevel
 
 from dtqw.coin.coin import Coin
 from dtqw.math.operator import Operator
-from dtqw.utils.utils import CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
+from dtqw.utils.utils import Utils
 from dtqw.mesh.mesh import is_mesh
 
 __all__ = ['Coin2D']
@@ -50,7 +50,7 @@ class Coin2D(Coin):
         return True
 
     def create_operator(self, mesh, num_partitions,
-                        coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the coin operator for the walk.
 
@@ -62,7 +62,7 @@ class Coin2D(Coin):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is Utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -88,7 +88,7 @@ class Coin2D(Coin):
 
         mesh_size = mesh.size[0] * mesh.size[1]
         shape = (self._data.shape[0] * mesh_size, self._data.shape[1] * mesh_size)
-        data = self._spark_context.broadcast(self._data)
+        data = Utils.broadcast(self._spark_context, self._data)
 
         # The coin operator is built by applying a tensor product between the chosen coin and
         # an identity matrix with the dimensions of the chosen mesh.
@@ -103,18 +103,11 @@ class Coin2D(Coin):
             __map
         )
 
-        if coord_format == CoordinateMultiplier:
-            rdd = rdd.map(
-                lambda m: (m[1], (m[0], m[2]))
-            ).partitionBy(
-                numPartitions=num_partitions
-            )
-        elif coord_format == CoordinateMultiplicand:
-            rdd = rdd.map(
-                lambda m: (m[0], (m[1], m[2]))
-            ).partitionBy(
-                numPartitions=num_partitions
-            )
+        rdd = Utils.changeCoordinate(
+            rdd, Utils.CoordinateDefault, new_coord=coord_format
+        ).partitionBy(
+            numPartitions=num_partitions
+        )
 
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 

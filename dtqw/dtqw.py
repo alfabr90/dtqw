@@ -9,8 +9,7 @@ from dtqw.math.operator import Operator, is_operator
 from dtqw.math.state import State
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiling.profiler import is_profiler
-from dtqw.utils.utils import broadcast, get_tmp_path, remove_path, \
-    CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
+from dtqw.utils.utils import Utils
 
 __all__ = ['DiscreteTimeQuantumWalk']
 
@@ -225,7 +224,7 @@ class DiscreteTimeQuantumWalk:
         return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
 
     def create_interaction_operator(self, phase,
-                                    coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                                    coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the particles' interaction operator for the walk.
 
@@ -234,7 +233,7 @@ class DiscreteTimeQuantumWalk:
         phase : float
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -304,15 +303,9 @@ class DiscreteTimeQuantumWalk:
             __map
         )
 
-        if coord_format == CoordinateMultiplier:
-            rdd = rdd.map(
-                lambda m: (m[1], (m[0], m[2]))
-            ).partitionBy(
-                numPartitions=self._num_partitions
-            )
-        elif coord_format == CoordinateMultiplicand:
-            rdd = rdd.map(
-                lambda m: (m[0], (m[1], m[2]))
+        if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+            rdd = Utils.changeCoordinate(
+                rdd, Utils.CoordinateDefault, new_coord=coord_format
             ).partitionBy(
                 numPartitions=self._num_partitions
             )
@@ -339,7 +332,7 @@ class DiscreteTimeQuantumWalk:
                     )
                 )
 
-    def create_walk_operator(self, coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_walk_operator(self, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the walk operator for the walk.
 
@@ -352,13 +345,13 @@ class DiscreteTimeQuantumWalk:
             Wn = I1 (X) ... (X) In-1 (X) W
 
         Regardless the number of particles, the walk operators have their (i,j,value) coordinates converted to
-        appropriate coordinates for multiplication, in this case, the Matrix.MultiplierCoordinate.
+        appropriate coordinates for multiplication, in this case, the CoordinateMultiplier.
 
         Parameters
         ----------
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -369,14 +362,14 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("no coin operator has been set. A new one will be built")
             self._coin_operator = self._coin.create_operator(
-                self._mesh, self._num_partitions, coord_format=CoordinateMultiplicand, storage_level=storage_level
+                self._mesh, self._num_partitions, coord_format=Utils.CoordinateMultiplicand, storage_level=storage_level
             )
 
         if self._shift_operator is None:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
             self._shift_operator = self._mesh.create_operator(
-                self._num_partitions, coord_format=CoordinateMultiplier, storage_level=storage_level
+                self._num_partitions, coord_format=Utils.CoordinateMultiplier, storage_level=storage_level
             )
 
         if self._num_particles == 1:
@@ -385,7 +378,7 @@ class DiscreteTimeQuantumWalk:
 
             t1 = datetime.now()
 
-            evolution_operator = self._shift_operator.multiply(self._coin_operator, coord_format=CoordinateMultiplier)
+            evolution_operator = self._shift_operator.multiply(self._coin_operator, coord_format=Utils.CoordinateMultiplier)
 
             self._walk_operator = evolution_operator.persist(storage_level).checkpoint().materialize(storage_level)
 
@@ -415,7 +408,7 @@ class DiscreteTimeQuantumWalk:
             t_tmp = datetime.now()
 
             evolution_operator = self._shift_operator.multiply(
-                self._coin_operator, coord_format=CoordinateDefault
+                self._coin_operator, coord_format=Utils.CoordinateDefault
             ).persist(storage_level).materialize(storage_level)
 
             self._coin_operator.unpersist()
@@ -426,10 +419,10 @@ class DiscreteTimeQuantumWalk:
 
             self._walk_operator = []
 
-            mode = 1
+            kron_mode = Utils.getConf(self._spark_context, 'dtqw.operator.kronMode', default='dump')
 
-            if mode == 0:
-                eo = broadcast(self._spark_context, evolution_operator.data.collect())
+            if kron_mode == 'broadcast':
+                eo = Utils.broadcast(self._spark_context, evolution_operator.data.collect())
                 evolution_operator.unpersist()
 
                 for p in range(self._num_particles):
@@ -456,15 +449,9 @@ class DiscreteTimeQuantumWalk:
                             __map
                         )
 
-                        if coord_format == CoordinateMultiplier:
-                            rdd = rdd.map(
-                                lambda m: (m[1], (m[0], m[2]))
-                            ).partitionBy(
-                                numPartitions=self._num_partitions
-                            )
-                        elif coord_format == CoordinateMultiplicand:
-                            rdd = rdd.map(
-                                lambda m: (m[0], (m[1], m[2]))
+                        if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                            rdd = Utils.changeCoordinate(
+                                rdd, Utils.CoordinateDefault, new_coord=coord_format
                             ).partitionBy(
                                 numPartitions=self._num_partitions
                             )
@@ -507,15 +494,9 @@ class DiscreteTimeQuantumWalk:
                         #
                         # ... (X) Ii-1 (X) U
                         if p == self._num_particles - 1:
-                            if coord_format == CoordinateMultiplier:
-                                rdd_pre = rdd_pre.map(
-                                    lambda m: (m[1], (m[0], m[2]))
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
-                            elif coord_format == CoordinateMultiplicand:
-                                rdd_pre = rdd_pre.map(
-                                    lambda m: (m[0], (m[1], m[2]))
+                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                                rdd_pre = Utils.changeCoordinate(
+                                    rdd_pre, Utils.CoordinateDefault, new_coord=coord_format
                                 ).partitionBy(
                                     numPartitions=self._num_partitions
                                 )
@@ -539,15 +520,9 @@ class DiscreteTimeQuantumWalk:
                                 __map
                             )
 
-                            if coord_format == CoordinateMultiplier:
-                                rdd_pos = rdd_pos.map(
-                                    lambda m: (m[1], (m[0], m[2]))
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
-                            elif coord_format == CoordinateMultiplicand:
-                                rdd_pos = rdd_pos.map(
-                                    lambda m: (m[0], (m[1], m[2]))
+                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                                rdd_pos = Utils.changeCoordinate(
+                                    rdd_pos, Utils.CoordinateDefault, new_coord=coord_format
                                 ).partitionBy(
                                     numPartitions=self._num_partitions
                                 )
@@ -580,9 +555,11 @@ class DiscreteTimeQuantumWalk:
                             )
 
                 eo.unpersist()
-            else:
-                path = get_tmp_path()
-                print(path)
+            elif kron_mode == 'dump':
+                path = Utils.getTempPath(
+                    Utils.getConf(self._spark_context, 'dtqw.storage.tempPath', default='./')
+                )
+
                 evolution_operator.dump(path)
 
                 for p in range(self._num_particles):
@@ -611,15 +588,9 @@ class DiscreteTimeQuantumWalk:
                             __map
                         )
 
-                        if coord_format == CoordinateMultiplier:
-                            rdd = rdd.map(
-                                lambda m: (m[1], (m[0], m[2]))
-                            ).partitionBy(
-                                numPartitions=self._num_partitions
-                            )
-                        elif coord_format == CoordinateMultiplicand:
-                            rdd = rdd.map(
-                                lambda m: (m[0], (m[1], m[2]))
+                        if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                            rdd = Utils.changeCoordinate(
+                                rdd, Utils.CoordinateDefault, new_coord=coord_format
                             ).partitionBy(
                                 numPartitions=self._num_partitions
                             )
@@ -664,15 +635,9 @@ class DiscreteTimeQuantumWalk:
                         #
                         # ... (X) Ii-1 (X) U
                         if p == self._num_particles - 1:
-                            if coord_format == CoordinateMultiplier:
-                                rdd_pre = rdd_pre.map(
-                                    lambda m: (m[1], (m[0], m[2]))
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
-                            elif coord_format == CoordinateMultiplicand:
-                                rdd_pre = rdd_pre.map(
-                                    lambda m: (m[0], (m[1], m[2]))
+                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                                rdd_pre = Utils.changeCoordinate(
+                                    rdd_pre, Utils.CoordinateDefault, new_coord=coord_format
                                 ).partitionBy(
                                     numPartitions=self._num_partitions
                                 )
@@ -696,15 +661,9 @@ class DiscreteTimeQuantumWalk:
                                 __map
                             )
 
-                            if coord_format == CoordinateMultiplier:
-                                rdd_pos = rdd_pos.map(
-                                    lambda m: (m[1], (m[0], m[2]))
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
-                            elif coord_format == CoordinateMultiplicand:
-                                rdd_pos = rdd_pos.map(
-                                    lambda m: (m[0], (m[1], m[2]))
+                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                                rdd_pos = Utils.changeCoordinate(
+                                    rdd_pos, Utils.CoordinateDefault, new_coord=coord_format
                                 ).partitionBy(
                                     numPartitions=self._num_partitions
                                 )
@@ -737,7 +696,11 @@ class DiscreteTimeQuantumWalk:
                             )
 
                 evolution_operator.unpersist()
-                remove_path(path)
+                Utils.removePath(path)
+            else:
+                if self._logger:
+                    self._logger.error("invalid kronecker mode")
+                raise ValueError("invalid kronecker mode")
 
     def destroy_coin_operator(self):
         """Call the Operator's method destroy."""
@@ -867,12 +830,12 @@ class DiscreteTimeQuantumWalk:
                 if self._walk_operator is None:
                     if self._logger:
                         self._logger.info("no walk operator has been set. A new one will be built")
-                    self.create_walk_operator(coord_format=CoordinateMultiplier, storage_level=storage_level)
+                    self.create_walk_operator(coord_format=Utils.CoordinateMultiplier, storage_level=storage_level)
 
             if self._num_particles > 1 and phase and self._interaction_operator is None:
                 if self._logger:
                     self._logger.info("no interaction operator has been set. A new one will be built")
-                self.create_interaction_operator(phase, coord_format=CoordinateMultiplier, storage_level=storage_level)
+                self.create_interaction_operator(phase, coord_format=Utils.CoordinateMultiplier, storage_level=storage_level)
 
             t1 = datetime.now()
 
@@ -883,11 +846,13 @@ class DiscreteTimeQuantumWalk:
                 if self._mesh.broken_links:
                     self.destroy_shift_operator()
                     self.destroy_walk_operator()
-                    self.create_walk_operator(coord_format=CoordinateMultiplier, storage_level=storage_level)
+                    self.create_walk_operator(coord_format=Utils.CoordinateMultiplier, storage_level=storage_level)
 
                 t_tmp = datetime.now()
 
                 result_tmp = result
+
+                mul_mode = Utils.getConf(self._spark_context, 'dtqw.operator.multiplicationMode', default='join')
 
                 if self._num_particles == 1:
                     result_tmp = self._walk_operator.multiply(result_tmp)

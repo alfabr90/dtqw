@@ -6,7 +6,7 @@ __all__ = ['PermanentBrokenLinks']
 
 
 class PermanentBrokenLinks(BrokenLinks):
-    """Class for permanent broken links."""
+    """Class for permanent broken links of a mesh."""
 
     def __init__(self, spark_context, edges):
         """

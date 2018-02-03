@@ -1,12 +1,13 @@
 import random
 
 from dtqw.mesh.broken_links.broken_links import BrokenLinks
+from dtqw.utils.utils import Utils
 
 __all__ = ['RandomBrokenLinks']
 
 
 class RandomBrokenLinks(BrokenLinks):
-    """Class for generating random broken links."""
+    """Class for generating random broken links for a mesh."""
 
     def __init__(self, spark_context, probability):
         """
@@ -42,9 +43,10 @@ class RandomBrokenLinks(BrokenLinks):
 
         """
         probability = self._probability
+        seed = Utils.getConf(self._spark_context, 'dtqw.randomBrokenLinks.seed', default=None)
 
         def __map(e):
-            random.seed()
+            random.seed(seed)
             return e, random.random() < probability
 
         return self._spark_context.range(

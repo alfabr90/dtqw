@@ -2,7 +2,7 @@ import math
 
 from dtqw.math.base import Base
 from dtqw.math.state import State, is_state
-from dtqw.utils.utils import priority_type, CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
+from dtqw.utils.utils import Utils
 
 __all__ = ['Operator', 'is_operator']
 
@@ -10,7 +10,7 @@ __all__ = ['Operator', 'is_operator']
 class Operator(Base):
     """Class for the operators of quantum walks."""
 
-    def __init__(self, rdd, shape, coord_format=CoordinateDefault):
+    def __init__(self, rdd, shape, coord_format=Utils.CoordinateDefault):
         """
         Build an Operator object.
 
@@ -22,7 +22,7 @@ class Operator(Base):
             The shape of this operator object. Must be a 2-dimensional tuple.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is Utils.CoordinateDefault.
         """
         super().__init__(rdd, shape, data_type=complex)
 
@@ -46,22 +46,22 @@ class Operator(Base):
         None
 
         """
-        if self._coordinate_format == CoordinateMultiplier:
+        if self._coordinate_format == Utils.CoordinateMultiplier:
             rdd = self.data.map(
                 lambda m: "{}, {}, {}".format(m[1][0], m[0], m[1][1])
             )
-        elif self._coordinate_format == CoordinateMultiplicand:
+        elif self._coordinate_format == Utils.CoordinateMultiplicand:
             rdd = self.data.map(
                 lambda m: "{}, {}, {}".format(m[0], m[1][0], m[1][1])
             )
-        else:
+        else:  # Utils.CoordinateDefault
             rdd = self.data.map(
                 lambda m: " ".join([str(e) for e in m])
             )
 
         rdd.saveAsTextFile(path)
 
-    def kron(self, other, coord_format=CoordinateDefault):
+    def kron(self, other, coord_format=Utils.CoordinateDefault):
         """
         Perform a tensor (Kronecker) product with another operator.
 
@@ -71,7 +71,7 @@ class Operator(Base):
             The other operator.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is Utils.CoordinateDefault.
 
         Returns
         -------
@@ -86,7 +86,7 @@ class Operator(Base):
 
         other_shape = other.shape
         new_shape = (self._shape[0] * other_shape[0], self._shape[1] * other_shape[1])
-        data_type = priority_type(self._data_type, other.data_type)
+        data_type = Utils.getPrecendentType(self._data_type, other.data_type)
         num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
 
         rdd = self.data.map(
@@ -100,19 +100,19 @@ class Operator(Base):
             lambda m: (m[1][0], m[1][1])
         )
 
-        if coord_format == CoordinateMultiplier:
+        if coord_format == Utils.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[0][1] * other_shape[1] + m[1][1], (m[0][0] * other_shape[0] + m[1][0], m[0][2] * m[1][2]))
             ).partitionBy(
                 numPartitions=num_partitions
             )
-        elif coord_format == CoordinateMultiplicand:
+        elif coord_format == Utils.CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0][0] * other_shape[0] + m[1][0], (m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2]))
             ).partitionBy(
                 numPartitions=num_partitions
             )
-        else:  # utils.CoordinateDefault
+        else:  # Utils.CoordinateDefault
             rdd = rdd.map(
                 lambda m: (m[0][0] * other_shape[0] + m[1][0], m[0][1] * other_shape[1] + m[1][1], m[0][2] * m[1][2])
             )
@@ -129,11 +129,20 @@ class Operator(Base):
             The norm of this operator.
 
         """
-        n = self.data.filter(
-            lambda m: m[2] != complex()
-        ).map(
-            lambda m: m[2].real ** 2 + m[2].imag ** 2
-        ).reduce(
+        if self._coordinate_format == Utils.CoordinateMultiplier or self._coordinate_format == Utils.CoordinateMultiplicand:
+            n = self.data.filter(
+                lambda m: m[1][1] != complex()
+            ).map(
+                lambda m: m[1][1].real ** 2 + m[1][1].imag ** 2
+            )
+        else:  # Utils.CoordinateDefault
+            n = self.data.filter(
+                lambda m: m[2] != complex()
+            ).map(
+                lambda m: m[2].real ** 2 + m[2].imag ** 2
+            )
+
+        n = n.reduce(
             lambda a, b: a + b
         )
 
@@ -156,19 +165,19 @@ class Operator(Base):
             lambda a, b: a + b, numPartitions=num_partitions
         )
 
-        if coord_format == CoordinateMultiplier:
+        if coord_format == Utils.CoordinateMultiplier:
             rdd = rdd.map(
                 lambda m: (m[0][1], (m[0][0], m[1]))
             ).partitionBy(
                 numPartitions=num_partitions
             )
-        elif coord_format == CoordinateMultiplicand:
+        elif coord_format == Utils.CoordinateMultiplicand:
             rdd = rdd.map(
                 lambda m: (m[0][0], (m[0][1], m[1]))
             ).partitionBy(
                 numPartitions=num_partitions
             )
-        else:  # utils.CoordinateDefault
+        else:  # Utils.CoordinateDefault
             rdd = rdd.map(
                 lambda m: (m[0][0], m[0][1], m[1])
             )
@@ -194,7 +203,7 @@ class Operator(Base):
 
         return State(rdd, shape, other.mesh, other.num_particles)
 
-    def multiply(self, other, coord_format=CoordinateDefault):
+    def multiply(self, other, coord_format=Utils.CoordinateDefault):
         """
         Multiply this operator with another one or with a system state.
 
@@ -204,7 +213,7 @@ class Operator(Base):
             An operator if multiplying another operator, State otherwise.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault. Not applicable when multiplying a State.
+            Default value is Utils.CoordinateDefault. Not applicable when multiplying a State.
 
         Returns
         -------

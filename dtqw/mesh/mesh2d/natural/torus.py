@@ -4,7 +4,7 @@ from pyspark import StorageLevel
 
 from dtqw.mesh.mesh2d.natural.natural import Natural
 from dtqw.math.operator import Operator
-from dtqw.utils.utils import CoordinateDefault, CoordinateMultiplier, CoordinateMultiplicand
+from dtqw.utils.utils import Utils
 
 __all__ = ['TorusNatural']
 
@@ -46,7 +46,7 @@ class TorusNatural(Natural):
         return True
 
     def create_operator(self, num_partitions,
-                        coord_format=CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
@@ -56,7 +56,7 @@ class TorusNatural(Natural):
             The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
-            Default value is utils.CoordinateDefault.
+            Default value is Utils.CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD. Default value is StorageLevel.MEMORY_AND_DISK.
 
@@ -140,19 +140,12 @@ class TorusNatural(Natural):
                 __map
             )
 
-        if coord_format == CoordinateMultiplier:
-            rdd = rdd.map(
-                lambda m: (m[1], (m[0], m[2]))
-            ).partitionBy(
-                numPartitions=num_partitions
-            )
-        elif coord_format == CoordinateMultiplicand:
-            rdd = rdd.map(
-                lambda m: (m[0], (m[1], m[2]))
-            ).partitionBy(
-                numPartitions=num_partitions
-            )
-
+        rdd = Utils.changeCoordinate(
+            rdd, Utils.CoordinateDefault, new_coord=coord_format
+        ).partitionBy(
+            numPartitions=num_partitions
+        )
+        
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
         if self._broken_links:

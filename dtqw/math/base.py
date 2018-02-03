@@ -3,7 +3,7 @@ from pyspark import RDD, StorageLevel
 
 from dtqw.utils.logger import is_logger
 from dtqw.utils.profiling.profiler import is_profiler
-from dtqw.utils.utils import is_shape
+from dtqw.utils.utils import Utils
 
 __all__ = ['Base']
 
@@ -30,7 +30,7 @@ class Base:
             raise TypeError("invalid argument to instantiate an Operator object")
 
         if shape is not None:
-            if not is_shape(shape):
+            if not Utils.is_shape(shape):
                 # self.logger.error("Invalid shape")
                 raise ValueError("invalid shape")
 
@@ -289,14 +289,9 @@ class Base:
 
         return result
 
-    def is_unitary(self, round_precision=10):
+    def is_unitary(self):
         """
         Check if this matrix is unitary by calculating its norm.
-
-        Parameters
-        ----------
-        round_precision : int, optional
-            The desired precision when rounding the norm of this matrix. The default value is 10.
 
         Returns
         -------
@@ -304,4 +299,6 @@ class Base:
             True if the norm of this matrix is 1.0, False otherwise.
 
         """
+        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+        
         return round(self.norm(), round_precision) == 1.0
