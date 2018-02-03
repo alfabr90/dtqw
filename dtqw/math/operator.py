@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 from dtqw.math.base import Base
 from dtqw.math.state import State, is_state
@@ -60,6 +61,31 @@ class Operator(Base):
             )
 
         rdd.saveAsTextFile(path)
+
+    def numpy_array(self):
+        """
+        Create a numpy array containing this object's RDD data.
+
+        Returns
+        -------
+        :obj:ndarray
+            The numpy array
+
+        """
+        data = self.data.collect()
+        result = np.zeros(self._shape, dtype=self._data_type)
+
+        if self._coordinate_format == Utils.CoordinateMultiplier:
+            for e in data:
+                result[e[1][0], e[0]] = e[1][1]
+        elif self._coordinate_format == Utils.CoordinateMultiplicand:
+            for e in data:
+                result[e[0], e[1][0]] = e[1][1]
+        else:  # Utils.CoordinateDefault
+            for e in data:
+                result[e[0], e[1]] = e[2]
+
+        return result
 
     def kron(self, other, coord_format=Utils.CoordinateDefault):
         """

@@ -281,8 +281,8 @@ class Base:
 
         """
         data = self.data.collect()
-        ind = len(data[0]) - 1
         result = np.zeros(self._shape, dtype=self._data_type)
+        ind = len(data[0]) - 1
 
         for e in data:
             result[e[0:ind]] = e[ind]
@@ -300,5 +300,5 @@ class Base:
 
         """
         round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
-        
+
         return round(self.norm(), round_precision) == 1.0
