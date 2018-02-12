@@ -174,6 +174,20 @@ class Operator(Base):
 
         return math.sqrt(n)
 
+    def is_unitary(self):
+        """
+        Check if this operator is unitary by calculating its norm.
+
+        Returns
+        -------
+        bool
+            True if the norm of this operator is 1.0, False otherwise.
+
+        """
+        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+
+        return round(self.norm(), round_precision) == 1.0
+
     def _multiply_operator(self, other, coord_format):
         if self._shape[1] != other.shape[0]:
             if self._logger:

@@ -254,7 +254,7 @@ class Base:
 
     def dump(self, path):
         """
-        Dump this object's RDD into disk.
+        Dump this object's RDD to disk.
 
         Parameters
         ----------
@@ -288,17 +288,3 @@ class Base:
             result[e[0:ind]] = e[ind]
 
         return result
-
-    def is_unitary(self):
-        """
-        Check if this matrix is unitary by calculating its norm.
-
-        Returns
-        -------
-        bool
-            True if the norm of this matrix is 1.0, False otherwise.
-
-        """
-        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
-
-        return round(self.norm(), round_precision) == 1.0

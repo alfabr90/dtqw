@@ -113,6 +113,20 @@ class State(Base):
 
         return math.sqrt(n)
 
+    def is_unitary(self):
+        """
+        Check if this state is unitary by calculating its norm.
+
+        Returns
+        -------
+        bool
+            True if the norm of this state is 1.0, False otherwise.
+
+        """
+        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+
+        return round(self.norm(), round_precision) == 1.0
+
     def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Perform the measurement of the entire system state.

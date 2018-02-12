@@ -103,11 +103,12 @@ class Coin1D(Coin):
             __map
         )
 
-        rdd = Utils.changeCoordinate(
-            rdd, Utils.CoordinateDefault, new_coord=coord_format
-        ).partitionBy(
-            numPartitions=num_partitions
-        )
+        if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+            rdd = Utils.changeCoordinate(
+                rdd, Utils.CoordinateDefault, new_coord=coord_format
+            ).partitionBy(
+                numPartitions=num_partitions
+            )
 
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
