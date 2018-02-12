@@ -61,6 +61,10 @@ class Segment(Mesh1D):
         -------
         Operator
 
+        Raises
+        ------
+        ValueError
+
         """
         if self._logger:
             self._logger.info("building shift operator...")
@@ -75,35 +79,63 @@ class Segment(Mesh1D):
         if self._broken_links:
             broken_links = self._broken_links.generate(num_edges)
 
-            def __map(e):
-                """e = (edge, (edge, broken or not))"""
-                for i in range(coin_size):
-                    l = (-1) ** i
+            generation_mode = Utils.getConf(self._spark_context, 'dtqw.mesh.brokenLinks.generationMode', default='rdd')
 
-                    # Finding the correspondent x coordinate of the vertex from the edge number
-                    x = (e[1][0] - i - l) % size
+            if generation_mode == 'rdd':
+                def __map(e):
+                    """e = (edge, (edge, broken or not))"""
+                    for i in range(coin_size):
+                        l = (-1) ** i
 
-                    if e[1][1]:
-                        bl = 0
-                    else:
-                        if x + l >= size or x + l < 0:
+                        # Finding the correspondent x coordinate of the vertex from the edge number
+                        x = (e[1][0] - i - l) % size
+
+                        if e[1][1]:
                             bl = 0
                         else:
-                            bl = l
+                            if x + l >= size or x + l < 0:
+                                bl = 0
+                            else:
+                                bl = l
 
-                    yield (i + bl) * size + x + bl, (1 - i) * size + x, 1
+                        yield (i + bl) * size + x + bl, (1 - i) * size + x, 1
 
-            rdd = self._spark_context.range(
-                num_edges
-            ).map(
-                lambda m: (m, m)
-            ).partitionBy(
-                numPartitions=num_partitions
-            ).leftOuterJoin(
-                broken_links
-            ).flatMap(
-                __map
-            )
+                rdd = self._spark_context.range(
+                    num_edges
+                ).map(
+                    lambda m: (m, m)
+                ).leftOuterJoin(
+                    broken_links
+                ).flatMap(
+                    __map
+                )
+            elif generation_mode == 'broadcast':
+                def __map(e):
+                    for i in range(coin_size):
+                        l = (-1) ** i
+
+                        # Finding the correspondent x coordinate of the vertex from the edge number
+                        x = (e - i - l) % size
+
+                        if e in broken_links.value:
+                            bl = 0
+                        else:
+                            if x + l >= size or x + l < 0:
+                                bl = 0
+                            else:
+                                bl = l
+
+                        yield (i + bl) * size + x + bl, (1 - i) * size + x, 1
+
+                rdd = self._spark_context.range(
+                    num_edges
+                ).flatMap(
+                    __map
+                )
+            else:
+                if self._logger:
+                    self._logger.error("invalid broken links generation mode")
+                raise ValueError("invalid broken links generation mode")
         else:
             def __map(x):
                 for i in range(coin_size):

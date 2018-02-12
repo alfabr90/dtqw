@@ -38,8 +38,12 @@ class RandomBrokenLinks(BrokenLinks):
 
         Returns
         -------
-        RDD
-            The RDD which keys are the numbered edges that are broken.
+        RDD or Broadcast
+            The RDD or Broadcast dict which keys are the numbered edges that are broken.
+
+        Raises
+        ------
+        ValueError
 
         """
         probability = self._probability
@@ -49,10 +53,19 @@ class RandomBrokenLinks(BrokenLinks):
             random.seed(seed)
             return e, random.random() < probability
 
-        return self._spark_context.range(
+        rdd = self._spark_context.range(
             num_edges
         ).map(
             __map
         ).filter(
             lambda m: m[1] is True
         )
+
+        generation_mode = Utils.getConf(self._spark_context, 'dtqw.mesh.brokenLinks.generationMode', default='rdd')
+
+        if generation_mode == 'rdd':
+            return rdd
+        elif generation_mode == 'broadcast':
+            return rdd.collectAsMap()
+        else:
+            raise ValueError("invalid broken links generation mode")

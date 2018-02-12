@@ -64,6 +64,10 @@ class BoxNatural(Natural):
         -------
         Operator
 
+        Raises
+        ------
+        ValueError
+
         """
         if self._logger:
             self._logger.info("building shift operator...")
@@ -79,52 +83,98 @@ class BoxNatural(Natural):
         if self._broken_links:
             broken_links = self._broken_links.generate(num_edges)
 
-            def __map(e):
-                """e = (edge, (edge, broken or not))"""
-                for i in range(coin_size):
-                    l = (-1) ** i
+            generation_mode = Utils.getConf(self._spark_context, 'dtqw.mesh.brokenLinks.generationMode', default='rdd')
 
-                    # Finding the correspondent x,y coordinates of the vertex from the edge number
-                    if e[1][0] >= size[0] * size[1]:
-                        j = i
-                        delta = int(not (i ^ j))
-                        x = int((e[1][0] - size[0] * size[1]) / size[0])
-                        y = ((e[1][0] - size[0] * size[1]) % size[1] - i - l) % size[1]
-                    else:
-                        j = int(not i)
-                        delta = int(not (i ^ j))
-                        x = (e[1][0] % size[0] - i - l) % size[0]
-                        y = int(e[1][0] / size[0])
+            if generation_mode == 'rdd':
+                def __map(e):
+                    """e = (edge, (edge, broken or not))"""
+                    for i in range(coin_size):
+                        l = (-1) ** i
 
-                    pos1 = x + l * (1 - delta)
-                    pos2 = y + l * delta
+                        # Finding the correspondent x,y coordinates of the vertex from the edge number
+                        if e[1][0] >= size[0] * size[1]:
+                            j = i
+                            delta = int(not (i ^ j))
+                            x = int((e[1][0] - size[0] * size[1]) / size[0])
+                            y = ((e[1][0] - size[0] * size[1]) % size[1] - i - l) % size[1]
+                        else:
+                            j = int(not i)
+                            delta = int(not (i ^ j))
+                            x = (e[1][0] % size[0] - i - l) % size[0]
+                            y = int(e[1][0] / size[0])
 
-                    if e[1][1]:
-                        bl = 0
-                    else:
-                        # The border edges are considered broken so that they become reflexive
-                        if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
+                        pos1 = x + l * (1 - delta)
+                        pos2 = y + l * delta
+
+                        if e[1][1]:
                             bl = 0
                         else:
-                            bl = l
+                            # The border edges are considered broken so that they become reflexive
+                            if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
+                                bl = 0
+                            else:
+                                bl = l
 
-                    m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
-                        (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
-                    n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
+                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
+                            (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
+                        n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
-                    yield m, n, 1
+                        yield m, n, 1
 
-            rdd = self._spark_context.range(
-                num_edges
-            ).map(
-                lambda m: (m, m)
-            ).partitionBy(
-                numPartitions=num_partitions
-            ).leftOuterJoin(
-                broken_links
-            ).flatMap(
-                __map
-            )
+                rdd = self._spark_context.range(
+                    num_edges
+                ).map(
+                    lambda m: (m, m)
+                ).leftOuterJoin(
+                    broken_links
+                ).flatMap(
+                    __map
+                )
+            elif generation_mode == 'broadcast':
+                def __map(e):
+                    """e = (edge, (edge, broken or not))"""
+                    for i in range(coin_size):
+                        l = (-1) ** i
+
+                        # Finding the correspondent x,y coordinates of the vertex from the edge number
+                        if e >= size[0] * size[1]:
+                            j = i
+                            delta = int(not (i ^ j))
+                            x = int((e - size[0] * size[1]) / size[0])
+                            y = ((e - size[0] * size[1]) % size[1] - i - l) % size[1]
+                        else:
+                            j = int(not i)
+                            delta = int(not (i ^ j))
+                            x = (e % size[0] - i - l) % size[0]
+                            y = int(e / size[0])
+
+                        pos1 = x + l * (1 - delta)
+                        pos2 = y + l * delta
+
+                        if e in broken_links.value:
+                            bl = 0
+                        else:
+                            # The border edges are considered broken so that they become reflexive
+                            if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
+                                bl = 0
+                            else:
+                                bl = l
+
+                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
+                            (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
+                        n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
+
+                        yield m, n, 1
+
+                rdd = self._spark_context.range(
+                    num_edges
+                ).flatMap(
+                    __map
+                )
+            else:
+                if self._logger:
+                    self._logger.error("invalid broken links generation mode")
+                raise ValueError("invalid broken links generation mode")
         else:
             def __map(xy):
                 x = xy % size[0]
@@ -162,7 +212,7 @@ class BoxNatural(Natural):
             ).partitionBy(
                 numPartitions=num_partitions
             )
-        
+
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
         if self._broken_links:

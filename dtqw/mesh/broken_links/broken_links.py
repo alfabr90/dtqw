@@ -21,6 +21,17 @@ class BrokenLinks():
     def spark_context(self):
         return self._spark_context
 
+    def generate(self, num_edges):
+        """
+        Yield broken links for the mesh.
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
+        raise NotImplementedError
+
 
 def is_broken_links(obj):
     """

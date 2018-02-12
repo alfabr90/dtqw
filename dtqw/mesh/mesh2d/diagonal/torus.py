@@ -64,6 +64,10 @@ class TorusDiagonal(Diagonal):
         -------
         Operator
 
+        Raises
+        ------
+        ValueError
+
         """
         if self._logger:
             self._logger.info("building shift operator...")
@@ -79,39 +83,72 @@ class TorusDiagonal(Diagonal):
         if self._broken_links:
             broken_links = self._broken_links.generate(num_edges)
 
-            def __map(e):
-                """e = (edge, (edge, broken or not))"""
-                for i in range(coin_size):
-                    l1 = (-1) ** i
-                    for j in range(coin_size):
-                        l2 = (-1) ** j
+            generation_mode = Utils.getConf(self._spark_context, 'dtqw.mesh.brokenLinks.generationMode', default='rdd')
 
-                        # Finding the correspondent x,y coordinates of the vertex from the edge number
-                        x = (e[1][0] % size[0] - i - l1) % size[0]
-                        y = (int(e[1][0] / size[0]) - j - l2) % size[1]
+            if generation_mode == 'rdd':
+                def __map(e):
+                    """e = (edge, (edge, broken or not))"""
+                    for i in range(coin_size):
+                        l1 = (-1) ** i
+                        for j in range(coin_size):
+                            l2 = (-1) ** j
 
-                        if e[1][1]:
-                            bl1, bl2 = 0, 0
-                        else:
-                            bl1, bl2 = l1, l2
+                            # Finding the correspondent x,y coordinates of the vertex from the edge number
+                            x = (e[1][0] % size[0] - i - l1) % size[0]
+                            y = (int(e[1][0] / size[0]) - j - l2) % size[1]
 
-                        m = ((i + bl1) * coin_size + (j + bl2)) * size_xy + \
-                            ((x + bl1) % size[0]) * size[1] + ((y + bl2) % size[1])
-                        n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
+                            if e[1][1]:
+                                bl1, bl2 = 0, 0
+                            else:
+                                bl1, bl2 = l1, l2
 
-                        yield m, n, 1
+                            m = ((i + bl1) * coin_size + (j + bl2)) * size_xy + \
+                                ((x + bl1) % size[0]) * size[1] + ((y + bl2) % size[1])
+                            n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
-            rdd = self._spark_context.range(
-                num_edges
-            ).map(
-                lambda m: (m, m)
-            ).partitionBy(
-                numPartitions=num_partitions
-            ).leftOuterJoin(
-                broken_links
-            ).flatMap(
-                __map
-            )
+                            yield m, n, 1
+
+                rdd = self._spark_context.range(
+                    num_edges
+                ).map(
+                    lambda m: (m, m)
+                ).leftOuterJoin(
+                    broken_links
+                ).flatMap(
+                    __map
+                )
+            elif generation_mode == 'broadcast':
+                def __map(e):
+                    """e = (edge, (edge, broken or not))"""
+                    for i in range(coin_size):
+                        l1 = (-1) ** i
+                        for j in range(coin_size):
+                            l2 = (-1) ** j
+
+                            # Finding the correspondent x,y coordinates of the vertex from the edge number
+                            x = (e % size[0] - i - l1) % size[0]
+                            y = (int(e / size[0]) - j - l2) % size[1]
+
+                            if e in broken_links.value:
+                                bl1, bl2 = 0, 0
+                            else:
+                                bl1, bl2 = l1, l2
+
+                            m = ((i + bl1) * coin_size + (j + bl2)) * size_xy + \
+                                ((x + bl1) % size[0]) * size[1] + ((y + bl2) % size[1])
+                            n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
+
+                            yield m, n, 1
+
+                rdd = self._spark_context.range(
+                    num_edges
+                ).flatMap(
+                    __map
+                )
+            else:
+                if self._logger:
+                    self._logger.error("invalid broken links generation mode")
+                raise ValueError("invalid broken links generation mode")
         else:
             def __map(xy):
                 x = xy % size[0]
