@@ -4,10 +4,10 @@ from pyspark import StorageLevel
 
 from dtqw.math.statistics.pdf import PDF
 
-__all__ = ['FilteredPDF']
+__all__ = ['CollisionPDF']
 
 
-class FilteredPDF(PDF):
+class CollisionPDF(PDF):
     """Class for probability distribution function of the quantum system when the particles are at the same sites."""
 
     def __init__(self, rdd, shape, mesh, num_particles):
@@ -103,7 +103,7 @@ class FilteredPDF(PDF):
 
         Returns
         -------
-        :obj:FilteredPDF
+        :obj:CollisionPDF
 
         """
         norm = self.norm()
@@ -116,7 +116,7 @@ class FilteredPDF(PDF):
             __map
         )
 
-        return FilteredPDF(
+        return CollisionPDF(
             self._spark_context, rdd, self._shape, self._mesh, self._num_particles
         ).materialize(storage_level)
 

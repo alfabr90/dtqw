@@ -282,9 +282,11 @@ class Base:
         """
         data = self.data.collect()
         result = np.zeros(self._shape, dtype=self._data_type)
-        ind = len(data[0]) - 1
 
-        for e in data:
-            result[e[0:ind]] = e[ind]
+        if len(data):
+            ind = len(data[0]) - 1
+
+            for e in data:
+                result[e[0:ind]] = e[ind]
 
         return result

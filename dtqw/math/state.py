@@ -6,7 +6,7 @@ from pyspark import StorageLevel
 from dtqw.math.base import Base
 from dtqw.math.statistics.pdf import is_pdf
 from dtqw.math.statistics.joint_pdf import JointPDF
-from dtqw.math.statistics.filtered_pdf import FilteredPDF
+from dtqw.math.statistics.collision_pdf import CollisionPDF
 from dtqw.math.statistics.marginal_pdf import MarginalPDF
 from dtqw.mesh.mesh import is_mesh
 from dtqw.utils.utils import Utils
@@ -127,7 +127,7 @@ class State(Base):
 
         return round(self.norm(), round_precision) == 1.0
 
-    def full_measurement(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def measure_system(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Perform the measurement of the entire system state.
 
@@ -273,7 +273,7 @@ class State(Base):
 
         return pdf
 
-    def filtered_measurement(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def measure_collision(self, full_measurement, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Filter the measurement of the entire system by checking when
         all particles are located at the same site of the mesh.
@@ -287,7 +287,7 @@ class State(Base):
 
         Returns
         -------
-        :obj:FilteredPDF
+        :obj:CollisionPDF
             The PDF of the system when all particles are located at the same site.
 
         Raises
@@ -347,7 +347,7 @@ class State(Base):
             __map
         )
 
-        pdf = FilteredPDF(rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
+        pdf = CollisionPDF(rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
 
         app_id = self._spark_context.applicationId
 
@@ -355,12 +355,12 @@ class State(Base):
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)
 
-            info = self._profiler.profile_pdf('filteredMeasurement', pdf, (datetime.now() - t1).total_seconds())
+            info = self._profiler.profile_pdf('collisionMeasurement', pdf, (datetime.now() - t1).total_seconds())
 
             if self._logger:
-                self._logger.info("filtered measurement was done in {}s".format(info['buildingTime']))
+                self._logger.info("collision measurement was done in {}s".format(info['buildingTime']))
                 self._logger.info(
-                    "PDF with filtered measurement is consuming {} bytes in memory and {} bytes in disk".format(
+                    "PDF with collision measurement is consuming {} bytes in memory and {} bytes in disk".format(
                         info['memoryUsed'], info['diskUsed']
                     )
                 )
@@ -369,7 +369,7 @@ class State(Base):
 
         return pdf
 
-    def partial_measurement(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def measure_particle(self, particle, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Perform the partial measurement of a particle of the system state.
 
@@ -492,7 +492,7 @@ class State(Base):
 
         return pdf
 
-    def partial_measurements(self, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def measure_particles(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Perform the partial measurement of each particle of the system state.
 
@@ -507,7 +507,7 @@ class State(Base):
             A tuple containing the PDF of each particle.
 
         """
-        return [self.partial_measurement(p, storage_level) for p in range(self._num_particles)]
+        return [self.measure_particle(p, storage_level) for p in range(self._num_particles)]
 
     def measure(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
@@ -515,7 +515,7 @@ class State(Base):
 
         If the state is composed by only one particle, the full measurement of the
         system is performed and returned. In other cases, the measurement process will return a tuple containing
-        the full measurement, the filtered measurement - probabilities of each mesh site
+        the full measurement, the collision measurement - probabilities of each mesh site
         with all particles located at - and the partial measurement of each particle.
 
         Parameters
@@ -530,13 +530,13 @@ class State(Base):
 
         """
         if self._num_particles == 1:
-            return self.full_measurement(storage_level)
+            return self.measure_system(storage_level)
         else:
-            full_measurement = self.full_measurement(storage_level)
-            filtered_measurement = self.filtered_measurement(full_measurement, storage_level)
-            partial_measurements = self.partial_measurements(storage_level)
+            full_measurement = self.measure_system(storage_level)
+            collision_measurement = self.measure_collision(full_measurement, storage_level)
+            partial_measurements = self.measure_particles(storage_level)
 
-            return full_measurement, filtered_measurement, partial_measurements
+            return full_measurement, collision_measurement, partial_measurements
 
 
 def is_state(obj):
