@@ -295,8 +295,13 @@ class State(Base):
         NotImplementedError
 
         """
+        if self._num_particles <= 1:
+            if self._logger:
+                self._logger.error("the measurement of collision cannot be performed for quantum walks with only one particle")
+            raise NotImplementedError("the measurement of collision cannot be performed for quantum walks with only one particle")
+
         if self._logger:
-            self._logger.info("measuring the state of the system which the particles are at the same positions...")
+            self._logger.info("measuring the state of the system considering that the particles are at the same positions...")
 
         t1 = datetime.now()
 
@@ -391,6 +396,11 @@ class State(Base):
         ValueError
 
         """
+        if particle >= self._num_particles:
+            if self._logger:
+                self._logger.error("invalid particle number")
+            raise ValueError("invalid particle number")
+
         if self._logger:
             self._logger.info("measuring the state of the system for particle {}...".format(particle + 1))
 

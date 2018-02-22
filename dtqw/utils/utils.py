@@ -39,8 +39,10 @@ class Utils():
     def getConf(sc, config_str, default=None):
         c = sc.getConf().get(config_str)
 
-        if not c and default is not None:
+        if not c and (default is not None):
             return default
+
+        return c
 
     @staticmethod
     def changeCoordinate(rdd, old_coord, new_coord=CoordinateDefault):

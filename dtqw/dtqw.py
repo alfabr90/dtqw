@@ -436,33 +436,22 @@ class DiscreteTimeQuantumWalk:
                         # evolution operator and the other particles' corresponding identity matrices
                         #
                         # W1 = U (X) I2 (X) ... (X) In
-                        for p2 in range(self._num_particles - 2 - p):
-                            shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        rdd_shape = (
+                            shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
+                            shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
+                        )
 
                         def __map(m):
                             for i in eo.value:
-                                yield i[0] * shape[0] + m, i[1] * shape[1] + m, i[2]
+                                yield i[0] * rdd_shape[0] + m, i[1] * rdd_shape[1] + m, i[2]
 
                         rdd = self._spark_context.range(
-                            shape[0]
+                            rdd_shape[0]
                         ).flatMap(
                             __map
                         )
 
-                        if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-                            rdd = Utils.changeCoordinate(
-                                rdd, Utils.CoordinateDefault, new_coord=coord_format
-                            ).partitionBy(
-                                numPartitions=self._num_partitions
-                            )
-
-                        shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
-
-                        self._walk_operator.append(
-                            Operator(
-                                rdd, shape, coord_format=coord_format
-                            ).persist(storage_level).checkpoint().materialize(storage_level)
-                        )
+                        shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
                     else:
                         t_tmp = datetime.now()
 
@@ -470,20 +459,22 @@ class DiscreteTimeQuantumWalk:
                         # tensor product between its previous particles' identity matrices and its evolution operator.
                         #
                         # Wi = I1 (X) ... (X) Ii-1 (X) U ...
-                        for p2 in range(p - 1):
-                            shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        rdd_shape = (
+                            shape[0] * shape_tmp[0] ** (p - 1),
+                            shape[1] * shape_tmp[1] ** (p - 1)
+                        )
 
                         def __map(m):
                             for i in eo.value:
                                 yield m * shape_tmp[0] + i[0], m * shape_tmp[1] + i[1], i[2]
 
-                        rdd_pre = self._spark_context.range(
-                            shape[0]
+                        rdd = self._spark_context.range(
+                            rdd_shape[0]
                         ).flatMap(
                             __map
                         )
 
-                        new_shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
 
                         # Then, the tensor product is applied between the following particles' identity matrices.
                         #
@@ -493,47 +484,34 @@ class DiscreteTimeQuantumWalk:
                         # the pre-identity and evolution operators
                         #
                         # ... (X) Ii-1 (X) U
-                        if p == self._num_particles - 1:
-                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-                                rdd_pre = Utils.changeCoordinate(
-                                    rdd_pre, Utils.CoordinateDefault, new_coord=coord_format
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
-
-                            self._walk_operator.append(
-                                Operator(
-                                    rdd_pre, new_shape, coord_format=coord_format
-                                ).persist(storage_level).checkpoint().materialize(storage_level)
+                        if p < self._num_particles == 1:
+                            rdd_shape = (
+                                shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
+                                shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
                             )
-                        else:
-                            shape = shape_tmp
-
-                            for p2 in range(self._num_particles - 2 - p):
-                                shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
                             def __map(m):
                                 for i in range(shape[0]):
-                                    yield m[0] * shape[0] + i, m[1] * shape[1] + i, m[2]
+                                    yield m[0] * rdd_shape[0] + i, m[1] * rdd_shape[1] + i, m[2]
 
-                            rdd_pos = rdd_pre.flatMap(
+                            rdd = rdd.flatMap(
                                 __map
                             )
 
-                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-                                rdd_pos = Utils.changeCoordinate(
-                                    rdd_pos, Utils.CoordinateDefault, new_coord=coord_format
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
+                            shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
 
-                            new_shape = (shape[0] * new_shape[0], shape[1] * new_shape[1])
+                    if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                        rdd = Utils.changeCoordinate(
+                            rdd, Utils.CoordinateDefault, new_coord=coord_format
+                        ).partitionBy(
+                            numPartitions=self._num_partitions
+                        )
 
-                            self._walk_operator.append(
-                                Operator(
-                                    rdd_pos, new_shape, coord_format=coord_format
-                                ).persist(storage_level).checkpoint().materialize(storage_level)
-                            )
+                    self._walk_operator.append(
+                        Operator(
+                            rdd, shape, coord_format=coord_format
+                        ).persist(storage_level).checkpoint().materialize(storage_level)
+                    )
 
                     if self._profiler:
                         self._profiler.profile_resources(app_id)
@@ -573,35 +551,24 @@ class DiscreteTimeQuantumWalk:
                         # evolution operator and the other particles' corresponding identity matrices
                         #
                         # W1 = U (X) I2 (X) ... (X) In
-                        for p2 in range(self._num_particles - 2 - p):
-                            shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        rdd_shape = (
+                            shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
+                            shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
+                        )
 
                         def __map(m):
                             with fileinput.input(files=glob(path + '/part-*')) as f:
                                 for line in f:
                                     l = line.split()
-                                    yield int(l[0]) * shape[0] + m, int(l[1]) * shape[1] + m, complex(l[2])
+                                    yield int(l[0]) * rdd_shape[0] + m, int(l[1]) * rdd_shape[1] + m, complex(l[2])
 
                         rdd = self._spark_context.range(
-                            shape[0]
+                            rdd_shape[0]
                         ).flatMap(
                             __map
                         )
 
-                        if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-                            rdd = Utils.changeCoordinate(
-                                rdd, Utils.CoordinateDefault, new_coord=coord_format
-                            ).partitionBy(
-                                numPartitions=self._num_partitions
-                            )
-
-                        shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
-
-                        self._walk_operator.append(
-                            Operator(
-                                rdd, shape, coord_format=coord_format
-                            ).persist(storage_level).checkpoint().materialize(storage_level)
-                        )
+                        shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
                     else:
                         t_tmp = datetime.now()
 
@@ -609,8 +576,10 @@ class DiscreteTimeQuantumWalk:
                         # tensor product between its previous particles' identity matrices and its evolution operator.
                         #
                         # Wi = I1 (X) ... (X) Ii-1 (X) U ...
-                        for p2 in range(p - 1):
-                            shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        rdd_shape = (
+                            shape[0] * shape_tmp[0] ** (p - 1),
+                            shape[1] * shape_tmp[1] ** (p - 1)
+                        )
 
                         def __map(m):
                             with fileinput.input(files=glob(path + '/part-*')) as f:
@@ -618,13 +587,13 @@ class DiscreteTimeQuantumWalk:
                                     l = line.split()
                                     yield m * shape_tmp[0] + int(l[0]), m * shape_tmp[1] + int(l[1]), complex(l[2])
 
-                        rdd_pre = self._spark_context.range(
-                            shape[0]
+                        rdd = self._spark_context.range(
+                            rdd_shape[0]
                         ).flatMap(
                             __map
                         )
 
-                        new_shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
+                        shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
 
                         # Then, the tensor product is applied between the following particles' identity matrices.
                         #
@@ -634,47 +603,34 @@ class DiscreteTimeQuantumWalk:
                         # the pre-identity and evolution operators
                         #
                         # ... (X) Ii-1 (X) U
-                        if p == self._num_particles - 1:
-                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-                                rdd_pre = Utils.changeCoordinate(
-                                    rdd_pre, Utils.CoordinateDefault, new_coord=coord_format
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
-
-                            self._walk_operator.append(
-                                Operator(
-                                    rdd_pre, new_shape, coord_format=coord_format
-                                ).persist(storage_level).checkpoint().materialize(storage_level)
+                        if p < self._num_particles == 1:
+                            rdd_shape = (
+                                shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
+                                shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
                             )
-                        else:
-                            shape = shape_tmp
-
-                            for p2 in range(self._num_particles - 2 - p):
-                                shape = (shape[0] * shape_tmp[0], shape[1] * shape_tmp[1])
 
                             def __map(m):
                                 for i in range(shape[0]):
-                                    yield m[0] * shape[0] + i, m[1] * shape[1] + i, m[2]
+                                    yield m[0] * rdd_shape[0] + i, m[1] * rdd_shape[1] + i, m[2]
 
-                            rdd_pos = rdd_pre.flatMap(
+                            rdd = rdd.flatMap(
                                 __map
                             )
 
-                            if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-                                rdd_pos = Utils.changeCoordinate(
-                                    rdd_pos, Utils.CoordinateDefault, new_coord=coord_format
-                                ).partitionBy(
-                                    numPartitions=self._num_partitions
-                                )
+                            shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
 
-                            new_shape = (shape[0] * new_shape[0], shape[1] * new_shape[1])
+                    if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
+                        rdd = Utils.changeCoordinate(
+                            rdd, Utils.CoordinateDefault, new_coord=coord_format
+                        ).partitionBy(
+                            numPartitions=self._num_partitions
+                        )
 
-                            self._walk_operator.append(
-                                Operator(
-                                    rdd_pos, new_shape, coord_format=coord_format
-                                ).persist(storage_level).checkpoint().materialize(storage_level)
-                            )
+                    self._walk_operator.append(
+                        Operator(
+                            rdd, shape, coord_format=coord_format
+                        ).persist(storage_level).checkpoint().materialize(storage_level)
+                    )
 
                     if self._profiler:
                         self._profiler.profile_resources(app_id)
