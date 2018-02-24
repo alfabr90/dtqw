@@ -1,3 +1,4 @@
+import math
 import cmath
 import fileinput
 from glob import glob
@@ -798,6 +799,14 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("starting the walk...")
 
+            checkpoint_frequency = int(
+                Utils.getConf(
+                    self._spark_context,
+                    'dtqw.walk.checkpointFrequency',
+                    default=math.sqrt(steps)
+                )
+            )
+
             for i in range(1, steps + 1, 1):
                 if self._mesh.broken_links:
                     self.destroy_shift_operator()
@@ -818,6 +827,9 @@ class DiscreteTimeQuantumWalk:
 
                     for wo in self._walk_operator:
                         result_tmp = wo.multiply(result_tmp)
+
+                if i % checkpoint_frequency == 0:
+                    result_tmp.persist(storage_level).checkpoint()
 
                 result_tmp.materialize(storage_level)
                 result.unpersist()

@@ -66,6 +66,6 @@ class RandomBrokenLinks(BrokenLinks):
         if generation_mode == 'rdd':
             return rdd
         elif generation_mode == 'broadcast':
-            return rdd.collectAsMap()
+            return Utils.broadcast(self._spark_context, rdd.collectAsMap())
         else:
             raise ValueError("invalid broken links generation mode")
