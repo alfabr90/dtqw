@@ -828,8 +828,9 @@ class DiscreteTimeQuantumWalk:
                     for wo in self._walk_operator:
                         result_tmp = wo.multiply(result_tmp)
 
-                if i % checkpoint_frequency == 0:
-                    result_tmp.persist(storage_level).checkpoint()
+                if checkpoint_frequency:
+                    if i % checkpoint_frequency == 0:
+                        result_tmp.persist(storage_level).checkpoint()
 
                 result_tmp.materialize(storage_level)
                 result.unpersist()
