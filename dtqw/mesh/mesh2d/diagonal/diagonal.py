@@ -31,15 +31,15 @@ class Diagonal(Mesh2D):
         # An example of a 5x5 diagonal mesh:
         #
         # 00 01 01 03 04 00 |
-        #   O  O  O  O  O   |
+        #   O     O     O   |
         # 20 21 22 23 24 20 |
-        #   O  O  O  O  O   |
+        #      O     O      |
         # 15 16 17 18 19 20 |
-        #   O  O  O  O  O   | y
+        #   O     O     O   | y
         # 10 11 12 13 14 10 |
-        #   O  O  O  O  O   |
+        #      O     O      |
         # 05 06 07 08 09 05 |
-        #   O  O  O  O  O   |
+        #   O     O     O   |
         # 00 01 02 03 04 00 |
         # -----------------
         #         x
