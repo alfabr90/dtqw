@@ -94,22 +94,20 @@ class TorusNatural(Natural):
                         # Finding the correspondent x,y coordinates of the vertex from the edge number
                         if e[1][0] >= size[0] * size[1]:
                             j = i
-                            delta = int(not (i ^ j))
                             x = int((e[1][0] - size[0] * size[1]) / size[0])
                             y = ((e[1][0] - size[0] * size[1]) % size[1] - i - l) % size[1]
                         else:
                             j = int(not i)
-                            delta = int(not (i ^ j))
                             x = (e[1][0] % size[0] - i - l) % size[0]
                             y = int(e[1][0] / size[0])
 
-                        if e[1][1]:
-                            bl = 0
-                        else:
-                            bl = l
+                        delta = int(not (i ^ j))
 
-                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
-                            ((x + bl * (1 - delta)) % size[0]) * size[1] + (y + bl * delta) % size[1]
+                        if e[1][1]:
+                            l = 0
+
+                        m = ((i + l) * coin_size + (abs(j + l) % coin_size)) * size_xy + \
+                            ((x + l * (1 - delta)) % size[0]) * size[1] + (y + l * delta) % size[1]
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
                         yield m, n, 1

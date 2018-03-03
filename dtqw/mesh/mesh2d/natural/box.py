@@ -94,29 +94,26 @@ class BoxNatural(Natural):
                         # Finding the correspondent x,y coordinates of the vertex from the edge number
                         if e[1][0] >= size[0] * size[1]:
                             j = i
-                            delta = int(not (i ^ j))
                             x = int((e[1][0] - size[0] * size[1]) / size[0])
                             y = ((e[1][0] - size[0] * size[1]) % size[1] - i - l) % size[1]
                         else:
                             j = int(not i)
-                            delta = int(not (i ^ j))
                             x = (e[1][0] % size[0] - i - l) % size[0]
                             y = int(e[1][0] / size[0])
 
+                        delta = int(not (i ^ j))
                         pos1 = x + l * (1 - delta)
                         pos2 = y + l * delta
 
                         if e[1][1]:
-                            bl = 0
+                            l = 0
                         else:
                             # The border edges are considered broken so that they become reflexive
                             if pos1 >= size[0] or pos1 < 0 or pos2 >= size[1] or pos2 < 0:
-                                bl = 0
-                            else:
-                                bl = l
+                                l = 0
 
-                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
-                            (x + bl * (1 - delta)) * size[1] + (y + bl * delta)
+                        m = ((i + l) * coin_size + (abs(j + l) % coin_size)) * size_xy + \
+                            (x + l * (1 - delta)) * size[1] + (y + l * delta)
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
                         yield m, n, 1

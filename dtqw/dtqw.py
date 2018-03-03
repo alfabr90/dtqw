@@ -262,7 +262,6 @@ class DiscreteTimeQuantumWalk:
                 for p in range(num_particles):
                     x.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
 
-                for p in range(num_particles):
                     if x[0] != x[p]:
                         return m, m, 1
 
@@ -288,7 +287,6 @@ class DiscreteTimeQuantumWalk:
                         )
                     )
 
-                for p in range(num_particles):
                     if xy[0][0] != xy[p][0] or xy[0][1] != xy[p][1]:
                         return m, m, 1
 
@@ -341,9 +339,9 @@ class DiscreteTimeQuantumWalk:
         where n is the number of particles of the system. In this case, each operator is built by
         applying a tensor product between the evolution operator and n-1 identity matrices as follows:
 
-            W1 = W (X) I2 (X) ... (X) In
+            W1 = W1 (X) I2 (X) ... (X) In
             Wi = I1 (X) ... (X) Ii-1 (X) Wi (X) Ii+1 (X) ... In
-            Wn = I1 (X) ... (X) In-1 (X) W
+            Wn = I1 (X) ... (X) In-1 (X) Wn
 
         Regardless the number of particles, the walk operators have their (i,j,value) coordinates converted to
         appropriate coordinates for multiplication, in this case, the CoordinateMultiplier.
@@ -438,8 +436,8 @@ class DiscreteTimeQuantumWalk:
                         #
                         # W1 = U (X) I2 (X) ... (X) In
                         rdd_shape = (
-                            shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
-                            shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
+                            shape_tmp[0] ** (self._num_particles - 1 - p),
+                            shape_tmp[1] ** (self._num_particles - 1 - p)
                         )
 
                         def __map(m):
@@ -461,8 +459,8 @@ class DiscreteTimeQuantumWalk:
                         #
                         # Wi = I1 (X) ... (X) Ii-1 (X) U ...
                         rdd_shape = (
-                            shape[0] * shape_tmp[0] ** (p - 1),
-                            shape[1] * shape_tmp[1] ** (p - 1)
+                            shape_tmp[0] ** p,
+                            shape_tmp[1] ** p
                         )
 
                         def __map(m):
@@ -485,14 +483,14 @@ class DiscreteTimeQuantumWalk:
                         # the pre-identity and evolution operators
                         #
                         # ... (X) Ii-1 (X) U
-                        if p < self._num_particles == 1:
+                        if p < self._num_particles - 1:
                             rdd_shape = (
-                                shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
-                                shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
+                                shape_tmp[0] ** (self._num_particles - 1 - p),
+                                shape_tmp[1] ** (self._num_particles - 1 - p)
                             )
 
                             def __map(m):
-                                for i in range(shape[0]):
+                                for i in range(rdd_shape[0]):
                                     yield m[0] * rdd_shape[0] + i, m[1] * rdd_shape[1] + i, m[2]
 
                             rdd = rdd.flatMap(
@@ -553,8 +551,8 @@ class DiscreteTimeQuantumWalk:
                         #
                         # W1 = U (X) I2 (X) ... (X) In
                         rdd_shape = (
-                            shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
-                            shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
+                            shape_tmp[0] ** (self._num_particles - 1 - p),
+                            shape_tmp[1] ** (self._num_particles - 1 - p)
                         )
 
                         def __map(m):
@@ -578,8 +576,8 @@ class DiscreteTimeQuantumWalk:
                         #
                         # Wi = I1 (X) ... (X) Ii-1 (X) U ...
                         rdd_shape = (
-                            shape[0] * shape_tmp[0] ** (p - 1),
-                            shape[1] * shape_tmp[1] ** (p - 1)
+                            shape_tmp[0] ** p,
+                            shape_tmp[1] ** p
                         )
 
                         def __map(m):
@@ -606,12 +604,12 @@ class DiscreteTimeQuantumWalk:
                         # ... (X) Ii-1 (X) U
                         if p < self._num_particles == 1:
                             rdd_shape = (
-                                shape[0] * shape_tmp[0] ** (self._num_particles - 2 - p),
-                                shape[1] * shape_tmp[1] ** (self._num_particles - 2 - p)
+                                shape_tmp[0] ** (self._num_particles - 1 - p),
+                                shape_tmp[1] ** (self._num_particles - 1 - p)
                             )
 
                             def __map(m):
-                                for i in range(shape[0]):
+                                for i in range(rdd_shape[0]):
                                     yield m[0] * rdd_shape[0] + i, m[1] * rdd_shape[1] + i, m[2]
 
                             rdd = rdd.flatMap(

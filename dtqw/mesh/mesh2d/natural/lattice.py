@@ -109,22 +109,20 @@ class LatticeNatural(Natural):
                         # Finding the correspondent x,y coordinates of the vertex from the edge number
                         if e[1][0] >= size[0] * size[1]:
                             j = i
-                            delta = int(not (i ^ j))
                             x = int((e[1][0] - size[0] * size[1]) / size[0])
                             y = ((e[1][0] - size[0] * size[1]) % size[1] - i - l) % size[1]
                         else:
                             j = int(not i)
-                            delta = int(not (i ^ j))
                             x = (e[1][0] % size[0] - i - l) % size[0]
                             y = int(e[1][0] / size[0])
 
                         if e[1][1]:
-                            bl = 0
-                        else:
-                            bl = l
+                            l = 0
 
-                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
-                            ((x + bl * (1 - delta)) % size[0]) * size[1] + (y + bl * delta) % size[1]
+                        delta = int(not (i ^ j))
+
+                        m = ((i + l) * coin_size + (abs(j + l) % coin_size)) * size_xy + \
+                            ((x + l * (1 - delta)) % size[0]) * size[1] + (y + l * delta) % size[1]
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
                         yield m, n, 1
@@ -147,22 +145,20 @@ class LatticeNatural(Natural):
                         # Finding the correspondent x,y coordinates of the vertex from the edge number
                         if e >= size[0] * size[1]:
                             j = i
-                            delta = int(not (i ^ j))
                             x = int((e - size[0] * size[1]) / size[0])
                             y = ((e - size[0] * size[1]) % size[1] - i - l) % size[1]
                         else:
                             j = int(not i)
-                            delta = int(not (i ^ j))
                             x = (e % size[0] - i - l) % size[0]
                             y = int(e / size[0])
 
-                        if e in broken_links.value:
-                            bl = 0
-                        else:
-                            bl = l
+                        delta = int(not (i ^ j))
 
-                        m = ((i + bl) * coin_size + (abs(j + bl) % coin_size)) * size_xy + \
-                            ((x + bl * (1 - delta)) % size[0]) * size[1] + (y + bl * delta) % size[1]
+                        if e in broken_links.value:
+                            l = 0
+
+                        m = ((i + l) * coin_size + (abs(j + l) % coin_size)) * size_xy + \
+                            ((x + l * (1 - delta)) % size[0]) * size[1] + (y + l * delta) % size[1]
                         n = ((1 - i) * coin_size + (1 - j)) * size_xy + x * size[1] + y
 
                         yield m, n, 1
