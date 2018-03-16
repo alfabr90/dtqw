@@ -205,21 +205,17 @@ class State(Base):
                 xy = []
 
                 for p in range(num_particles):
-                    xy.append(
-                        (
-                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
-                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p))) % size_y
-                        )
-                    )
+                    xy.append(int(m[0] / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x)
+                    xy.append(int(m[0] / (cs_size_xy ** (num_particles - 1 - p))) % size_y)
 
                 return tuple(xy), (abs(m[1]) ** 2).real
 
             def __unmap(m):
                 xy = []
 
-                for p in range(num_particles):
-                    xy.append(m[0][p][0])
-                    xy.append(m[0][p][1])
+                for p in range(0, ind, ndim):
+                    xy.append(m[0][p])
+                    xy.append(m[0][p + 1])
 
                 xy.append(m[1])
 
@@ -248,7 +244,7 @@ class State(Base):
 
         round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
 
-        if round(pdf.sum(), round_precision) != 1.0:
+        if round(pdf.sum_values(), round_precision) != 1.0:
             if self._logger:
                 self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")
@@ -415,12 +411,8 @@ class State(Base):
             shape = (size, 1)
 
             def __map(m):
-                x = []
-
-                for p in range(num_particles):
-                    x.append(int(m[0] / (cs_size ** (num_particles - 1 - p))) % size)
-
-                return x[particle], (abs(m[1]) ** 2).real
+                x = int(m[0] / (cs_size ** (num_particles - 1 - particle))) % size
+                return x, (abs(m[1]) ** 2).real
 
             def __unmap(m):
                 return m
@@ -434,17 +426,11 @@ class State(Base):
             shape = (size_x, size_y)
 
             def __map(m):
-                xy = []
-
-                for p in range(num_particles):
-                    xy.append(
-                        (
-                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
-                            int(m[0] / (cs_size_xy ** (num_particles - 1 - p))) % size_y
-                        )
-                    )
-
-                return xy[particle], (abs(m[1]) ** 2).real
+                xy = (
+                    int(m[0] / (cs_size_xy ** (num_particles - 1 - particle) * size_y)) % size_x,
+                    int(m[0] / (cs_size_xy ** (num_particles - 1 - particle))) % size_y
+                )
+                return xy, (abs(m[1]) ** 2).real
 
             def __unmap(m):
                 return m[0][0], m[0][1], m[1]
@@ -472,7 +458,7 @@ class State(Base):
 
         round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
 
-        if round(pdf.sum(), round_precision) != 1.0:
+        if round(pdf.sum_values(), round_precision) != 1.0:
             if self._logger:
                 self._logger.error("PDFs must sum one")
             raise ValueError("PDFs must sum one")

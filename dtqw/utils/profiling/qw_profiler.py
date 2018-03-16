@@ -90,6 +90,8 @@ class QWProfiler(Profiler):
                     self._operators[name][-1][k] = v
 
         self._operators[name][-1]['buildingTime'] = time
+        self._operators[name][-1]['numElements'] = operator.num_elements
+        self._operators[name][-1]['numNonzeroElements'] = operator.num_nonzero_elements
 
         return self._operators[name][-1]
 

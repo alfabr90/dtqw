@@ -41,7 +41,7 @@ class PDF(Base):
     def mesh(self):
         return self._mesh
 
-    def sum(self):
+    def sum_values(self):
         """
         Sum the values of this PDF.
 
@@ -90,6 +90,135 @@ class PDF(Base):
         """
         raise NotImplementedError
 
+    # def sum(self, other):
+    #     if not is_pdf(other):
+    #         if self._logger:
+    #             self._logger.error('PDF instance expected, not "{}"'.format(type(other)))
+    #         raise TypeError('PDF instance expected, not "{}"'.format(type(other)))
+    #
+    #     if len(self._shape) != len(other.shape):
+    #         if self._logger:
+    #             self._logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
+    #         raise ValueError('incompatible shapes {} and {}'.format(self._shape, other.shape))
+    #
+    #     for i in len(self._shape):
+    #         if self._shape[i] != other.shape[i]:
+    #             if self._logger:
+    #                 self._logger.error("incompatible shapes {} and {}".format(self._shape, other.shape))
+    #             raise ValueError('incompatible shapes {} and {}'.format(self._shape, other.shape))
+    #
+    #     shape = self._shape
+    #     num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
+    #
+    #     num_particles = self._num_particles
+    #
+    #     if self._mesh.is_1d():
+    #         def __map(m):
+    #             x = []
+    #
+    #             for p in range(num_particles):
+    #                 x.append(m[p])
+    #
+    #             return tuple(x), m[num_particles]
+    #
+    #         def __unmap(m):
+    #             a = []
+    #
+    #             for p in range(num_particles):
+    #                 a.append(m[0][p])
+    #
+    #             a.append(m[1])
+    #
+    #             return tuple(a)
+    #     elif self._mesh.is_2d():
+    #         ndim = 2
+    #         ind = ndim * num_particles
+    #
+    #         def __map(m):
+    #             xy = []
+    #
+    #             for p in range(0, ind, ndim):
+    #                 xy.append(m[p])
+    #
+    #             return tuple(x), m[num_particles]
+    #
+    #         def __unmap(m):
+    #             a = []
+    #
+    #             for p in range(0, ind, ndim):
+    #                 a.append(m[0][p])
+    #                 a.append(m[0][p + 1])
+    #
+    #             a.append(m[1])
+    #
+    #             return tuple(a)
+    #     else:
+    #         if self._logger:
+    #             self._logger.error("mesh dimension not implemented")
+    #         raise NotImplementedError("mesh dimension not implemented")
+    #
+    #     rdd = self.data.union(
+    #         other.data
+    #     ).map(
+    #         __map
+    #     ).reduceByKey(
+    #         lambda a, b: a + b, numPartitions=num_partitions
+    #     ).map(
+    #         __unmap
+    #     )
+    #
+    #     return PDF(rdd, shape, self._mesh, self._num_particles)
+
+    def max(self):
+        """
+        Find the minimum value of this probability distribution.
+
+        Returns
+        ------
+        float
+
+        """
+        if self._mesh.is_1d():
+            ind = 1
+        elif self._mesh.is_2d():
+            ind = 2
+        else:
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
+
+        def __map(m):
+            return m[ind]
+
+        return self.data.map(
+            __map
+        ).max()
+
+    def min(self):
+        """
+        Find the minimum value of this probability distribution.
+
+        Returns
+        ------
+        float
+
+        """
+        if self._mesh.is_1d():
+            ind = 1
+        elif self._mesh.is_2d():
+            ind = 2
+        else:
+            if self._logger:
+                self._logger.error("mesh dimension not implemented")
+            raise NotImplementedError("mesh dimension not implemented")
+
+        def __map(m):
+            return m[ind]
+
+        return self.data.map(
+            __map
+        ).min()
+
     def plot(self, filename, title=None, labels=None, **kwargs):
         """
         Plot the probabilities over the mesh.
@@ -112,11 +241,6 @@ class PDF(Base):
         """
         if self._logger:
             self._logger.info("starting plot of probabilities...")
-
-        if len(self._shape) > 2:
-            if self._logger:
-                self._logger.warning('it is only possible to plot one and two-dimensional meshes')
-            return None
 
         t1 = datetime.now()
 
@@ -214,13 +338,13 @@ class PDF(Base):
         None
 
         """
-        if self._logger:
-            self._logger.info("starting contour plot of probabilities...")
-
-        if len(self._shape) > 2:
+        if not self._mesh.is_2d():
             if self._logger:
                 self._logger.warning('it is only possible to plot the contour function of two-dimensional meshes')
             return None
+
+        if self._logger:
+            self._logger.info("starting plot of probabilities...")
 
         t1 = datetime.now()
 
@@ -229,34 +353,33 @@ class PDF(Base):
 
         axis = self._mesh.axis()
 
-        if self._mesh.is_1d():
-            if self._logger:
-                self._logger.error("mesh dimension not implemented to contour plots")
-            raise NotImplementedError("mesh dimension not implemented to contour plots")
-        elif self._mesh.is_2d():
-            pdf = np.zeros(self._shape, dtype=float)
+        pdf = np.zeros(self._shape, dtype=float)
 
-            for i in self.data.collect():
-                pdf[i[0], i[1]] = i[2]
+        for i in self.data.collect():
+            pdf[i[0], i[1]] = i[2]
 
-            plt.contourf(axis[0], axis[1], pdf)
-            plt.colorbar()
+        if 'levels' not in kwargs:
+            max_level = pdf.max()
 
-            if labels:
-                plt.xlabel(labels[0])
-                plt.ylabel(labels[1])
-            else:
-                plt.xlabel('Position x')
-                plt.ylabel('Position y')
+            if not max_level:
+                max_level = 1
 
-            if title:
-                plt.title(title)
+            levels = np.linspace(0, max_level, 41)
 
-            # figure.set_size_inches(12.8, 12.8)
+        plt.contourf(axis[0], axis[1], pdf, levels=levels, **kwargs)
+        plt.colorbar()
+
+        if labels:
+            plt.xlabel(labels[0])
+            plt.ylabel(labels[1])
         else:
-            if self._logger:
-                self._logger.error("mesh dimension not implemented")
-            raise NotImplementedError("mesh dimension not implemented")
+            plt.xlabel('Position x')
+            plt.ylabel('Position y')
+
+        if title:
+            plt.title(title)
+
+        # figure.set_size_inches(12.8, 12.8)
 
         plt.savefig(filename, **kwargs)
         plt.cla()
