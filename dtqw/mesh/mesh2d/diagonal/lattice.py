@@ -42,7 +42,8 @@ class LatticeDiagonal(Diagonal):
     def axis(self):
         return np.meshgrid(
             range(- int((self._size[0] - 1) / 2), int((self._size[0] - 1) / 2) + 1),
-            range(- int((self._size[1] - 1) / 2), int((self._size[1] - 1) / 2) + 1)
+            range(- int((self._size[1] - 1) / 2), int((self._size[1] - 1) / 2) + 1),
+            indexing='ij'
         )
 
     def check_steps(self, steps):

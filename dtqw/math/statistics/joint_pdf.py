@@ -375,7 +375,8 @@ class JointPDF(PDF):
 
             axis = np.meshgrid(
                 range(- int((mesh_size - 1) / 2), int((mesh_size - 1) / 2) + 1),
-                range(- int((mesh_size - 1) / 2), int((mesh_size - 1) / 2) + 1)
+                range(- int((mesh_size - 1) / 2), int((mesh_size - 1) / 2) + 1),
+                indexing='ij'
             )
 
             pdf = np.zeros(self._shape, dtype=float)
@@ -402,8 +403,8 @@ class JointPDF(PDF):
                 axes.set_ylabel(labels[1])
                 axes.set_zlabel(labels[2])
             else:
-                axes.set_xlabel('Particle 2')
-                axes.set_ylabel('Particle 1')
+                axes.set_xlabel('Particle 1')
+                axes.set_ylabel('Particle 2')
                 axes.set_zlabel('Probability')
 
             if title:
@@ -470,7 +471,8 @@ class JointPDF(PDF):
 
             axis = np.meshgrid(
                 range(- int((mesh_size - 1) / 2), int((mesh_size - 1) / 2) + 1),
-                range(- int((mesh_size - 1) / 2), int((mesh_size - 1) / 2) + 1)
+                range(- int((mesh_size - 1) / 2), int((mesh_size - 1) / 2) + 1),
+                indexing='ij'
             )
 
             pdf = np.zeros(self._shape, dtype=float)
@@ -493,8 +495,8 @@ class JointPDF(PDF):
                 plt.xlabel(labels[0])
                 plt.ylabel(labels[1])
             else:
-                plt.xlabel('Particle 2')
-                plt.ylabel('Particle 1')
+                plt.xlabel('Particle 1')
+                plt.ylabel('Particle 2')
 
             if title:
                 plt.title(title)

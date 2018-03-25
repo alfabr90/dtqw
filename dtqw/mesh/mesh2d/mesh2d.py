@@ -57,7 +57,11 @@ class Mesh2D(Mesh):
         )
 
     def axis(self):
-        return np.meshgrid(range(self._size[0]), range(self._size[1]))
+        return np.meshgrid(
+            range(self._size[0]),
+            range(self._size[1]),
+            indexing='ij'
+        )
 
     def is_1d(self):
         """

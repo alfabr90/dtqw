@@ -849,7 +849,7 @@ class DiscreteTimeQuantumWalk:
                     if self._interaction_operator is not None:
                         result_tmp = self._interaction_operator.multiply(result_tmp)
 
-                    for wo in self._walk_operator:
+                    for wo in reversed(self._walk_operator):
                         result_tmp = wo.multiply(result_tmp)
 
                 if checkpoint_states == 'True':
