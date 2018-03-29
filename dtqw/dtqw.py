@@ -18,7 +18,7 @@ __all__ = ['DiscreteTimeQuantumWalk']
 class DiscreteTimeQuantumWalk:
     """Build the necessary operators and perform a discrete time quantum walk."""
 
-    def __init__(self, spark_context, coin, mesh, num_particles, num_partitions):
+    def __init__(self, spark_context, coin, mesh, num_particles, phase=None, num_partitions=None):
         """
         Build a discrete time quantum walk object
 
@@ -32,7 +32,9 @@ class DiscreteTimeQuantumWalk:
             A Mesh object.
         num_particles : int
             The number of particles present in the walk.
-        num_partitions : int
+        phase: float, optional
+            The collision phase of the particles.
+        num_partitions : int, optional
             The desired number of partitions for the RDD.
 
         """
@@ -41,6 +43,8 @@ class DiscreteTimeQuantumWalk:
         self._mesh = mesh
         self._num_particles = num_particles
         self._num_partitions = num_partitions
+
+        self._phase = phase
 
         self._coin_operator = None
         self._shift_operator = None
@@ -65,6 +69,10 @@ class DiscreteTimeQuantumWalk:
     @property
     def mesh(self):
         return self._mesh
+
+    @property
+    def phase(self):
+        return self._phase
 
     @property
     def coin_operator(self):
@@ -224,27 +232,34 @@ class DiscreteTimeQuantumWalk:
     def title(self):
         return "Quantum Walk with {} Particle(s) on a {}".format(self._num_particles, self._mesh.title())
 
-    def create_interaction_operator(self, phase,
-                                    coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_interaction_operator(self, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the particles' interaction operator for the walk.
 
         Parameters
         ----------
-        phase : float
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
             Default value is CoordinateDefault.
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
+        Raises
+        ------
+        ValueError
+
         """
+        if not self._phase:
+            if self._logger:
+                self._logger.error('No collision phase or a zeroed collision phase was informed')
+            raise ValueError('No collision phase or a zeroed collision phase was informed')
+
         if self._logger:
             self._logger.info("building interaction operator...")
 
         t1 = datetime.now()
 
-        phase = cmath.exp(phase * (0.0+1.0j))
+        phase = cmath.exp(self._phase * (0.0+1.0j))
         num_particles = self._num_particles
 
         coin_size = 2
@@ -714,7 +729,7 @@ class DiscreteTimeQuantumWalk:
         self.destroy_interaction_operator()
         self.destroy_walk_operator()
 
-    def walk(self, steps, initial_state, phase=None, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def walk(self, steps, initial_state, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Perform a walk
 
@@ -723,7 +738,6 @@ class DiscreteTimeQuantumWalk:
         steps : int
         initial_state : State
             The initial state of the system.
-        phase : float, optional
         storage_level : StorageLevel, optional
             The desired storage level when materializing the RDD.
 
@@ -749,12 +763,12 @@ class DiscreteTimeQuantumWalk:
             self._logger.info("number of partitions: {}".format(self._num_partitions))
 
             if self._num_particles > 1:
-                if phase is None:
+                if self._phase is None:
                     self._logger.info("no collision phase has been defined")
-                elif phase == 0.0:
+                elif self._phase == 0.0:
                     self._logger.info("a zeroed collision phase was defined. No interaction operator will be built")
                 else:
-                    self._logger.info("collision phase: {}".format(phase))
+                    self._logger.info("collision phase: {}".format(self._phase))
 
             if self._mesh.broken_links is None:
                 self._logger.info("no broken links has been defined")
@@ -806,10 +820,10 @@ class DiscreteTimeQuantumWalk:
                         self._logger.info("no walk operator has been set. A new one will be built")
                     self.create_walk_operator(coord_format=Utils.CoordinateMultiplier, storage_level=storage_level)
 
-            if self._num_particles > 1 and phase and self._interaction_operator is None:
+            if self._num_particles > 1 and self._phase and self._interaction_operator is None:
                 if self._logger:
                     self._logger.info("no interaction operator has been set. A new one will be built")
-                self.create_interaction_operator(phase, coord_format=Utils.CoordinateMultiplier, storage_level=storage_level)
+                self.create_interaction_operator(coord_format=Utils.CoordinateMultiplier, storage_level=storage_level)
 
             t1 = datetime.now()
 

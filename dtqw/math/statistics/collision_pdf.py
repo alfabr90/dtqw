@@ -117,7 +117,7 @@ class CollisionPDF(PDF):
         )
 
         return CollisionPDF(
-            self._spark_context, rdd, self._shape, self._mesh, self._num_particles
+            rdd, self._shape, self._mesh, self._num_particles
         ).materialize(storage_level)
 
     # def sum(self, other):
