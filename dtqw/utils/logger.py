@@ -39,7 +39,7 @@ class Logger:
         """Set the severity level for log writes."""
         self._level = level
 
-    def __write_message(self, level, name, message):
+    def _write_message(self, level, name, message):
         with open(self._filename, 'a') as f:
             f.write("{}:{}:{}\n".format(level, name, message))
 
@@ -56,22 +56,22 @@ class Logger:
     def debug(self, message):
         """Write the message in the log file with debug level."""
         if self._level <= logging.DEBUG:
-            self.__write_message('DEBUG', self._name, message)
+            self._write_message('DEBUG', self._name, message)
 
     def info(self, message):
         """Write the message in the log file with info level."""
         if self._level <= logging.INFO:
-            self.__write_message('INFO', self._name, message)
+            self._write_message('INFO', self._name, message)
 
     def warning(self, message):
         """Write the message in the log file with warning level."""
         if self._level <= logging.WARNING:
-            self.__write_message('WARNING', self._name, message)
+            self._write_message('WARNING', self._name, message)
 
     def error(self, message):
         """Write the message in the log file with error level."""
         if self._level <= logging.ERROR:
-            self.__write_message('ERROR', self._name, message)
+            self._write_message('ERROR', self._name, message)
 
 
 def is_logger(obj):
