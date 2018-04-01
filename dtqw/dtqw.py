@@ -272,15 +272,17 @@ class DiscreteTimeQuantumWalk:
             shape = (rdd_range, rdd_range)
 
             def __map(m):
-                x = []
+                p = 0
 
-                for p in range(num_particles):
-                    x.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
+                x = x_prev = int(m / (cs_size ** (num_particles - 1 - p))) % size
 
-                    if x[0] != x[p]:
-                        return m, m, 1
+                for p in range(1, num_particles, 1):
+                    x = int(m / (cs_size ** (num_particles - 1 - p))) % size
 
-                return m, m, phase
+                    if x == x_prev:
+                        return m, m, phase
+
+                return m, m, 1
         elif self._mesh.is_2d():
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
@@ -292,20 +294,23 @@ class DiscreteTimeQuantumWalk:
             shape = (rdd_range, rdd_range)
 
             def __map(m):
-                xy = []
+                p = 0
 
-                for p in range(num_particles):
-                    xy.append(
-                        (
-                            int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
-                            int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
-                        )
+                xy = xy_prev = (
+                    int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
+                    int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
+                )
+
+                for p in range(1, num_particles, 1):
+                    xy = (
+                        int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
+                        int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
                     )
 
-                    if xy[0][0] != xy[p][0] or xy[0][1] != xy[p][1]:
-                        return m, m, 1
+                    if xy[0] == xy_prev[0] and xy[1] == xy_prev[1]:
+                        return m, m, phase
 
-                return m, m, phase
+                return m, m, 1
         else:
             if self._logger:
                 self._logger.error("mesh dimension not implemented")
@@ -457,8 +462,6 @@ class DiscreteTimeQuantumWalk:
                     if self._logger:
                         self._logger.debug("building walk operator for particle {}...".format(p + 1))
 
-                    shape = shape_tmp
-
                     if p == 0:
                         # The first particle's walk operator consists in applying the tensor product between the
                         # evolution operator and the other particles' corresponding identity matrices
@@ -526,7 +529,7 @@ class DiscreteTimeQuantumWalk:
                                 __map
                             )
 
-                            shape = (rdd_shape[0] * shape_tmp[0], rdd_shape[1] * shape_tmp[1])
+                            shape = (rdd_shape[0] * shape[0], rdd_shape[1] * shape[1])
 
                     if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
                         rdd = Utils.changeCoordinate(
