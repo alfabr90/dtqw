@@ -358,6 +358,9 @@ class DiscreteTimeQuantumWalk:
                     )
                 )
 
+            if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                self._profiler.log_executors(app_id=app_id)
+
     def create_walk_operator(self, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the walk operator for the walk.
@@ -391,12 +394,21 @@ class DiscreteTimeQuantumWalk:
                 self._mesh, self._num_partitions, coord_format=Utils.CoordinateMultiplicand, storage_level=storage_level
             )
 
+            if self._profiler:
+                if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                    self._profiler.log_executors(app_id=app_id)
+
+
         if self._shift_operator is None:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
             self._shift_operator = self._mesh.create_operator(
                 self._num_partitions, coord_format=Utils.CoordinateMultiplier, storage_level=storage_level
             )
+
+            if self._profiler:
+                if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                    self._profiler.log_executors(app_id=app_id)
 
         if self._num_particles == 1:
             if self._logger:
@@ -434,6 +446,9 @@ class DiscreteTimeQuantumWalk:
                             info['memoryUsed'], info['diskUsed']
                         )
                     )
+
+                if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                    self._profiler.log_executors(app_id=app_id)
         else:
             if self._logger:
                 self._logger.info("building walk operator...")
@@ -446,6 +461,9 @@ class DiscreteTimeQuantumWalk:
 
             self._coin_operator.unpersist()
             self._shift_operator.unpersist()
+
+            if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                self._profiler.log_executors(app_id=app_id)
 
             shape = evolution_operator.shape
             shape_tmp = shape
@@ -568,6 +586,9 @@ class DiscreteTimeQuantumWalk:
                                 )
                             )
 
+                        if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                            self._profiler.log_executors(app_id=app_id)
+
                 eo.unpersist()
             elif kron_mode == 'dump':
                 path = Utils.getTempPath(
@@ -686,6 +707,9 @@ class DiscreteTimeQuantumWalk:
                                     p + 1, info['memoryUsed'], info['diskUsed']
                                 )
                             )
+
+                        if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                            self._profiler.log_executors(app_id=app_id)
 
                 evolution_operator.unpersist()
                 Utils.removePath(path)
@@ -925,5 +949,8 @@ class DiscreteTimeQuantumWalk:
                         info['memoryUsed'], info['diskUsed']
                     )
                 )
+
+            if Utils.getConf(self._spark_context, 'dtqw.profiler.logExecutors', default='False') == 'True':
+                self._profiler.log_executors(app_id=app_id)
 
         return result
