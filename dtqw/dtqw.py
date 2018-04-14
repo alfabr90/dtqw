@@ -431,7 +431,6 @@ class DiscreteTimeQuantumWalk:
 
             self._walk_operator = eo.materialize(storage_level)
 
-            evolution_operator.unpersist()
             self._coin_operator.unpersist()
             self._shift_operator.unpersist()
 
