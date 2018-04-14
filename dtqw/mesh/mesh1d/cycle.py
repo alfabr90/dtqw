@@ -42,15 +42,12 @@ class Cycle(Mesh1D):
         """
         return True
 
-    def create_operator(self, num_partitions,
-                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the shift operator for the walk.
 
         Parameters
         ----------
-        num_partitions : int
-            The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
             Default value is Utils.CoordinateDefault.
@@ -141,11 +138,18 @@ class Cycle(Mesh1D):
         if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
             rdd = Utils.changeCoordinate(
                 rdd, Utils.CoordinateDefault, new_coord=coord_format
-            ).partitionBy(
-                numPartitions=num_partitions
             )
 
-        operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
+            expected_elems = coin_size * size
+            expected_size = Utils.getSizeOfType(int) * expected_elems
+            num_partitions = Utils.getNumPartitions(self._spark_context, expected_elems)
+
+            if num_partitions:
+                rdd = rdd.partitionBy(
+                    numPartitions=num_partitions
+                )
+
+        operator = Operator(rdd, shape, data_type=int, coord_format=coord_format).materialize(storage_level)
 
         if self._broken_links:
             broken_links.unpersist()

@@ -72,7 +72,10 @@ class State(Base):
 
         other_shape = other.shape
         new_shape = (self._shape[0] * other_shape[0], 1)
-        num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
+
+        expected_elems = new_shape[0]
+        expected_size = Utils.getSizeOfType(complex) * expected_elems
+        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
 
         rdd = self.data.map(
             lambda m: (0, m)
@@ -159,6 +162,7 @@ class State(Base):
             num_particles = self._num_particles
             ind = ndim * num_particles
             size = self._mesh.size
+            expected_elems = size
             cs_size = coin_size * size
             dims = [size for p in range(ind)]
 
@@ -196,6 +200,7 @@ class State(Base):
 
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
+            expected_elems = size_x * size_y
             cs_size_x = coin_size * size_x
             cs_size_y = coin_size * size_y
             cs_size_xy = cs_size_x * cs_size_y
@@ -225,6 +230,9 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        expected_size = Utils.getSizeOfType(float) * expected_elems
+        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+
         data_type = self._data_type()
 
         rdd = self.data.filter(
@@ -232,7 +240,7 @@ class State(Base):
         ).map(
             __map
         ).reduceByKey(
-            lambda a, b: a + b, numPartitions=self.data.getNumPartitions()
+            lambda a, b: a + b, numPartitions=num_partitions
         ).map(
             __unmap
         )
@@ -311,6 +319,7 @@ class State(Base):
             num_particles = self._num_particles
             ind = ndim * num_particles
             size = self._mesh.size
+            expected_elems = size
             shape = (size, 1)
 
             def __filter(m):
@@ -327,6 +336,7 @@ class State(Base):
             ind = ndim * num_particles
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
+            expected_elems = size_x * size_y
             shape = (size_x, size_y)
 
             def __filter(m):
@@ -342,10 +352,15 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        expected_size = Utils.getSizeOfType(float) * expected_elems
+        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+
         rdd = full_measurement.data.filter(
             __filter
         ).map(
             __map
+        ).coalesce(
+            num_partitions
         )
 
         pdf = CollisionPDF(rdd, shape, self._mesh, self._num_particles).materialize(storage_level)
@@ -407,6 +422,7 @@ class State(Base):
         if self._mesh.is_1d():
             num_particles = self._num_particles
             size = self._mesh.size
+            expected_elems = size
             cs_size = coin_size * size
             shape = (size, 1)
 
@@ -420,6 +436,7 @@ class State(Base):
             num_particles = self._num_particles
             size_x = self._mesh.size[0]
             size_y = self._mesh.size[1]
+            expected_elems = size_x * size_y
             cs_size_x = coin_size * size_x
             cs_size_y = coin_size * size_y
             cs_size_xy = cs_size_x * cs_size_y
@@ -439,6 +456,9 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
+        expected_size = Utils.getSizeOfType(float) * expected_elems
+        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+
         data_type = self._data_type()
 
         rdd = self.data.filter(
@@ -446,7 +466,7 @@ class State(Base):
         ).map(
             __map
         ).reduceByKey(
-            lambda a, b: a + b, numPartitions=self.data.getNumPartitions()
+            lambda a, b: a + b, numPartitions=num_partitions
         ).map(
             __unmap
         )

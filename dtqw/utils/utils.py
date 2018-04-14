@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import tempfile as tf
 
 __all__ = ['Utils']
@@ -81,8 +82,8 @@ class Utils():
                 return rdd
 
     @staticmethod
-    def filename(mesh_filename, steps, num_particles, num_partitions):
-        return "{}_{}_{}_{}".format(mesh_filename, steps, num_particles, num_partitions)
+    def filename(mesh_filename, steps, num_particles):
+        return "{}_{}_{}".format(mesh_filename, steps, num_particles)
 
     @staticmethod
     def getPrecendentType(type1, type2):
@@ -97,6 +98,23 @@ class Utils():
     @staticmethod
     def getSizeOfType(data_type):
         return sys.getsizeof(data_type())
+
+    @staticmethod
+    def getNumPartitions(spark_context, expected_size):
+        safety_factor = 1.3
+        num_partitions = None
+
+        if Utils.getConf(spark_context, 'dtqw.useSparkDefaultPartitions', default='False') == 'False':
+            num_cores = Utils.getConf(spark_context, 'dtqw.cluster.totalCores', default=None)
+
+            if not num_cores:
+                raise ValueError("Invalid number of total cores in the cluster: {}".format(num_cores))
+
+            num_cores = int(num_cores)
+            max_partition_size = int(Utils.getConf(spark_context, 'dtqw.cluster.maxPartitionSize', default=48 * 10 ** 6))
+            num_partitions = math.ceil(safety_factor * expected_size / max_partition_size / num_cores) * num_cores
+
+        return num_partitions
 
     @staticmethod
     def createDir(path):

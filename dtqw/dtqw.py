@@ -18,7 +18,7 @@ __all__ = ['DiscreteTimeQuantumWalk']
 class DiscreteTimeQuantumWalk:
     """Build the necessary operators and perform a discrete time quantum walk."""
 
-    def __init__(self, spark_context, coin, mesh, num_particles, phase=None, num_partitions=None):
+    def __init__(self, spark_context, coin, mesh, num_particles, phase=None):
         """
         Build a discrete time quantum walk object
 
@@ -34,15 +34,12 @@ class DiscreteTimeQuantumWalk:
             The number of particles present in the walk.
         phase: float, optional
             The collision phase of the particles.
-        num_partitions : int, optional
-            The desired number of partitions for the RDD.
 
         """
         self._spark_context = spark_context
         self._coin = coin
         self._mesh = mesh
         self._num_particles = num_particles
-        self._num_partitions = num_partitions
 
         self._phase = phase
 
@@ -325,9 +322,16 @@ class DiscreteTimeQuantumWalk:
         if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
             rdd = Utils.changeCoordinate(
                 rdd, Utils.CoordinateDefault, new_coord=coord_format
-            ).partitionBy(
-                numPartitions=self._num_partitions
             )
+
+            expected_elems = rdd_range
+            expected_size = Utils.getSizeOfType(complex) * expected_elems
+            num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
+
+            if num_partitions:
+                rdd = rdd.partitionBy(
+                    numPartitions=num_partitions
+                )
 
         io = Operator(
             rdd, shape, coord_format=coord_format
@@ -391,7 +395,7 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("no coin operator has been set. A new one will be built")
             self._coin_operator = self._coin.create_operator(
-                self._mesh, self._num_partitions, coord_format=Utils.CoordinateMultiplicand, storage_level=storage_level
+                self._mesh, coord_format=Utils.CoordinateMultiplicand, storage_level=storage_level
             )
 
             if self._profiler:
@@ -403,7 +407,7 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.info("no shift operator has been set. A new one will be built")
             self._shift_operator = self._mesh.create_operator(
-                self._num_partitions, coord_format=Utils.CoordinateMultiplier, storage_level=storage_level
+                coord_format=Utils.CoordinateMultiplier, storage_level=storage_level
             )
 
             if self._profiler:
@@ -552,9 +556,16 @@ class DiscreteTimeQuantumWalk:
                     if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
                         rdd = Utils.changeCoordinate(
                             rdd, Utils.CoordinateDefault, new_coord=coord_format
-                        ).partitionBy(
-                            numPartitions=self._num_partitions
                         )
+
+                        expected_elems = evolution_operator.num_nonzero_elements * evolution_operator.shape[0] ** (self._num_particles - 1)
+                        expected_size = Utils.getSizeOfType(complex) * expected_elems
+                        num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
+
+                        if num_partitions:
+                            rdd = rdd.partitionBy(
+                                numPartitions=num_partitions
+                            )
 
                     wo = Operator(
                         rdd, shape, coord_format=coord_format
@@ -679,9 +690,16 @@ class DiscreteTimeQuantumWalk:
                     if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
                         rdd = Utils.changeCoordinate(
                             rdd, Utils.CoordinateDefault, new_coord=coord_format
-                        ).partitionBy(
-                            numPartitions=self._num_partitions
                         )
+
+                        expected_elems = evolution_operator.num_nonzero_elements * evolution_operator.shape[0] ** (self._num_particles - 1)
+                        expected_size = Utils.getSizeOfType(complex) * expected_elems
+                        num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
+
+                        if num_partitions:
+                            rdd = rdd.partitionBy(
+                                numPartitions=num_partitions
+                            )
 
                     self._walk_operator.append(
                         Operator(
@@ -787,7 +805,6 @@ class DiscreteTimeQuantumWalk:
             self._logger.info("steps: {}".format(steps))
             self._logger.info("space size: {}".format(self._mesh.size))
             self._logger.info("number of particles: {}".format(self._num_particles))
-            self._logger.info("number of partitions: {}".format(self._num_partitions))
 
             if self._num_particles > 1:
                 if self._phase is None:
@@ -801,17 +818,6 @@ class DiscreteTimeQuantumWalk:
                 self._logger.info("no broken links has been defined")
             else:
                 self._logger.info("broken links probability: {}".format(self._mesh.broken_links.probability))
-
-        # Partitioning the initial state of the system in order to reduce some shuffling operations
-        '''rdd = initial_state.data.partitionBy(
-            numPartitions=self._num_partitions
-        )
-
-        result = State(
-            self._spark_context, rdd, initial_state.shape, self._mesh, self._num_particles
-        ).materialize(storage_level)
-
-        initial_state.unpersist()'''
 
         result = initial_state.materialize(storage_level)
 

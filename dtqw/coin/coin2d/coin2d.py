@@ -49,8 +49,7 @@ class Coin2D(Coin):
         """
         return True
 
-    def create_operator(self, mesh, num_partitions,
-                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, mesh, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the coin operator for the walk.
 
@@ -58,8 +57,6 @@ class Coin2D(Coin):
         ----------
         mesh : Mesh
             A Mesh instance.
-        num_partitions : int
-            The desired number of partitions for the RDD.
         coord_format : bool, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
             Default value is Utils.CoordinateDefault.
@@ -106,9 +103,16 @@ class Coin2D(Coin):
         if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
             rdd = Utils.changeCoordinate(
                 rdd, Utils.CoordinateDefault, new_coord=coord_format
-            ).partitionBy(
-                numPartitions=num_partitions
             )
+
+            expected_elems = len(self._data) * mesh_size
+            expected_size = Utils.getSizeOfType(complex) * expected_elems
+            num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
+
+            if num_partitions:
+                rdd = rdd.partitionBy(
+                    numPartitions=num_partitions
+                )
 
         operator = Operator(rdd, shape, coord_format=coord_format).materialize(storage_level)
 
