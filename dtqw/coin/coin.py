@@ -132,8 +132,7 @@ class Coin:
         """
         raise NotImplementedError
 
-    def create_operator(self, mesh, num_partitions,
-                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, mesh, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the coin operator.
 
