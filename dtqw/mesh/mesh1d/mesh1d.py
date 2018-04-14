@@ -101,15 +101,12 @@ class Mesh1D(Mesh):
         """
         raise NotImplementedError
 
-    def create_operator(self, num_partitions,
-                        coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
+    def create_operator(self, coord_format=Utils.CoordinateDefault, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Build the mesh operator.
 
         Parameters
         ----------
-        num_partitions : int
-            The desired number of partitions for the RDD.
         coord_format : int, optional
             Indicate if the operator must be returned in an apropriate format for multiplications.
             Default value is Utils.CoordinateDefault.
