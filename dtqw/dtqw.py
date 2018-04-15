@@ -48,6 +48,8 @@ class DiscreteTimeQuantumWalk:
         self._interaction_operator = None
         self._walk_operator = None
 
+        self._num_partitions = None
+
         if num_particles < 1:
             # self._logger.error("Invalid number of particles")
             raise ValueError("invalid number of particles")
@@ -324,9 +326,16 @@ class DiscreteTimeQuantumWalk:
                 rdd, Utils.CoordinateDefault, new_coord=coord_format
             )
 
-            expected_elems = rdd_range
-            expected_size = Utils.getSizeOfType(complex) * expected_elems
-            num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
+            # The walk operators must be guaranteed to be previously built
+            # in order to the number of partitions be already known.
+            # Using the same number of partitions is important to avoid shuffle
+            # when multiplying the state by the operators.
+            num_partitions = self._num_partitions
+
+            if not num_partitions:
+                expected_elems = rdd_range
+                expected_size = Utils.getSizeOfType(complex) * expected_elems
+                num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
 
             if num_partitions:
                 rdd = rdd.partitionBy(
@@ -337,9 +346,7 @@ class DiscreteTimeQuantumWalk:
             rdd, shape, coord_format=coord_format
         ).persist(storage_level)
 
-        checkpoint_op = Utils.getConf(self._spark_context, 'dtqw.interactionOperator.checkpoint', default='False')
-
-        if checkpoint_op == 'True':
+        if Utils.getConf(self._spark_context, 'dtqw.interactionOperator.checkpoint', default='False') == 'True':
             io = io.checkpoint()
 
         self._interaction_operator = io.materialize(storage_level)
@@ -424,9 +431,7 @@ class DiscreteTimeQuantumWalk:
 
             eo = evolution_operator.persist(storage_level)
 
-            checkpoint_op = Utils.getConf(self._spark_context, 'dtqw.walkOperator.checkpoint', default='False')
-
-            if checkpoint_op == 'True':
+            if Utils.getConf(self._spark_context, 'dtqw.walkOperator.checkpoint', default='False') == 'True':
                 eo = eo.checkpoint()
 
             self._walk_operator = eo.materialize(storage_level)
@@ -567,13 +572,13 @@ class DiscreteTimeQuantumWalk:
                                 numPartitions=num_partitions
                             )
 
+                        self._num_partitions = num_partitions
+
                     wo = Operator(
                         rdd, shape, coord_format=coord_format
                     ).persist(storage_level)
 
-                    checkpoint_op = Utils.getConf(self._spark_context, 'dtqw.walkOperator.checkpoint', default='False')
-
-                    if checkpoint_op == 'True':
+                    if Utils.getConf(self._spark_context, 'dtqw.walkOperator.checkpoint', default='False') == 'True':
                         wo = wo.checkpoint()
 
                     self._walk_operator.append(wo.materialize(storage_level))
@@ -701,11 +706,16 @@ class DiscreteTimeQuantumWalk:
                                 numPartitions=num_partitions
                             )
 
-                    self._walk_operator.append(
-                        Operator(
-                            rdd, shape, coord_format=coord_format
-                        ).persist(storage_level).checkpoint().materialize(storage_level)
-                    )
+                        self._num_partitions = num_partitions
+
+                    wo = Operator(
+                        rdd, shape, coord_format=coord_format
+                    ).persist(storage_level)
+
+                    if Utils.getConf(self._spark_context, 'dtqw.walkOperator.checkpoint', default='False') == 'True':
+                        wo = wo.checkpoint()
+
+                    self._walk_operator.append(wo.materialize(storage_level))
 
                     if self._profiler:
                         self._profiler.profile_resources(app_id)
@@ -899,6 +909,17 @@ class DiscreteTimeQuantumWalk:
                     for wo in reversed(self._walk_operator):
                         result_tmp = wo.multiply(result_tmp)
 
+                # In the last step, the resulting state is not materialized
+                # because it will be repartitioned to a more appropriate
+                # number of partitions and have a partitioner defined.
+                if i == steps:
+                    expected_elems = result_tmp.shape[0]
+                    expected_size = Utils.getSizeOfType(result_tmp.data_type) * expected_elems
+                    num_partitions = Utils.getNumPartitions(self._spark_context, expected_elems)
+
+                    if num_partitions:
+                        result_tmp.define_partitioner(num_partitions)
+
                 if checkpoint_states == 'True':
                     if i % checkpoint_frequency == 0:
                         result_tmp.persist(storage_level).checkpoint()
@@ -942,13 +963,6 @@ class DiscreteTimeQuantumWalk:
 
             if self._logger:
                 self._logger.debug("unitarity check was done in {}s".format((datetime.now() - t1).total_seconds()))
-
-        expected_elems = result.shape[0]
-        expected_size = Utils.getSizeOfType(result.data_type) * expected_elems
-        num_partitions = Utils.getNumPartitions(self._spark_context, expected_elems)
-
-        if num_partitions:
-            result.repartition(num_partitions)
 
         if self._profiler:
             self._profiler.profile_resources(app_id)

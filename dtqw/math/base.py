@@ -157,6 +157,27 @@ class Base:
 
         return self
 
+    def define_partitioner(self, num_partitions):
+        """
+        Define a partitioner with the chosen number of partitions for this object's RDD.
+
+        Parameters
+        ----------
+        num_partitions : int
+            The target number of partitions of the RDD.
+
+        Returns
+        -------
+        :obj
+            A reference to this object.
+
+        """
+        self.data = self.data.partitionBy(
+            numPartitions=num_partitions
+        )
+
+        return self
+
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Persist this object's RDD considering the chosen storage level.
