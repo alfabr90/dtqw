@@ -943,6 +943,13 @@ class DiscreteTimeQuantumWalk:
             if self._logger:
                 self._logger.debug("unitarity check was done in {}s".format((datetime.now() - t1).total_seconds()))
 
+        expected_elems = result.shape[0]
+        expected_size = Utils.getSizeOfType(result.data_type) * expected_elems
+        num_partitions = Utils.getNumPartitions(self._spark_context, expected_elems)
+
+        if num_partitions:
+            result.repartition(num_partitions)
+
         if self._profiler:
             self._profiler.profile_resources(app_id)
             self._profiler.profile_executors(app_id)

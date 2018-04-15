@@ -203,7 +203,7 @@ class Operator(Base):
         num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
 
         rdd = self.data.join(
-            other.data  # , numPartitions=num_partitions
+            other.data, numPartitions=num_partitions
         ).map(
             lambda m: ((m[1][0][0], m[1][1][0]), m[1][0][1] * m[1][1][1])
         ).reduceByKey(
@@ -237,16 +237,12 @@ class Operator(Base):
 
         shape = other.shape
 
-        expected_elems = len(other.shape)
-        expected_size = Utils.getSizeOfType(other.data_type) * expected_elems
-        num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
-
         rdd = self.data.join(
-            other.data  # , numPartitions=self.data.getNumPartitions()
+            other.data, numPartitions=self.data.getNumPartitions()
         ).map(
             lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
         ).reduceByKey(
-            lambda a, b: a + b, numPartitions=num_partitions
+            lambda a, b: a + b, numPartitions=self.data.getNumPartitions()
         )
 
         return State(rdd, shape, other.mesh, other.num_particles)

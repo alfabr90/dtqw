@@ -135,6 +135,28 @@ class Base:
         """
         return 1.0 - self.num_nonzero_elements / self._num_elements
 
+    def repartition(self, num_partitions):
+        """
+        Changes the number of partitions of this object's RDD.
+
+        Parameters
+        ----------
+        num_partitions : int
+            The target number of partitions of the RDD.
+
+        Returns
+        -------
+        :obj
+            A reference to this object.
+
+        """
+        if num_partitions > self.data.getNumPartitions():
+            self.data = self.data.repartition(num_partitions)
+        elif num_partitions < self.data.getNumPartitions():
+            self.data = self.data.coalesce(num_partitions)
+
+        return self
+
     def persist(self, storage_level=StorageLevel.MEMORY_AND_DISK):
         """
         Persist this object's RDD considering the chosen storage level.
