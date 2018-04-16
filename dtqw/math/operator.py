@@ -236,14 +236,13 @@ class Operator(Base):
             raise ValueError("incompatible shapes {} and {}".format(self._shape, other.shape))
 
         shape = other.shape
-        num_partitions = max(self.data.getNumPartitions(), other.data.getNumPartitions())
 
         rdd = self.data.join(
-            other.data, numPartitions=num_partitions
+            other.data, numPartitions=self.data.getNumPartitions()
         ).map(
             lambda m: (m[1][0][0], m[1][0][1] * m[1][1])
         ).reduceByKey(
-            lambda a, b: a + b, numPartitions=other.data.getNumPartitions()
+            lambda a, b: a + b, numPartitions=self.data.getNumPartitions()
         )
 
         return State(rdd, shape, other.mesh, other.num_particles)
