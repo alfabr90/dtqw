@@ -271,15 +271,15 @@ class DiscreteTimeQuantumWalk:
             shape = (rdd_range, rdd_range)
 
             def __map(m):
-                p = 0
+                x = []
 
-                x = x_prev = int(m / (cs_size ** (num_particles - 1 - p))) % size
+                for p in range(num_particles):
+                    x.append(int(m / (cs_size ** (num_particles - 1 - p))) % size)
 
-                for p in range(1, num_particles, 1):
-                    x = int(m / (cs_size ** (num_particles - 1 - p))) % size
-
-                    if x == x_prev:
-                        return m, m, phase
+                for p1 in range(num_particles):
+                    for p2 in range(num_particles):
+                        if p1 != p2 and x[p1] == x[p2]:
+                            return m, m, phase
 
                 return m, m, 1
         elif self._mesh.is_2d():
@@ -293,21 +293,20 @@ class DiscreteTimeQuantumWalk:
             shape = (rdd_range, rdd_range)
 
             def __map(m):
-                p = 0
+                xy = []
 
-                xy = xy_prev = (
-                    int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
-                    int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
-                )
-
-                for p in range(1, num_particles, 1):
-                    xy = (
-                        int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
-                        int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
+                for p in range(num_particles):
+                    xy.append(
+                        (
+                            int(m / (cs_size_xy ** (num_particles - 1 - p) * size_y)) % size_x,
+                            int(m / (cs_size_xy ** (num_particles - 1 - p))) % size_y
+                        )
                     )
 
-                    if xy[0] == xy_prev[0] and xy[1] == xy_prev[1]:
-                        return m, m, phase
+                for p1 in range(num_particles):
+                    for p2 in range(num_particles):
+                        if p1 != p2 and xy[p1][0] == xy[p2][0] and xy[p1][1] == xy[p2][1]:
+                            return m, m, phase
 
                 return m, m, 1
         else:
