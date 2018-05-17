@@ -102,13 +102,13 @@ class Coin1D(Coin):
         )
 
         if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-            rdd = Utils.changeCoordinate(
+            rdd = Utils.change_coordinate(
                 rdd, Utils.CoordinateDefault, new_coord=coord_format
             )
 
             expected_elems = len(self._data) * mesh_size
-            expected_size = Utils.getSizeOfType(complex) * expected_elems
-            num_partitions = Utils.getNumPartitions(self._spark_context, expected_size)
+            expected_size = Utils.get_size_of_type(complex) * expected_elems
+            num_partitions = Utils.get_num_partitions(self._spark_context, expected_size)
 
             if num_partitions:
                 rdd = rdd.partitionBy(

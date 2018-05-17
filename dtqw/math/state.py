@@ -74,8 +74,8 @@ class State(Base):
         new_shape = (self._shape[0] * other_shape[0], 1)
 
         expected_elems = new_shape[0]
-        expected_size = Utils.getSizeOfType(complex) * expected_elems
-        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+        expected_size = Utils.get_size_of_type(complex) * expected_elems
+        num_partitions = Utils.get_num_partitions(self.data.context, expected_size)
 
         rdd = self.data.map(
             lambda m: (0, m)
@@ -126,7 +126,7 @@ class State(Base):
             True if the norm of this state is 1.0, False otherwise.
 
         """
-        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+        round_precision = int(Utils.get_conf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
 
         return round(self.norm(), round_precision) == 1.0
 
@@ -230,8 +230,8 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        expected_size = Utils.getSizeOfType(float) * expected_elems
-        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+        expected_size = Utils.get_size_of_type(float) * expected_elems
+        num_partitions = Utils.get_num_partitions(self.data.context, expected_size)
 
         data_type = self._data_type()
 
@@ -250,7 +250,7 @@ class State(Base):
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+        round_precision = int(Utils.get_conf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
 
         if round(pdf.sum_values(), round_precision) != 1.0:
             if self._logger:
@@ -352,8 +352,8 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        expected_size = Utils.getSizeOfType(float) * expected_elems
-        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+        expected_size = Utils.get_size_of_type(float) * expected_elems
+        num_partitions = Utils.get_num_partitions(self.data.context, expected_size)
 
         rdd = full_measurement.data.filter(
             __filter
@@ -456,8 +456,8 @@ class State(Base):
                 self._logger.error("mesh dimension not implemented")
             raise NotImplementedError("mesh dimension not implemented")
 
-        expected_size = Utils.getSizeOfType(float) * expected_elems
-        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+        expected_size = Utils.get_size_of_type(float) * expected_elems
+        num_partitions = Utils.get_num_partitions(self.data.context, expected_size)
 
         data_type = self._data_type()
 
@@ -476,7 +476,7 @@ class State(Base):
         if self._logger:
             self._logger.info("checking if the probabilities sum one...")
 
-        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+        round_precision = int(Utils.get_conf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
 
         if round(pdf.sum_values(), round_precision) != 1.0:
             if self._logger:

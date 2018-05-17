@@ -37,7 +37,7 @@ class Utils():
         return sc.broadcast(data)
 
     @staticmethod
-    def getConf(sc, config_str, default=None):
+    def get_conf(sc, config_str, default=None):
         c = sc.getConf().get(config_str)
 
         if not c and (default is not None):
@@ -46,7 +46,7 @@ class Utils():
         return c
 
     @staticmethod
-    def changeCoordinate(rdd, old_coord, new_coord=CoordinateDefault):
+    def change_coordinate(rdd, old_coord, new_coord=CoordinateDefault):
         if old_coord == Utils.CoordinateMultiplier:
             if new_coord == Utils.CoordinateMultiplier:
                 return rdd
@@ -86,7 +86,7 @@ class Utils():
         return "{}_{}_{}".format(mesh_filename, steps, num_particles)
 
     @staticmethod
-    def getPrecendentType(type1, type2):
+    def get_precendent_type(type1, type2):
         if type1 == complex or type2 == complex:
             return complex
 
@@ -96,28 +96,28 @@ class Utils():
         return int
 
     @staticmethod
-    def getSizeOfType(data_type):
+    def get_size_of_type(data_type):
         return sys.getsizeof(data_type())
 
     @staticmethod
-    def getNumPartitions(spark_context, expected_size):
+    def get_num_partitions(spark_context, expected_size):
         safety_factor = 1.3
         num_partitions = None
 
-        if Utils.getConf(spark_context, 'dtqw.useSparkDefaultPartitions', default='False') == 'False':
-            num_cores = Utils.getConf(spark_context, 'dtqw.cluster.totalCores', default=None)
+        if Utils.get_conf(spark_context, 'dtqw.useSparkDefaultPartitions', default='False') == 'False':
+            num_cores = Utils.get_conf(spark_context, 'dtqw.cluster.totalCores', default=None)
 
             if not num_cores:
                 raise ValueError("Invalid number of total cores in the cluster: {}".format(num_cores))
 
             num_cores = int(num_cores)
-            max_partition_size = int(Utils.getConf(spark_context, 'dtqw.cluster.maxPartitionSize', default=48 * 10 ** 6))
+            max_partition_size = int(Utils.get_conf(spark_context, 'dtqw.cluster.maxPartitionSize', default=48 * 10 ** 6))
             num_partitions = math.ceil(safety_factor * expected_size / max_partition_size / num_cores) * num_cores
 
         return num_partitions
 
     @staticmethod
-    def createDir(path):
+    def create_dir(path):
         if os.path.exists(path):
             if not os.path.isdir(path):
                 raise ValueError('"{}" is an invalid path'.format(path))
@@ -125,39 +125,39 @@ class Utils():
             os.makedirs(path)
 
     @staticmethod
-    def getTempPath(d):
+    def get_temp_path(d):
         tmp_file = tf.NamedTemporaryFile(dir=d)
         tmp_file.close()
 
         return tmp_file.name
 
     @staticmethod
-    def removePath(path):
+    def remove_path(path):
         if os.path.exists(path):
             if os.path.isdir(path):
                 if path != '/':
                     for i in os.listdir(path):
-                        Utils.removePath(path + "/" + i)
+                        Utils.remove_path(path + "/" + i)
                     os.rmdir(path)
             else:
                 os.remove(path)
 
     @staticmethod
-    def clearPath(path):
+    def clear_path(path):
         if os.path.exists(path):
             if os.path.isdir(path):
                 if path != '/':
                     for i in os.listdir(path):
-                        Utils.removePath(path + "/" + i)
+                        Utils.remove_path(path + "/" + i)
             else:
                 raise ValueError('"{}" is an invalid path'.format(path))
 
     @staticmethod
-    def getSizeOfPath(path):
+    def get_size_of_path(path):
         if os.path.isdir(path):
             size = 0
             for i in os.listdir(path):
-                size += Utils.getSizeOfPath(path + "/" + i)
+                size += Utils.get_size_of_path(path + "/" + i)
             return size
         else:
             return os.stat(path).st_size

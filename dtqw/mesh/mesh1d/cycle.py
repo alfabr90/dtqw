@@ -76,7 +76,7 @@ class Cycle(Mesh1D):
         if self._broken_links:
             broken_links = self._broken_links.generate(num_edges)
 
-            generation_mode = Utils.getConf(self._spark_context, 'dtqw.mesh.brokenLinks.generationMode', default='broadcast')
+            generation_mode = Utils.get_conf(self._spark_context, 'dtqw.mesh.brokenLinks.generationMode', default='broadcast')
 
             if generation_mode == 'rdd':
                 def __map(e):
@@ -136,13 +136,13 @@ class Cycle(Mesh1D):
             )
 
         if coord_format == Utils.CoordinateMultiplier or coord_format == Utils.CoordinateMultiplicand:
-            rdd = Utils.changeCoordinate(
+            rdd = Utils.change_coordinate(
                 rdd, Utils.CoordinateDefault, new_coord=coord_format
             )
 
             expected_elems = coin_size * size
-            expected_size = Utils.getSizeOfType(int) * expected_elems
-            num_partitions = Utils.getNumPartitions(self._spark_context, expected_elems)
+            expected_size = Utils.get_size_of_type(int) * expected_elems
+            num_partitions = Utils.get_num_partitions(self._spark_context, expected_elems)
 
             if num_partitions:
                 rdd = rdd.partitionBy(

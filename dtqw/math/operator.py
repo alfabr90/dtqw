@@ -114,11 +114,11 @@ class Operator(Base):
 
         other_shape = other.shape
         new_shape = (self._shape[0] * other_shape[0], self._shape[1] * other_shape[1])
-        data_type = Utils.getPrecendentType(self._data_type, other.data_type)
+        data_type = Utils.get_precendent_type(self._data_type, other.data_type)
 
         expected_elems = self._num_nonzero_elements * other.num_nonzero_elements
-        expected_size = Utils.getSizeOfType(data_type) * expected_elems
-        num_partitions = Utils.getNumPartitions(self.data.context, expected_size)
+        expected_size = Utils.get_size_of_type(data_type) * expected_elems
+        num_partitions = Utils.get_num_partitions(self.data.context, expected_size)
 
         rdd = self.data.map(
             lambda m: (0, m)
@@ -189,7 +189,7 @@ class Operator(Base):
             True if the norm of this operator is 1.0, False otherwise.
 
         """
-        round_precision = int(Utils.getConf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
+        round_precision = int(Utils.get_conf(self._spark_context, 'dtqw.math.roundPrecision', default='10'))
 
         return round(self.norm(), round_precision) == 1.0
 
